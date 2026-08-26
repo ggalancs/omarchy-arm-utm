@@ -20,6 +20,7 @@
 #    ./build-omarchy-arm.sh --from build     # reanudar desde una fase
 #    ./build-omarchy-arm.sh --only package   # ejecutar solo una fase
 #    ./build-omarchy-arm.sh --list           # listar fases
+#    ./build-omarchy-arm.sh --language en    # usar la interfaz en ingles
 #
 #  Fases:
 #    deps      comprobar dependencias del anfitrion
@@ -35,6 +36,58 @@
 #  (git, python3) y ~40 GB libres. No necesita sudo.
 #  ────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
+
+# Interfaz del constructor. English is the default. An interactive run that
+# does not specify a language gets a small selector before the questionnaire.
+# The embedded payload logs retain their original language to keep the script
+# self-contained.
+LANGUAGE="${OMARCHY_LANGUAGE:-en}"
+LANGUAGE_SELECTED=0
+[[ -n ${OMARCHY_LANGUAGE+x} ]] && LANGUAGE_SELECTED=1
+
+tr() {
+  [[ $LANGUAGE == en ]] || { printf '%s' "$1"; return; }
+  case "$1" in
+    configuracion) printf '%s' 'configuration' ;;
+    'deps · dependencias del anfitrion') printf '%s' 'deps · host dependencies' ;;
+    'fetch · imagenes base') printf '%s' 'fetch · base images' ;;
+    'prepare · lista de paquetes') printf '%s' 'prepare · package list' ;;
+    'build · construccion del disco (headless, QEMU + HVF)') printf '%s' 'build · disk image (headless, QEMU + HVF)' ;;
+    'utm · bundle UTM') printf '%s' 'utm · UTM bundle' ;;
+    'verify · comprobacion') printf '%s' 'verify · validation' ;;
+    'sanitize · limpieza') printf '%s' 'sanitize · cleanup' ;;
+    'package · compresion') printf '%s' 'package · compression' ;;
+    'Enter acepta el valor entre corchetes. Detectados de tu Mac.') printf '%s' 'Press Enter to accept the value in brackets. Detected from your Mac.' ;;
+    'Zona horaria') printf '%s' 'Time zone' ;;
+    'Teclado (consola)') printf '%s' 'Keyboard (console)' ;;
+    'Teclado (Hyprland/Wayland)') printf '%s' 'Keyboard (Hyprland/Wayland)' ;;
+    'Nucleos para la VM') printf '%s' 'VM CPU cores' ;;
+    'Memoria para la VM (MiB)') printf '%s' 'VM memory (MiB)' ;;
+    'Tamano del disco') printf '%s' 'Disk size' ;;
+    'Compilar las 17 herramientas de Omarchy que no existen para ARM (~40 min)?') printf '%s' 'Compile the 17 Omarchy tools unavailable on ARM (~40 min)?' ;;
+    'Incluir OBS Studio y Pinta (software libre, se compilan: ~45 min)?') printf '%s' 'Include OBS Studio and Pinta (free software, compiled from source: ~45 min)?' ;;
+    'Preparar la imagen para repartir?') printf '%s' 'Prepare the image for distribution?' ;;
+    'Usuario de la imagen distribuible') printf '%s' 'Distribution image user' ;;
+    'Usuario de la VM') printf '%s' 'VM user' ;;
+    'Contrasena') printf '%s' 'Password' ;;
+    'Nombre completo') printf '%s' 'Full name' ;;
+    'Empezar?') printf '%s' 'Start?' ;;
+    'Dos usos posibles:') printf '%s' 'Two possible uses:' ;;
+    'resumen: '* ) printf 'summary: %s' "${1#resumen: }" ;;
+    '         herramientas: '* ) printf '         tools: %s' "${1#         herramientas: }" ;;
+    'reanudando con las respuestas de '* ) printf 'resuming with answers from %s' "${1#reanudando con las respuestas de }" ;;
+    'cancelado') printf '%s' 'cancelled' ;;
+    'Completado en '* ) printf 'Completed in %s' "${1#Completado en }" ;;
+    'opcion desconocida: '* ) printf 'unknown option: %s' "${1#opcion desconocida: }" ;;
+    '--from necesita una fase ('* ) printf '%s' '--from requires a phase (see --list)' ;;
+    '--only necesita una fase ('* ) printf '%s' '--only requires a phase (see --list)' ;;
+    '--from y --only son excluyentes: elige uno') printf '%s' '--from and --only are mutually exclusive: choose one' ;;
+    'fase desconocida: '* ) printf 'unknown phase: %s' "${1#fase desconocida: }" ;;
+    'VM_USER='*' no vale:'* ) printf '%s' 'VM_USER is invalid: use lowercase letters, digits, - and _, starting with a letter, 3-32 characters' ;;
+    'VM_USER='*' es parte de DIST_NEW_USER='* ) printf '%s' 'VM_USER must not be part of DIST_NEW_USER; choose another user' ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
 
 # ───────────────────────────────── parametros ──────────────────────────────
 # Que variables trae ya el entorno, ANTES de que los ':=' de abajo las rellenen.
@@ -77,11 +130,11 @@ PHASES=(deps fetch prepare build utm verify sanitize package)
 
 # ─────────────────────────────────── salida ────────────────────────────────
 c_ok=$'\033[32m'; c_warn=$'\033[33m'; c_err=$'\033[31m'; c_hi=$'\033[1;36m'; c_off=$'\033[0m'
-phase() { echo; echo "${c_hi}━━━ $* ━━━${c_off}"; }
-info()  { echo "  $*"; }
-ok()    { echo "  ${c_ok}✓${c_off} $*"; }
-warn()  { echo "  ${c_warn}!${c_off} $*" >&2; }
-die()   { echo "  ${c_err}✗ $*${c_off}" >&2; exit 1; }
+phase() { echo; echo "${c_hi}━━━ $(tr "$*") ━━━${c_off}"; }
+info()  { echo "  $(tr "$*")"; }
+ok()    { echo "  ${c_ok}✓${c_off} $(tr "$*")"; }
+warn()  { echo "  ${c_warn}!${c_off} $(tr "$*")" >&2; }
+die()   { echo "  ${c_err}✗${c_off} $(tr "$*")" >&2; exit 1; }
 
 # ── interaccion ─────────────────────────────────────────────────────────────
 # El script nacio desatendido y debe seguir siendolo: sin terminal, o con
@@ -134,14 +187,14 @@ ask() {  # ask <variable> <pregunta> [valor por defecto]
   local var="$1" q="$2" def="${3:-}" cur ans
   cur="${!var:-$def}"
   if (( ! INTERACTIVO )); then printf -v "$var" '%s' "$cur"; return; fi
-  read -r -p "  $q [${cur}]: " ans </dev/tty || ans=""
+  read -r -p "  $(tr "$q") [${cur}]: " ans </dev/tty || ans=""
   printf -v "$var" '%s' "${ans:-$cur}"
 }
 
 confirm() {  # confirm <pregunta> <si|no por defecto>
   local q="$1" def="${2:-si}" ans
   if (( ! INTERACTIVO )); then [[ $def == si ]]; return; fi
-  read -r -p "  $q [$([[ $def == si ]] && echo 'S/n' || echo 's/N')]: " ans </dev/tty || ans=""
+  read -r -p "  $(tr "$q") [$([[ $def == si ]] && echo 'S/n' || echo 's/N')]: " ans </dev/tty || ans=""
   ans="${ans:-$def}"
   # ${var,,} es de bash 4 y macOS trae bash 3.2: ahi es un error de expansion
   # que aborta la funcion entera, y confirm devolvia "si" por accidente.
@@ -3662,22 +3715,22 @@ cuestionario() {
     [[ -f "$W/respuestas.env" ]] || guardar_respuestas
     return
   fi
-  phase "configuracion"
-  info "Enter acepta el valor entre corchetes. Detectados de tu Mac."
+  phase "$(tr configuracion)"
+  info "$(tr 'Enter acepta el valor entre corchetes. Detectados de tu Mac.')"
   echo
 
-  ask VM_TIMEZONE "Zona horaria"                     "$VM_TIMEZONE"
-  ask VM_KEYMAP   "Teclado (consola)"                "$VM_KEYMAP"
-  ask VM_XKB      "Teclado (Hyprland/Wayland)"       "$VM_XKB"
+  ask VM_TIMEZONE "$(tr 'Zona horaria')"                     "$VM_TIMEZONE"
+  ask VM_KEYMAP   "$(tr 'Teclado (consola)')"                "$VM_KEYMAP"
+  ask VM_XKB      "$(tr 'Teclado (Hyprland/Wayland)')"       "$VM_XKB"
   echo
-  ask UTM_CPUS    "Nucleos para la VM"               "$UTM_CPUS"
-  ask UTM_MEM     "Memoria para la VM (MiB)"         "$UTM_MEM"
-  ask DISK_SIZE   "Tamano del disco"                 "$DISK_SIZE"
+  ask UTM_CPUS    "$(tr 'Nucleos para la VM')"               "$UTM_CPUS"
+  ask UTM_MEM     "$(tr 'Memoria para la VM (MiB)')"         "$UTM_MEM"
+  ask DISK_SIZE   "$(tr 'Tamano del disco')"                 "$DISK_SIZE"
   echo
 
   # ~40 min de compilaciones. Sin ellas el escritorio funciona, pero faltan el
   # salvapantallas, el anotador de capturas y la calculadora, entre otros.
-  if confirm "Compilar las 17 herramientas de Omarchy que no existen para ARM (~40 min)?" si; then
+  if confirm "$(tr 'Compilar las 17 herramientas de Omarchy que no existen para ARM (~40 min)?')" si; then
     HACER_TOOLS=si
   else
     HACER_TOOLS=no
@@ -3687,7 +3740,7 @@ cuestionario() {
 
   # OBS y Pinta son lo mas caro del build. Van dentro porque son software libre
   # y la imagen que se distribuye los lleva, pero para una VM de pruebas sobran.
-  if confirm "Incluir OBS Studio y Pinta (software libre, se compilan: ~45 min)?" si; then
+  if confirm "$(tr 'Incluir OBS Studio y Pinta (software libre, se compilan: ~45 min)?')" si; then
     HACER_LIBRES=si
   else
     HACER_LIBRES=no
@@ -3697,30 +3750,49 @@ cuestionario() {
 
   # La distincion que mas cambia el resultado: imagen para repartir frente a
   # VM para uso propio.
-  info "Dos usos posibles:"
+  info "$(tr 'Dos usos posibles:')"
   info "  · imagen para repartir  → renombra el usuario a '$DIST_NEW_USER', borra"
   info "    claves SSH e identidad, y genera un zip de ~6,5 GB (~30 min extra)"
   info "  · VM para ti            → se queda como esta, con el usuario '$VM_USER'"
-  if confirm "Preparar la imagen para repartir?" no; then
+  if confirm "$(tr 'Preparar la imagen para repartir?')" no; then
     HACER_DIST=si
-    ask DIST_NEW_USER "Usuario de la imagen distribuible" "$DIST_NEW_USER"
+    ask DIST_NEW_USER "$(tr 'Usuario de la imagen distribuible')" "$DIST_NEW_USER"
   else
     HACER_DIST=no
-    ask VM_USER     "Usuario de la VM"     "$VM_USER"
-    ask VM_PASSWORD "Contrasena"           "$VM_PASSWORD"
-    ask VM_FULLNAME "Nombre completo"      "$VM_FULLNAME"
+    ask VM_USER     "$(tr 'Usuario de la VM')"     "$VM_USER"
+    ask VM_PASSWORD "$(tr 'Contrasena')"           "$VM_PASSWORD"
+    ask VM_FULLNAME "$(tr 'Nombre completo')"      "$VM_FULLNAME"
   fi
   echo
   info "resumen: $VM_KEYMAP/$VM_XKB · $VM_TIMEZONE · ${UTM_CPUS} nucleos · ${UTM_MEM} MiB · disco $DISK_SIZE"
   info "         herramientas: $HACER_TOOLS · OBS+Pinta: $HACER_LIBRES · repartir: $HACER_DIST"
-  confirm "Empezar?" si || die "cancelado"
+  confirm "$(tr 'Empezar?')" si || die "cancelado"
   guardar_respuestas
 }
 
 # ──────────────────────────────────── main ─────────────────────────────────
 # Imprime la cabecera entera, sea cual sea su longitud: fijar '2,30p' hacia que
 # --help se quedara sin la lista de fases en cuanto el banner crecia.
-usage() { awk 'NR>1 && /^#/{print; next} NR>1{exit}' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; }
+usage() {
+  if [[ $LANGUAGE == en ]]; then
+    cat <<'EOF'
+build-omarchy-arm.sh
+
+Build an Arch Linux ARM + Omarchy 4 UTM virtual machine on Apple Silicon.
+
+Usage:
+  ./build-omarchy-arm.sh                  run all phases
+  ./build-omarchy-arm.sh --from build     resume from a phase
+  ./build-omarchy-arm.sh --only package   run one phase
+  ./build-omarchy-arm.sh --list           list phases
+  ./build-omarchy-arm.sh --language en    use the English interface
+  ./build-omarchy-arm.sh --language es    use the Spanish interface
+  ./build-omarchy-arm.sh --yes            accept defaults without prompts
+EOF
+    return
+  fi
+  awk 'NR>1 && /^#/{print; next} NR>1{exit}' "$0" | sed 's/^#\{0,2\} \{0,1\}//'
+}
 
 run_from=""; run_only=""
 while (($#)); do
@@ -3731,10 +3803,30 @@ while (($#)); do
     --only) run_only="${2:-}"; [[ -n $run_only ]] || { usage; die "--only necesita una fase (${PHASES[*]})"; }; shift 2 ;;
     --list) printf '%s\n' "${PHASES[@]}"; exit 0 ;;
     --yes|-y|--sin-preguntas) ASSUME_YES=1; INTERACTIVO=0; shift ;;
+    --language|--lang) LANGUAGE="${2:-}"; [[ $LANGUAGE == en || $LANGUAGE == es ]] || die "language must be 'en' or 'es'"; LANGUAGE_SELECTED=1; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) die "opcion desconocida: $1" ;;
   esac
 done
+
+choose_language() {
+  (( INTERACTIVO )) || return 0
+  (( LANGUAGE_SELECTED )) && return 0
+  echo
+  echo "  Select language / Selecciona el idioma:"
+  echo "    1) English"
+  echo "    2) Español"
+  local choice
+  read -r -p "  Language [1]: " choice </dev/tty || choice=""
+  case "$choice" in
+    2) LANGUAGE=es ;;
+    1|"" ) LANGUAGE=en ;;
+    *) warn "unknown selection; using English"; LANGUAGE=en ;;
+  esac
+  LANGUAGE_SELECTED=1
+}
+
+choose_language
 
 # El nombre del usuario de construccion acaba en un `find ... -regex` del
 # sanitizado y en rutas de todo el invitado. Un nombre raro o demasiado corto
@@ -3793,4 +3885,4 @@ for p in "${PHASES[@]}"; do
   "ph_$p" || die "fallo en la fase '$p'"
 done
 echo
-echo "${c_ok}Completado en $(( (SECONDS-t0)/60 )) min.${c_off}"
+echo "${c_ok}$(tr "Completado en $(( (SECONDS-t0)/60 )) min.")${c_off}"

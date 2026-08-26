@@ -135,7 +135,14 @@ y para el portapapeles [`fixes/19-portapapeles.sh`](fixes/19-portapapeles.sh).
 ./build-omarchy-arm.sh --yes        # desatendido, con los valores por defecto
 ./build-omarchy-arm.sh --from build # reanudar desde una fase (no pregunta)
 ./build-omarchy-arm.sh --list       # ver las fases
+./build-omarchy-arm.sh --language en # interfaz en ingles
 ```
+
+En una ejecución interactiva aparece un selector de idioma si no se indica
+ninguno. El inglés es el valor predeterminado; usa `--language en` o
+`--language es` para elegirlo explícitamente. También puedes usar
+`OMARCHY_LANGUAGE=en|es`. Esto traduce las preguntas y los mensajes de
+progreso del anfitrión; los logs de los scripts embebidos conservan el español.
 
 Fases: `deps`, `fetch`, `prepare`, `build`, `utm`, `verify`, `sanitize`,
 `package`.

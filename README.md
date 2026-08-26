@@ -94,6 +94,16 @@ cd omarchy-arm-utm
 ./build-omarchy-arm.sh
 ```
 
+The builder uses English by default. In an interactive run, it offers a
+language selector when no language was specified. Use `--language en` or
+`--language es` to select one explicitly; `OMARCHY_LANGUAGE=en|es` also works.
+The language option only translates host-side prompts and progress messages;
+logs emitted by the embedded guest provisioning scripts remain Spanish.
+
+```bash
+./build-omarchy-arm.sh --language en
+```
+
 Requirements: **Apple Silicon Mac**, Homebrew, **UTM 4.7+**, Xcode Command Line
 Tools (for `git` and `python3`), **~40 GB free**. No `sudo` needed. Outside its
 working directory (`~/omarchy-arm-build`) it installs the Homebrew formulas you
