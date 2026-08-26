@@ -47,55 +47,65 @@ LANGUAGE_SELECTED=0
 
 # Keep both translations together under a stable key. Call sites refer only to
 # the key, so either sentence can be edited without breaking the other locale.
+answer_label() {
+  case "$LANGUAGE:$1" in
+    en:si|en:sí) printf '%s' 'yes' ;;
+    en:no)       printf '%s' 'no' ;;
+    es:si|es:sí) printf '%s' 'sí' ;;
+    es:no)       printf '%s' 'no' ;;
+    *)           printf '%s' "$1" ;;
+  esac
+}
+
 msg() {
   local key="$1"
   shift
   case "$key" in
-    phase_deps)       [[ $LANGUAGE == es ]] && printf '%s' 'deps · dependencias del anfitrion' || printf '%s' 'deps · host dependencies' ;;
-    phase_fetch)      [[ $LANGUAGE == es ]] && printf '%s' 'fetch · imagenes base' || printf '%s' 'fetch · base images' ;;
-    phase_prepare)    [[ $LANGUAGE == es ]] && printf '%s' 'prepare · lista de paquetes' || printf '%s' 'prepare · package list' ;;
-    phase_build)      [[ $LANGUAGE == es ]] && printf '%s' 'build · construccion del disco (headless, QEMU + HVF)' || printf '%s' 'build · disk image (headless, QEMU + HVF)' ;;
+    phase_deps)       [[ $LANGUAGE == es ]] && printf '%s' 'deps · dependencias del anfitrión' || printf '%s' 'deps · host dependencies' ;;
+    phase_fetch)      [[ $LANGUAGE == es ]] && printf '%s' 'fetch · imágenes base' || printf '%s' 'fetch · base images' ;;
+    phase_prepare)    [[ $LANGUAGE == es ]] && printf '%s' 'prepare · resolver paquetes' || printf '%s' 'prepare · resolve packages' ;;
+    phase_build)      [[ $LANGUAGE == es ]] && printf '%s' 'build · construcción del disco (headless, QEMU + HVF)' || printf '%s' 'build · disk image (headless, QEMU + HVF)' ;;
     phase_utm)        [[ $LANGUAGE == es ]] && printf '%s' 'utm · bundle .utm' || printf '%s' 'utm · .utm bundle' ;;
-    phase_verify)     [[ $LANGUAGE == es ]] && printf '%s' 'verify · arranque y comprobacion' || printf '%s' 'verify · boot and validation' ;;
-    phase_sanitize)   [[ $LANGUAGE == es ]] && printf '%s' 'sanitize · copia limpia para distribuir' || printf '%s' 'sanitize · clean distribution copy' ;;
+    phase_verify)     [[ $LANGUAGE == es ]] && printf '%s' 'verify · arranque y comprobación' || printf '%s' 'verify · boot and validation' ;;
+    phase_sanitize)   [[ $LANGUAGE == es ]] && printf '%s' 'sanitize · eliminar datos personales de la imagen compartible' || printf '%s' 'sanitize · remove personal data from the shareable image' ;;
     phase_package)    [[ $LANGUAGE == es ]] && printf '%s' 'package · compactar y comprimir' || printf '%s' 'package · compact and compress' ;;
-    phase_config)     [[ $LANGUAGE == es ]] && printf '%s' 'configuracion' || printf '%s' 'configuration' ;;
-    defaults_hint)    [[ $LANGUAGE == es ]] && printf '%s' 'Enter acepta el valor entre corchetes. Detectados de tu Mac.' || printf '%s' 'Press Enter to accept the value in brackets. Detected from your Mac.' ;;
+    phase_config)     [[ $LANGUAGE == es ]] && printf '%s' 'configuración' || printf '%s' 'configuration' ;;
+    defaults_hint)    [[ $LANGUAGE == es ]] && printf '%s' 'Los valores predeterminados se detectaron en tu Mac. Pulsa Enter para aceptar cada uno.' || printf '%s' 'Defaults were detected from your Mac. Press Enter to accept each one.' ;;
     timezone)         [[ $LANGUAGE == es ]] && printf '%s' 'Zona horaria' || printf '%s' 'Time zone' ;;
     keyboard_console) [[ $LANGUAGE == es ]] && printf '%s' 'Teclado (consola)' || printf '%s' 'Keyboard (console)' ;;
     keyboard_wayland) [[ $LANGUAGE == es ]] && printf '%s' 'Teclado (Hyprland/Wayland)' || printf '%s' 'Keyboard (Hyprland/Wayland)' ;;
-    vm_cpus)          [[ $LANGUAGE == es ]] && printf '%s' 'Nucleos para la VM' || printf '%s' 'VM CPU cores' ;;
+    vm_cpus)          [[ $LANGUAGE == es ]] && printf '%s' 'Núcleos para la VM' || printf '%s' 'VM CPU cores' ;;
     vm_memory)        [[ $LANGUAGE == es ]] && printf '%s' 'Memoria para la VM (MiB)' || printf '%s' 'VM memory (MiB)' ;;
-    disk_size)        [[ $LANGUAGE == es ]] && printf '%s' 'Tamano del disco' || printf '%s' 'Disk size' ;;
-    compile_tools)    [[ $LANGUAGE == es ]] && printf '%s' 'Compilar las 17 herramientas de Omarchy que no existen para ARM (~40 min)?' || printf '%s' 'Compile the 17 Omarchy tools unavailable on ARM (~40 min)?' ;;
-    include_apps)     [[ $LANGUAGE == es ]] && printf '%s' 'Incluir OBS Studio y Pinta (software libre, se compilan: ~45 min)?' || printf '%s' 'Include OBS Studio and Pinta (free software, compiled from source: ~45 min)?' ;;
-    prepare_dist)     [[ $LANGUAGE == es ]] && printf '%s' 'Preparar la imagen para repartir?' || printf '%s' 'Prepare the image for distribution?' ;;
-    dist_user)        [[ $LANGUAGE == es ]] && printf '%s' 'Usuario de la imagen distribuible' || printf '%s' 'Distribution image user' ;;
+    disk_size)        [[ $LANGUAGE == es ]] && printf '%s' 'Tamaño del disco' || printf '%s' 'Disk size' ;;
+    compile_tools)    [[ $LANGUAGE == es ]] && printf '%s' '¿Compilar las 17 herramientas de Omarchy que no ofrecen paquetes para ARM (~40 min)?' || printf '%s' "Build the 17 Omarchy tools that don't provide ARM packages (~40 min)?" ;;
+    include_apps)     [[ $LANGUAGE == es ]] && printf '%s' '¿Incluir OBS Studio y Pinta (software libre, se compilan: ~45 min)?' || printf '%s' 'Include OBS Studio and Pinta (free software, compiled from source: ~45 min)?' ;;
+    create_shareable_image) [[ $LANGUAGE == es ]] && printf '%s' '¿Crear una imagen de VM para compartir?' || printf '%s' 'Create a shareable VM image?' ;;
+    shareable_image_user)   [[ $LANGUAGE == es ]] && printf '%s' 'Usuario de la imagen para compartir' || printf '%s' 'Username in the shareable image' ;;
     vm_user)          [[ $LANGUAGE == es ]] && printf '%s' 'Usuario de la VM' || printf '%s' 'VM user' ;;
-    password)         [[ $LANGUAGE == es ]] && printf '%s' 'Contrasena' || printf '%s' 'Password' ;;
+    password)         [[ $LANGUAGE == es ]] && printf '%s' 'Contraseña' || printf '%s' 'Password' ;;
     full_name)        [[ $LANGUAGE == es ]] && printf '%s' 'Nombre completo' || printf '%s' 'Full name' ;;
-    start)            [[ $LANGUAGE == es ]] && printf '%s' 'Empezar?' || printf '%s' 'Start?' ;;
-    use_cases)        [[ $LANGUAGE == es ]] && printf '%s' 'Dos usos posibles:' || printf '%s' 'Two possible uses:' ;;
+    start)            [[ $LANGUAGE == es ]] && printf '%s' '¿Empezar?' || printf '%s' 'Start?' ;;
+    usage_question)   [[ $LANGUAGE == es ]] && printf '%s' '¿Cómo usarás esta VM?' || printf '%s' 'How will you use this VM?' ;;
     cancelled)        [[ $LANGUAGE == es ]] && printf '%s' 'cancelado' || printf '%s' 'cancelled' ;;
-    tools_missing)    [[ $LANGUAGE == es ]] && printf '%s' 'sin ellas faltaran ttfx, tensaku, omacalc, omacut, omawrite, aether, cliamp...' || printf '%s' 'without them, ttfx, tensaku, omacalc, omacut, omawrite, aether, cliamp and others will be missing' ;;
-    apps_later)       [[ $LANGUAGE == es ]] && printf '%s' 'se pueden anadir despues desde dentro: omarchy-arm-extras pinta obs' || printf '%s' 'you can add them later inside the VM: omarchy-arm-extras pinta obs' ;;
-    use_dist_1)       [[ $LANGUAGE == es ]] && printf "  · imagen para repartir  → renombra el usuario a '%s', borra" "$1" || printf "  · distribution image → renames the user to '%s', removes" "$1" ;;
-    use_dist_2)       [[ $LANGUAGE == es ]] && printf '%s' '    claves SSH e identidad, y genera un zip de ~6,5 GB (~30 min extra)' || printf '%s' '    SSH keys and machine identity, and creates a ~6.5 GB zip (~30 min extra)' ;;
-    use_personal)     [[ $LANGUAGE == es ]] && printf "  · VM para ti            → se queda como esta, con el usuario '%s'" "$1" || printf "  · personal VM         → keeps the current state and user '%s'" "$1" ;;
-    summary)          [[ $LANGUAGE == es ]] && printf 'resumen: %s/%s · %s · %s nucleos · %s MiB · disco %s' "$@" || printf 'summary: %s/%s · %s · %s cores · %s MiB · %s disk' "$@" ;;
-    summary_options)  [[ $LANGUAGE == es ]] && printf '         herramientas: %s · OBS+Pinta: %s · repartir: %s' "$@" || printf '         tools: %s · OBS+Pinta: %s · distribute: %s' "$@" ;;
-    resume_answers)   [[ $LANGUAGE == es ]] && printf "reanudando con las respuestas de %s (usuario '%s', repartir: %s)" "$@" || printf "resuming with answers from %s (user '%s', distribute: %s)" "$@" ;;
+    tools_missing)    [[ $LANGUAGE == es ]] && printf '%s' 'Sin ellas faltarán ttfx, tensaku, omacalc, omacut, omawrite, aether, cliamp y otras herramientas.' || printf '%s' 'Without them, ttfx, tensaku, omacalc, omacut, omawrite, aether, cliamp, and other tools will be missing.' ;;
+    apps_later)       [[ $LANGUAGE == es ]] && printf '%s' 'Puedes añadirlas después dentro de la VM: omarchy-arm-extras pinta obs' || printf '%s' 'You can add them later inside the VM: omarchy-arm-extras pinta obs' ;;
+    use_shareable_1)  [[ $LANGUAGE == es ]] && printf "  · imagen para compartir → cambia el usuario a '%s', elimina" "$1" || printf "  · shareable image → renames the user to '%s', removes" "$1" ;;
+    use_shareable_2)  [[ $LANGUAGE == es ]] && printf '%s' '    las claves SSH y la identidad del equipo, y crea un ZIP de ~6,5 GB (~30 min extra)' || printf '%s' '    SSH keys and machine identity, and creates a ~6.5 GB ZIP (~30 min extra)' ;;
+    use_personal)     [[ $LANGUAGE == es ]] && printf "  · VM personal → conserva el usuario '%s' y omite la limpieza y el empaquetado" "$1" || printf "  · personal VM → keeps user '%s' and skips sanitizing and packaging" "$1" ;;
+    summary)          [[ $LANGUAGE == es ]] && printf 'resumen: %s/%s · %s · %s núcleos · %s MiB · disco de %s' "$@" || printf 'summary: %s/%s · %s · %s cores · %s MiB · %s disk' "$@" ;;
+    summary_options)  [[ $LANGUAGE == es ]] && printf '         herramientas: %s · OBS+Pinta: %s · imagen para compartir: %s' "$(answer_label "$1")" "$(answer_label "$2")" "$(answer_label "$3")" || printf '         tools: %s · OBS+Pinta: %s · shareable image: %s' "$(answer_label "$1")" "$(answer_label "$2")" "$(answer_label "$3")" ;;
+    resume_answers)   [[ $LANGUAGE == es ]] && printf "reanudando con las respuestas de %s (usuario '%s', imagen para compartir: %s)" "$1" "$2" "$(answer_label "$3")" || printf "resuming with answers from %s (user '%s', shareable image: %s)" "$1" "$2" "$(answer_label "$3")" ;;
     completed)        [[ $LANGUAGE == es ]] && printf 'Completado en %s min.' "$1" || printf 'Completed in %s min.' "$1" ;;
-    unknown_option)   [[ $LANGUAGE == es ]] && printf 'opcion desconocida: %s' "$1" || printf 'unknown option: %s' "$1" ;;
+    unknown_option)   [[ $LANGUAGE == es ]] && printf 'opción desconocida: %s' "$1" || printf 'unknown option: %s' "$1" ;;
     language_invalid) [[ $LANGUAGE == es ]] && printf '%s' "el idioma debe ser 'en' o 'es'" || printf '%s' "language must be 'en' or 'es'" ;;
-    selector_invalid) [[ $LANGUAGE == es ]] && printf '%s' 'seleccion desconocida; se usara ingles' || printf '%s' 'unknown selection; using English' ;;
+    selector_invalid) [[ $LANGUAGE == es ]] && printf '%s' 'selección desconocida; se usará inglés' || printf '%s' 'unknown selection; using English' ;;
     from_required)    [[ $LANGUAGE == es ]] && printf '%s' '--from necesita una fase (consulta --list)' || printf '%s' '--from requires a phase (see --list)' ;;
     only_required)    [[ $LANGUAGE == es ]] && printf '%s' '--only necesita una fase (consulta --list)' || printf '%s' '--only requires a phase (see --list)' ;;
     exclusive)        [[ $LANGUAGE == es ]] && printf '%s' '--from y --only son excluyentes: elige uno' || printf '%s' '--from and --only are mutually exclusive: choose one' ;;
-    unknown_phase)    [[ $LANGUAGE == es ]] && printf "fase desconocida: '%s' (validas: %s)" "$@" || printf "unknown phase: '%s' (valid: %s)" "$@" ;;
-    invalid_vm_user)  [[ $LANGUAGE == es ]] && printf "VM_USER='%s' no vale: minusculas, digitos, '-' y '_', empezando por letra, 3-32 caracteres" "$1" || printf "VM_USER='%s' is invalid: use lowercase letters, digits, '-' and '_', starting with a letter, 3-32 characters" "$1" ;;
+    unknown_phase)    [[ $LANGUAGE == es ]] && printf "fase desconocida: '%s' (válidas: %s)" "$@" || printf "unknown phase: '%s' (valid: %s)" "$@" ;;
+    invalid_vm_user)  [[ $LANGUAGE == es ]] && printf "VM_USER='%s' no es válido: usa letras minúsculas, dígitos, '-' y '_'; debe comenzar con una letra y tener entre 3 y 32 caracteres" "$1" || printf "VM_USER='%s' is invalid: use lowercase letters, digits, '-' and '_', starting with a letter, 3-32 characters" "$1" ;;
     overlapping_user) [[ $LANGUAGE == es ]] && printf "VM_USER='%s' es parte de DIST_NEW_USER='%s'; elige otro" "$@" || printf "VM_USER='%s' is part of DIST_NEW_USER='%s'; choose another" "$@" ;;
-    no_answers)       [[ $LANGUAGE == es ]] && printf 'no hay %s: se usaran los valores por defecto, que pueden no ser los que elegiste' "$1" || printf 'no %s found: defaults will be used and may differ from your previous choices' "$1" ;;
+    no_answers)       [[ $LANGUAGE == es ]] && printf 'no se encontraron respuestas guardadas en %s; se usarán los valores predeterminados' "$1" || printf "saved answers weren't found at %s; defaults will be used" "$1" ;;
     phase_failed)     [[ $LANGUAGE == es ]] && printf "fallo en la fase '%s'" "$1" || printf "phase '%s' failed" "$1" ;;
     *) printf '[missing message: %s]' "$key"; return 1 ;;
   esac
@@ -204,9 +214,14 @@ ask() {  # ask <variable> <pregunta> [valor por defecto]
 }
 
 confirm() {  # confirm <pregunta> <si|no por defecto>
-  local q="$1" def="${2:-si}" ans
+  local q="$1" def="${2:-si}" ans hint
   if (( ! INTERACTIVO )); then [[ $def == si ]]; return; fi
-  read -r -p "  $q [$([[ $def == si ]] && echo 'S/n' || echo 's/N')]: " ans </dev/tty || ans=""
+  if [[ $LANGUAGE == es ]]; then
+    [[ $def == si ]] && hint='S/n' || hint='s/N'
+  else
+    [[ $def == si ]] && hint='Y/n' || hint='y/N'
+  fi
+  read -r -p "  $q [$hint]: " ans </dev/tty || ans=""
   ans="${ans:-$def}"
   # ${var,,} es de bash 4 y macOS trae bash 3.2: ahi es un error de expansion
   # que aborta la funcion entera, y confirm devolvia "si" por accidente.
@@ -3760,15 +3775,15 @@ cuestionario() {
   fi
   echo
 
-  # La distincion que mas cambia el resultado: imagen para repartir frente a
+  # La distincion que mas cambia el resultado: imagen para compartir frente a
   # VM para uso propio.
-  info "$(msg use_cases)"
-  info "$(msg use_dist_1 "$DIST_NEW_USER")"
-  info "$(msg use_dist_2)"
+  info "$(msg usage_question)"
+  info "$(msg use_shareable_1 "$DIST_NEW_USER")"
+  info "$(msg use_shareable_2)"
   info "$(msg use_personal "$VM_USER")"
-  if confirm "$(msg prepare_dist)" no; then
+  if confirm "$(msg create_shareable_image)" no; then
     HACER_DIST=si
-    ask DIST_NEW_USER "$(msg dist_user)" "$DIST_NEW_USER"
+    ask DIST_NEW_USER "$(msg shareable_image_user)" "$DIST_NEW_USER"
   else
     HACER_DIST=no
     ask VM_USER     "$(msg vm_user)"   "$VM_USER"
