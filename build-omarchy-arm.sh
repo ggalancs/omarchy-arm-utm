@@ -45,47 +45,59 @@ LANGUAGE="${OMARCHY_LANGUAGE:-en}"
 LANGUAGE_SELECTED=0
 [[ -n ${OMARCHY_LANGUAGE+x} ]] && LANGUAGE_SELECTED=1
 
-tr() {
-  [[ $LANGUAGE == en ]] || { printf '%s' "$1"; return; }
-  case "$1" in
-    configuracion) printf '%s' 'configuration' ;;
-    'deps · dependencias del anfitrion') printf '%s' 'deps · host dependencies' ;;
-    'fetch · imagenes base') printf '%s' 'fetch · base images' ;;
-    'prepare · lista de paquetes') printf '%s' 'prepare · package list' ;;
-    'build · construccion del disco (headless, QEMU + HVF)') printf '%s' 'build · disk image (headless, QEMU + HVF)' ;;
-    'utm · bundle UTM') printf '%s' 'utm · UTM bundle' ;;
-    'verify · comprobacion') printf '%s' 'verify · validation' ;;
-    'sanitize · limpieza') printf '%s' 'sanitize · cleanup' ;;
-    'package · compresion') printf '%s' 'package · compression' ;;
-    'Enter acepta el valor entre corchetes. Detectados de tu Mac.') printf '%s' 'Press Enter to accept the value in brackets. Detected from your Mac.' ;;
-    'Zona horaria') printf '%s' 'Time zone' ;;
-    'Teclado (consola)') printf '%s' 'Keyboard (console)' ;;
-    'Teclado (Hyprland/Wayland)') printf '%s' 'Keyboard (Hyprland/Wayland)' ;;
-    'Nucleos para la VM') printf '%s' 'VM CPU cores' ;;
-    'Memoria para la VM (MiB)') printf '%s' 'VM memory (MiB)' ;;
-    'Tamano del disco') printf '%s' 'Disk size' ;;
-    'Compilar las 17 herramientas de Omarchy que no existen para ARM (~40 min)?') printf '%s' 'Compile the 17 Omarchy tools unavailable on ARM (~40 min)?' ;;
-    'Incluir OBS Studio y Pinta (software libre, se compilan: ~45 min)?') printf '%s' 'Include OBS Studio and Pinta (free software, compiled from source: ~45 min)?' ;;
-    'Preparar la imagen para repartir?') printf '%s' 'Prepare the image for distribution?' ;;
-    'Usuario de la imagen distribuible') printf '%s' 'Distribution image user' ;;
-    'Usuario de la VM') printf '%s' 'VM user' ;;
-    'Contrasena') printf '%s' 'Password' ;;
-    'Nombre completo') printf '%s' 'Full name' ;;
-    'Empezar?') printf '%s' 'Start?' ;;
-    'Dos usos posibles:') printf '%s' 'Two possible uses:' ;;
-    'resumen: '* ) printf 'summary: %s' "${1#resumen: }" ;;
-    '         herramientas: '* ) printf '         tools: %s' "${1#         herramientas: }" ;;
-    'reanudando con las respuestas de '* ) printf 'resuming with answers from %s' "${1#reanudando con las respuestas de }" ;;
-    'cancelado') printf '%s' 'cancelled' ;;
-    'Completado en '* ) printf 'Completed in %s' "${1#Completado en }" ;;
-    'opcion desconocida: '* ) printf 'unknown option: %s' "${1#opcion desconocida: }" ;;
-    '--from necesita una fase ('* ) printf '%s' '--from requires a phase (see --list)' ;;
-    '--only necesita una fase ('* ) printf '%s' '--only requires a phase (see --list)' ;;
-    '--from y --only son excluyentes: elige uno') printf '%s' '--from and --only are mutually exclusive: choose one' ;;
-    'fase desconocida: '* ) printf 'unknown phase: %s' "${1#fase desconocida: }" ;;
-    'VM_USER='*' no vale:'* ) printf '%s' 'VM_USER is invalid: use lowercase letters, digits, - and _, starting with a letter, 3-32 characters' ;;
-    'VM_USER='*' es parte de DIST_NEW_USER='* ) printf '%s' 'VM_USER must not be part of DIST_NEW_USER; choose another user' ;;
-    *) printf '%s' "$1" ;;
+# Keep both translations together under a stable key. Call sites refer only to
+# the key, so either sentence can be edited without breaking the other locale.
+msg() {
+  local key="$1"
+  shift
+  case "$key" in
+    phase_deps)       [[ $LANGUAGE == es ]] && printf '%s' 'deps · dependencias del anfitrion' || printf '%s' 'deps · host dependencies' ;;
+    phase_fetch)      [[ $LANGUAGE == es ]] && printf '%s' 'fetch · imagenes base' || printf '%s' 'fetch · base images' ;;
+    phase_prepare)    [[ $LANGUAGE == es ]] && printf '%s' 'prepare · lista de paquetes' || printf '%s' 'prepare · package list' ;;
+    phase_build)      [[ $LANGUAGE == es ]] && printf '%s' 'build · construccion del disco (headless, QEMU + HVF)' || printf '%s' 'build · disk image (headless, QEMU + HVF)' ;;
+    phase_utm)        [[ $LANGUAGE == es ]] && printf '%s' 'utm · bundle .utm' || printf '%s' 'utm · .utm bundle' ;;
+    phase_verify)     [[ $LANGUAGE == es ]] && printf '%s' 'verify · arranque y comprobacion' || printf '%s' 'verify · boot and validation' ;;
+    phase_sanitize)   [[ $LANGUAGE == es ]] && printf '%s' 'sanitize · copia limpia para distribuir' || printf '%s' 'sanitize · clean distribution copy' ;;
+    phase_package)    [[ $LANGUAGE == es ]] && printf '%s' 'package · compactar y comprimir' || printf '%s' 'package · compact and compress' ;;
+    phase_config)     [[ $LANGUAGE == es ]] && printf '%s' 'configuracion' || printf '%s' 'configuration' ;;
+    defaults_hint)    [[ $LANGUAGE == es ]] && printf '%s' 'Enter acepta el valor entre corchetes. Detectados de tu Mac.' || printf '%s' 'Press Enter to accept the value in brackets. Detected from your Mac.' ;;
+    timezone)         [[ $LANGUAGE == es ]] && printf '%s' 'Zona horaria' || printf '%s' 'Time zone' ;;
+    keyboard_console) [[ $LANGUAGE == es ]] && printf '%s' 'Teclado (consola)' || printf '%s' 'Keyboard (console)' ;;
+    keyboard_wayland) [[ $LANGUAGE == es ]] && printf '%s' 'Teclado (Hyprland/Wayland)' || printf '%s' 'Keyboard (Hyprland/Wayland)' ;;
+    vm_cpus)          [[ $LANGUAGE == es ]] && printf '%s' 'Nucleos para la VM' || printf '%s' 'VM CPU cores' ;;
+    vm_memory)        [[ $LANGUAGE == es ]] && printf '%s' 'Memoria para la VM (MiB)' || printf '%s' 'VM memory (MiB)' ;;
+    disk_size)        [[ $LANGUAGE == es ]] && printf '%s' 'Tamano del disco' || printf '%s' 'Disk size' ;;
+    compile_tools)    [[ $LANGUAGE == es ]] && printf '%s' 'Compilar las 17 herramientas de Omarchy que no existen para ARM (~40 min)?' || printf '%s' 'Compile the 17 Omarchy tools unavailable on ARM (~40 min)?' ;;
+    include_apps)     [[ $LANGUAGE == es ]] && printf '%s' 'Incluir OBS Studio y Pinta (software libre, se compilan: ~45 min)?' || printf '%s' 'Include OBS Studio and Pinta (free software, compiled from source: ~45 min)?' ;;
+    prepare_dist)     [[ $LANGUAGE == es ]] && printf '%s' 'Preparar la imagen para repartir?' || printf '%s' 'Prepare the image for distribution?' ;;
+    dist_user)        [[ $LANGUAGE == es ]] && printf '%s' 'Usuario de la imagen distribuible' || printf '%s' 'Distribution image user' ;;
+    vm_user)          [[ $LANGUAGE == es ]] && printf '%s' 'Usuario de la VM' || printf '%s' 'VM user' ;;
+    password)         [[ $LANGUAGE == es ]] && printf '%s' 'Contrasena' || printf '%s' 'Password' ;;
+    full_name)        [[ $LANGUAGE == es ]] && printf '%s' 'Nombre completo' || printf '%s' 'Full name' ;;
+    start)            [[ $LANGUAGE == es ]] && printf '%s' 'Empezar?' || printf '%s' 'Start?' ;;
+    use_cases)        [[ $LANGUAGE == es ]] && printf '%s' 'Dos usos posibles:' || printf '%s' 'Two possible uses:' ;;
+    cancelled)        [[ $LANGUAGE == es ]] && printf '%s' 'cancelado' || printf '%s' 'cancelled' ;;
+    tools_missing)    [[ $LANGUAGE == es ]] && printf '%s' 'sin ellas faltaran ttfx, tensaku, omacalc, omacut, omawrite, aether, cliamp...' || printf '%s' 'without them, ttfx, tensaku, omacalc, omacut, omawrite, aether, cliamp and others will be missing' ;;
+    apps_later)       [[ $LANGUAGE == es ]] && printf '%s' 'se pueden anadir despues desde dentro: omarchy-arm-extras pinta obs' || printf '%s' 'you can add them later inside the VM: omarchy-arm-extras pinta obs' ;;
+    use_dist_1)       [[ $LANGUAGE == es ]] && printf "  · imagen para repartir  → renombra el usuario a '%s', borra" "$1" || printf "  · distribution image → renames the user to '%s', removes" "$1" ;;
+    use_dist_2)       [[ $LANGUAGE == es ]] && printf '%s' '    claves SSH e identidad, y genera un zip de ~6,5 GB (~30 min extra)' || printf '%s' '    SSH keys and machine identity, and creates a ~6.5 GB zip (~30 min extra)' ;;
+    use_personal)     [[ $LANGUAGE == es ]] && printf "  · VM para ti            → se queda como esta, con el usuario '%s'" "$1" || printf "  · personal VM         → keeps the current state and user '%s'" "$1" ;;
+    summary)          [[ $LANGUAGE == es ]] && printf 'resumen: %s/%s · %s · %s nucleos · %s MiB · disco %s' "$@" || printf 'summary: %s/%s · %s · %s cores · %s MiB · %s disk' "$@" ;;
+    summary_options)  [[ $LANGUAGE == es ]] && printf '         herramientas: %s · OBS+Pinta: %s · repartir: %s' "$@" || printf '         tools: %s · OBS+Pinta: %s · distribute: %s' "$@" ;;
+    resume_answers)   [[ $LANGUAGE == es ]] && printf "reanudando con las respuestas de %s (usuario '%s', repartir: %s)" "$@" || printf "resuming with answers from %s (user '%s', distribute: %s)" "$@" ;;
+    completed)        [[ $LANGUAGE == es ]] && printf 'Completado en %s min.' "$1" || printf 'Completed in %s min.' "$1" ;;
+    unknown_option)   [[ $LANGUAGE == es ]] && printf 'opcion desconocida: %s' "$1" || printf 'unknown option: %s' "$1" ;;
+    language_invalid) [[ $LANGUAGE == es ]] && printf '%s' "el idioma debe ser 'en' o 'es'" || printf '%s' "language must be 'en' or 'es'" ;;
+    selector_invalid) [[ $LANGUAGE == es ]] && printf '%s' 'seleccion desconocida; se usara ingles' || printf '%s' 'unknown selection; using English' ;;
+    from_required)    [[ $LANGUAGE == es ]] && printf '%s' '--from necesita una fase (consulta --list)' || printf '%s' '--from requires a phase (see --list)' ;;
+    only_required)    [[ $LANGUAGE == es ]] && printf '%s' '--only necesita una fase (consulta --list)' || printf '%s' '--only requires a phase (see --list)' ;;
+    exclusive)        [[ $LANGUAGE == es ]] && printf '%s' '--from y --only son excluyentes: elige uno' || printf '%s' '--from and --only are mutually exclusive: choose one' ;;
+    unknown_phase)    [[ $LANGUAGE == es ]] && printf "fase desconocida: '%s' (validas: %s)" "$@" || printf "unknown phase: '%s' (valid: %s)" "$@" ;;
+    invalid_vm_user)  [[ $LANGUAGE == es ]] && printf "VM_USER='%s' no vale: minusculas, digitos, '-' y '_', empezando por letra, 3-32 caracteres" "$1" || printf "VM_USER='%s' is invalid: use lowercase letters, digits, '-' and '_', starting with a letter, 3-32 characters" "$1" ;;
+    overlapping_user) [[ $LANGUAGE == es ]] && printf "VM_USER='%s' es parte de DIST_NEW_USER='%s'; elige otro" "$@" || printf "VM_USER='%s' is part of DIST_NEW_USER='%s'; choose another" "$@" ;;
+    no_answers)       [[ $LANGUAGE == es ]] && printf 'no hay %s: se usaran los valores por defecto, que pueden no ser los que elegiste' "$1" || printf 'no %s found: defaults will be used and may differ from your previous choices' "$1" ;;
+    phase_failed)     [[ $LANGUAGE == es ]] && printf "fallo en la fase '%s'" "$1" || printf "phase '%s' failed" "$1" ;;
+    *) printf '[missing message: %s]' "$key"; return 1 ;;
   esac
 }
 
@@ -130,11 +142,11 @@ PHASES=(deps fetch prepare build utm verify sanitize package)
 
 # ─────────────────────────────────── salida ────────────────────────────────
 c_ok=$'\033[32m'; c_warn=$'\033[33m'; c_err=$'\033[31m'; c_hi=$'\033[1;36m'; c_off=$'\033[0m'
-phase() { echo; echo "${c_hi}━━━ $(tr "$*") ━━━${c_off}"; }
-info()  { echo "  $(tr "$*")"; }
-ok()    { echo "  ${c_ok}✓${c_off} $(tr "$*")"; }
-warn()  { echo "  ${c_warn}!${c_off} $(tr "$*")" >&2; }
-die()   { echo "  ${c_err}✗${c_off} $(tr "$*")" >&2; exit 1; }
+phase() { echo; echo "${c_hi}━━━ $* ━━━${c_off}"; }
+info()  { echo "  $*"; }
+ok()    { echo "  ${c_ok}✓${c_off} $*"; }
+warn()  { echo "  ${c_warn}!${c_off} $*" >&2; }
+die()   { echo "  ${c_err}✗${c_off} $*" >&2; exit 1; }
 
 # ── interaccion ─────────────────────────────────────────────────────────────
 # El script nacio desatendido y debe seguir siendolo: sin terminal, o con
@@ -187,14 +199,14 @@ ask() {  # ask <variable> <pregunta> [valor por defecto]
   local var="$1" q="$2" def="${3:-}" cur ans
   cur="${!var:-$def}"
   if (( ! INTERACTIVO )); then printf -v "$var" '%s' "$cur"; return; fi
-  read -r -p "  $(tr "$q") [${cur}]: " ans </dev/tty || ans=""
+  read -r -p "  $q [${cur}]: " ans </dev/tty || ans=""
   printf -v "$var" '%s' "${ans:-$cur}"
 }
 
 confirm() {  # confirm <pregunta> <si|no por defecto>
   local q="$1" def="${2:-si}" ans
   if (( ! INTERACTIVO )); then [[ $def == si ]]; return; fi
-  read -r -p "  $(tr "$q") [$([[ $def == si ]] && echo 'S/n' || echo 's/N')]: " ans </dev/tty || ans=""
+  read -r -p "  $q [$([[ $def == si ]] && echo 'S/n' || echo 's/N')]: " ans </dev/tty || ans=""
   ans="${ans:-$def}"
   # ${var,,} es de bash 4 y macOS trae bash 3.2: ahi es un error de expansion
   # que aborta la funcion entera, y confirm devolvia "si" por accidente.
@@ -248,7 +260,7 @@ detectar_del_anfitrion() {
 
 # ─────────────────────────────── fase: deps ────────────────────────────────
 ph_deps() {
-  phase "deps · dependencias del anfitrion"
+  phase "$(msg phase_deps)"
   [[ $(uname -s) == Darwin ]] || die "esto solo corre en macOS"
   [[ $(uname -m) == arm64  ]] || die "hace falta Apple Silicon (HVF para aarch64)"
   command -v brew >/dev/null || die "falta Homebrew: https://brew.sh"
@@ -276,7 +288,7 @@ ensure_dirs() { mkdir -p "$W"/{dl,vm,provision,scripts,logs,dist,shots}; }
 
 # ─────────────────────────────── fase: fetch ───────────────────────────────
 ph_fetch() {
-  phase "fetch · imagenes base"
+  phase "$(msg phase_fetch)"
   local iso="$W/dl/alpine-virt-aarch64.iso"
   local tgz="$W/dl/alarm-rootfs.tgz"
 
@@ -331,7 +343,7 @@ ph_fetch() {
 
 # ────────────────────────────── fase: prepare ──────────────────────────────
 ph_prepare() {
-  phase "prepare · lista de paquetes"
+  phase "$(msg phase_prepare)"
   # quattro es una rama de pre-release: cuando la fusionen o la borren, todo lo
   # que sigue falla sin decir por que. Se comprueba antes y se cae a la rama por
   # defecto del repositorio, avisando.
@@ -3295,7 +3307,7 @@ make_iso() {  # make_iso <destino.iso> <fichero...>
 
 # ─────────────────────────────── fase: build ───────────────────────────────
 ph_build() {
-  phase "build · construccion del disco (headless, QEMU + HVF)"
+  phase "$(msg phase_build)"
   write_payloads
   # Nombres cortos: hdiutil trunca los largos en el arbol ISO9660
   make_iso "$W/provision/provision.iso" \
@@ -3346,7 +3358,7 @@ ph_build() {
 
 # ──────────────────────────────── fase: utm ────────────────────────────────
 ph_utm() {
-  phase "utm · bundle .utm"
+  phase "$(msg phase_utm)"
   write_payloads
   [[ -s $W/vm/omarchy-arm.qcow2 ]] || die "no hay disco construido; ejecuta la fase build"
   # Borrar una VM homonima destruye su disco. Si ya existe una, se pregunta;
@@ -3373,7 +3385,7 @@ ph_utm() {
 
 # ─────────────────────────────── fase: verify ──────────────────────────────
 ph_verify() {
-  phase "verify · arranque y comprobacion"
+  phase "$(msg phase_verify)"
   "$UTMCTL" start "$VM_NAME" >/dev/null 2>&1 || true
   info "esperando al arranque..."
   sleep 60
@@ -3456,7 +3468,7 @@ EXPEOF
 
 # ────────────────────────────── fase: sanitize ─────────────────────────────
 ph_sanitize() {
-  phase "sanitize · copia limpia para distribuir"
+  phase "$(msg phase_sanitize)"
   write_payloads
   "$UTMCTL" stop "$VM_NAME" >/dev/null 2>&1 || true
   while [[ $("$UTMCTL" status "$VM_NAME" 2>/dev/null) == started ]]; do sleep 3; done
@@ -3494,7 +3506,7 @@ ph_sanitize() {
 
 # ────────────────────────────── fase: package ──────────────────────────────
 ph_package() {
-  phase "package · compactar y comprimir"
+  phase "$(msg phase_package)"
   [[ -s $W/dist/dist.qcow2 ]] || die "no hay imagen sanitizada; ejecuta la fase sanitize"
   info "compactando y comprimiendo los clusters del qcow2..."
   rm -f "$W/dist/slim.qcow2"
@@ -3715,58 +3727,58 @@ cuestionario() {
     [[ -f "$W/respuestas.env" ]] || guardar_respuestas
     return
   fi
-  phase "$(tr configuracion)"
-  info "$(tr 'Enter acepta el valor entre corchetes. Detectados de tu Mac.')"
+  phase "$(msg phase_config)"
+  info "$(msg defaults_hint)"
   echo
 
-  ask VM_TIMEZONE "$(tr 'Zona horaria')"                     "$VM_TIMEZONE"
-  ask VM_KEYMAP   "$(tr 'Teclado (consola)')"                "$VM_KEYMAP"
-  ask VM_XKB      "$(tr 'Teclado (Hyprland/Wayland)')"       "$VM_XKB"
+  ask VM_TIMEZONE "$(msg timezone)"         "$VM_TIMEZONE"
+  ask VM_KEYMAP   "$(msg keyboard_console)" "$VM_KEYMAP"
+  ask VM_XKB      "$(msg keyboard_wayland)" "$VM_XKB"
   echo
-  ask UTM_CPUS    "$(tr 'Nucleos para la VM')"               "$UTM_CPUS"
-  ask UTM_MEM     "$(tr 'Memoria para la VM (MiB)')"         "$UTM_MEM"
-  ask DISK_SIZE   "$(tr 'Tamano del disco')"                 "$DISK_SIZE"
+  ask UTM_CPUS    "$(msg vm_cpus)"   "$UTM_CPUS"
+  ask UTM_MEM     "$(msg vm_memory)" "$UTM_MEM"
+  ask DISK_SIZE   "$(msg disk_size)" "$DISK_SIZE"
   echo
 
   # ~40 min de compilaciones. Sin ellas el escritorio funciona, pero faltan el
   # salvapantallas, el anotador de capturas y la calculadora, entre otros.
-  if confirm "$(tr 'Compilar las 17 herramientas de Omarchy que no existen para ARM (~40 min)?')" si; then
+  if confirm "$(msg compile_tools)" si; then
     HACER_TOOLS=si
   else
     HACER_TOOLS=no
-    warn "sin ellas faltaran ttfx, tensaku, omacalc, omacut, omawrite, aether, cliamp..."
+    warn "$(msg tools_missing)"
   fi
   echo
 
   # OBS y Pinta son lo mas caro del build. Van dentro porque son software libre
   # y la imagen que se distribuye los lleva, pero para una VM de pruebas sobran.
-  if confirm "$(tr 'Incluir OBS Studio y Pinta (software libre, se compilan: ~45 min)?')" si; then
+  if confirm "$(msg include_apps)" si; then
     HACER_LIBRES=si
   else
     HACER_LIBRES=no
-    info "se pueden anadir despues desde dentro: omarchy-arm-extras pinta obs"
+    info "$(msg apps_later)"
   fi
   echo
 
   # La distincion que mas cambia el resultado: imagen para repartir frente a
   # VM para uso propio.
-  info "$(tr 'Dos usos posibles:')"
-  info "  · imagen para repartir  → renombra el usuario a '$DIST_NEW_USER', borra"
-  info "    claves SSH e identidad, y genera un zip de ~6,5 GB (~30 min extra)"
-  info "  · VM para ti            → se queda como esta, con el usuario '$VM_USER'"
-  if confirm "$(tr 'Preparar la imagen para repartir?')" no; then
+  info "$(msg use_cases)"
+  info "$(msg use_dist_1 "$DIST_NEW_USER")"
+  info "$(msg use_dist_2)"
+  info "$(msg use_personal "$VM_USER")"
+  if confirm "$(msg prepare_dist)" no; then
     HACER_DIST=si
-    ask DIST_NEW_USER "$(tr 'Usuario de la imagen distribuible')" "$DIST_NEW_USER"
+    ask DIST_NEW_USER "$(msg dist_user)" "$DIST_NEW_USER"
   else
     HACER_DIST=no
-    ask VM_USER     "$(tr 'Usuario de la VM')"     "$VM_USER"
-    ask VM_PASSWORD "$(tr 'Contrasena')"           "$VM_PASSWORD"
-    ask VM_FULLNAME "$(tr 'Nombre completo')"      "$VM_FULLNAME"
+    ask VM_USER     "$(msg vm_user)"   "$VM_USER"
+    ask VM_PASSWORD "$(msg password)"  "$VM_PASSWORD"
+    ask VM_FULLNAME "$(msg full_name)" "$VM_FULLNAME"
   fi
   echo
-  info "resumen: $VM_KEYMAP/$VM_XKB · $VM_TIMEZONE · ${UTM_CPUS} nucleos · ${UTM_MEM} MiB · disco $DISK_SIZE"
-  info "         herramientas: $HACER_TOOLS · OBS+Pinta: $HACER_LIBRES · repartir: $HACER_DIST"
-  confirm "$(tr 'Empezar?')" si || die "cancelado"
+  info "$(msg summary "$VM_KEYMAP" "$VM_XKB" "$VM_TIMEZONE" "$UTM_CPUS" "$UTM_MEM" "$DISK_SIZE")"
+  info "$(msg summary_options "$HACER_TOOLS" "$HACER_LIBRES" "$HACER_DIST")"
+  confirm "$(msg start)" si || die "$(msg cancelled)"
   guardar_respuestas
 }
 
@@ -3799,13 +3811,13 @@ while (($#)); do
   case "$1" in
     # ${2:-} y no $2: con `set -u` un argumento ausente aborta con "unbound
     # variable" y un numero de linea, en vez del mensaje util que hay abajo.
-    --from) run_from="${2:-}"; [[ -n $run_from ]] || { usage; die "--from necesita una fase (${PHASES[*]})"; }; shift 2 ;;
-    --only) run_only="${2:-}"; [[ -n $run_only ]] || { usage; die "--only necesita una fase (${PHASES[*]})"; }; shift 2 ;;
+    --from) run_from="${2:-}"; [[ -n $run_from ]] || { usage; die "$(msg from_required)"; }; shift 2 ;;
+    --only) run_only="${2:-}"; [[ -n $run_only ]] || { usage; die "$(msg only_required)"; }; shift 2 ;;
     --list) printf '%s\n' "${PHASES[@]}"; exit 0 ;;
     --yes|-y|--sin-preguntas) ASSUME_YES=1; INTERACTIVO=0; shift ;;
-    --language|--lang) LANGUAGE="${2:-}"; [[ $LANGUAGE == en || $LANGUAGE == es ]] || die "language must be 'en' or 'es'"; LANGUAGE_SELECTED=1; shift 2 ;;
+    --language|--lang) LANGUAGE="${2:-}"; [[ $LANGUAGE == en || $LANGUAGE == es ]] || die "$(msg language_invalid)"; LANGUAGE_SELECTED=1; shift 2 ;;
     -h|--help) usage; exit 0 ;;
-    *) die "opcion desconocida: $1" ;;
+    *) die "$(msg unknown_option "$1")" ;;
   esac
 done
 
@@ -3821,7 +3833,7 @@ choose_language() {
   case "$choice" in
     2) LANGUAGE=es ;;
     1|"" ) LANGUAGE=en ;;
-    *) warn "unknown selection; using English"; LANGUAGE=en ;;
+    *) warn "$(msg selector_invalid)"; LANGUAGE=en ;;
   esac
   LANGUAGE_SELECTED=1
 }
@@ -3833,21 +3845,21 @@ choose_language
 # convierte ese barrido en una escopeta: se exige que sea un nombre de usuario
 # de verdad y que no sea subcadena del usuario de la imagen distribuible.
 [[ $VM_USER =~ ^[a-z_][a-z0-9_-]{2,31}$ ]] \
-  || die "VM_USER='$VM_USER' no vale: minusculas, digitos, '-' y '_', empezando por letra, 3-32 caracteres"
+  || die "$(msg invalid_vm_user "$VM_USER")"
 [[ $DIST_NEW_USER == *"$VM_USER"* ]] \
-  && die "VM_USER='$VM_USER' es parte de DIST_NEW_USER='$DIST_NEW_USER'; elige otro"
+  && die "$(msg overlapping_user "$VM_USER" "$DIST_NEW_USER")"
 
 # Combinar los dos no ejecuta nada: si la fase de --only va ANTES que la de
 # --from en el array, el bucle nunca llega a poner started=1 y el script
 # terminaba anunciando "Completado en 0 min." con rc=0 sin hacer absolutamente
 # nada. Son excluyentes, asi que se dice y punto.
-[[ -n $run_from && -n $run_only ]] && die "--from y --only son excluyentes: elige uno"
+[[ -n $run_from && -n $run_only ]] && die "$(msg exclusive)"
 
 # Un nombre de fase mal escrito no debe salir con exito sin hacer nada.
 for sel in "$run_from" "$run_only"; do
   [[ -z $sel ]] && continue
   printf '%s\n' "${PHASES[@]}" | grep -qxF "$sel" \
-    || die "fase desconocida: '$sel' (validas: ${PHASES[*]})"
+    || die "$(msg unknown_phase "$sel" "${PHASES[*]}")"
 done
 
 # Reanudar o ejecutar una sola fase no debe reabrir el cuestionario, pero SI
@@ -3858,9 +3870,9 @@ if [[ -z $run_from && -z $run_only ]]; then
 else
   cargar_respuestas || true
   if [[ -f "$W/respuestas.env" ]]; then
-    info "reanudando con las respuestas de $W/respuestas.env (usuario '$VM_USER', repartir: ${HACER_DIST:-no})"
+    info "$(msg resume_answers "$W/respuestas.env" "$VM_USER" "${HACER_DIST:-no}")"
   else
-    warn "no hay $W/respuestas.env: se usaran los valores por defecto, que pueden no ser los que elegiste"
+    warn "$(msg no_answers "$W/respuestas.env")"
   fi
 fi
 
@@ -3882,7 +3894,7 @@ for p in "${PHASES[@]}"; do
   [[ -n $run_from && $p == "$run_from" ]] && started=1
   (( started )) || continue
   ensure_dirs
-  "ph_$p" || die "fallo en la fase '$p'"
+  "ph_$p" || die "$(msg phase_failed "$p")"
 done
 echo
-echo "${c_ok}$(tr "Completado en $(( (SECONDS-t0)/60 )) min.")${c_off}"
+echo "${c_ok}$(msg completed "$(( (SECONDS-t0)/60 ))")${c_off}"
