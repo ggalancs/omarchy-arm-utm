@@ -3557,8 +3557,15 @@ Arch Linux ARM + Hyprland y la configuración, temas y herramientas de
 
 - Mac con Apple Silicon (M1 o superior)
 - [UTM](https://mac.getutm.app) 4.7 o posterior
-- ~11 GB de disco libre: el `.zip` ocupa 3,6 GB y la imagen descomprimida
-  otros 7,2 GB, más lo que crezca al usarla
+- ~8 GB de disco libre para empezar: el `.zip` ocupa 3,6 GB y la imagen
+  descomprimida otros 3,6 GB. Puedes borrar el `.zip` una vez importada.
+- El disco de la VM **crece con el uso**: parte de 3,6 GB y se expande según
+  lo que instales, con un techo de 80 GB. Tras un día de uso normal ronda
+  los 4,7 GB.
+
+(Estas cifras son las de `omarchy-arm-utm-v2.zip`. La primera entrega,
+`omarchy-arm-utm.zip`, ocupa 6,5 GB y pide bastante más sitio; `VERSIONS.md`
+compara las dos.)
 
 ## Instalación
 
