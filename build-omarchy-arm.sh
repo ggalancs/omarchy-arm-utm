@@ -3644,6 +3644,27 @@ ph_package() {
   rm -f "$W/dist/dist.qcow2" "$W/dist/slim.qcow2"
   ok "listo: $W/dist/$DIST_ZIP ($(du -h "$W/dist/$DIST_ZIP" | cut -f1))"
   cat "$W/dist/$DIST_ZIP.sha256"
+
+  # La VM que registro la fase `utm` es un intermedio: sirve para `verify` y
+  # nada mas, porque lo que se reparte es el bundle sanitizado de dist/. Se
+  # quedaba en UTM despues de cada construccion, once gigas cada una, y
+  # ademas con un nombre parecido al de la imagen buena: alguien la arranco
+  # creyendo que era la imagen y se encontro la cuenta del constructor.
+  #
+  # Se borra solo si esta invocacion la creo -su UUID esta en make-utm.log- y
+  # llegamos hasta el final. CONSERVAR_VM=si la deja para depurar.
+  if [ "${CONSERVAR_VM:-}" != si ] && [ -f "$W/logs/make-utm.log" ]; then
+    local VU
+    VU=$(grep -o 'UUID: *[0-9A-Fa-f-]\{36\}' "$W/logs/make-utm.log" | tail -1 | awk '{print $2}')
+    if [ -n "$VU" ] && "$UTMCTL" list 2>/dev/null | grep -q "$VU"; then
+      "$UTMCTL" stop "$VU" >/dev/null 2>&1 || true
+      if "$UTMCTL" delete "$VU" >/dev/null 2>&1; then
+        ok "VM intermedia de construccion retirada de UTM ($VU)"
+      else
+        warn "no pude retirar la VM intermedia $VU; borrala tu si no la quieres"
+      fi
+    fi
+  fi
 }
 
 write_readme() {
@@ -3859,6 +3880,7 @@ __PAYLOAD_LEEME_MD__
 # implementacion, no decisiones.
 # Con ':=' para que se puedan fijar desde el entorno, igual que el resto:
 #   HACER_LIBRES=no ./build-omarchy-arm.sh --yes
+#   CONSERVAR_VM=si ./build-omarchy-arm.sh --yes   # no retira la VM intermedia
 : "${HACER_TOOLS:=si}"
 : "${HACER_LIBRES:=si}"
 : "${HACER_DIST:=si}"
