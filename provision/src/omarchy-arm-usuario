@@ -1,0 +1,59 @@
+#!/bin/bash
+#
+#  omarchy-arm-usuario — con que usuario entra la VM
+#  ────────────────────────────────────────────────────────────────────────────
+#  La imagen entra sola como 'omarchy'. Si creas otra cuenta, el arranque sigue
+#  entrando con la primera y no hay forma obvia de cambiarlo: el tema de SDDM
+#  de Omarchy pinta el ultimo usuario, no una lista donde elegir.
+#
+#  Esto cambia el autologin sin tener que editar ficheros a mano.
+#
+#    omarchy-arm-usuario              con quien entra ahora
+#    omarchy-arm-usuario ana          entra con 'ana' a partir del proximo arranque
+#    omarchy-arm-usuario --preguntar  no entra solo; pide usuario y contrasena
+#  ────────────────────────────────────────────────────────────────────────────
+set -uo pipefail
+CONF=/etc/sddm.conf.d/autologin.conf
+
+usuarios() { awk -F: '$3>=1000 && $3<65000 {print $1}' /etc/passwd | sort; }
+actual()   { [ -f "$CONF" ] && sed -n 's/^User=//p' "$CONF" | tail -1; }
+
+case "${1:-}" in
+  -h|--help) sed -n '3,15p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 0 ;;
+
+  "")
+    A=$(actual)
+    if [ -n "$A" ]; then echo "Entra sola como: $A"
+    else echo "No entra sola: SDDM pide usuario y contrasena."; fi
+    echo
+    echo "Cuentas en la maquina:"
+    usuarios | sed "s/^/  /"
+    echo
+    echo "Cambiarlo:  omarchy-arm-usuario <cuenta>   |   omarchy-arm-usuario --preguntar"
+    ;;
+
+  --preguntar)
+    [ -f "$CONF" ] || { echo "Ya pedia usuario y contrasena."; exit 0; }
+    sudo rm -f "$CONF" || exit 1
+    echo "Hecho: en el proximo arranque SDDM pedira usuario y contrasena."
+    echo
+    echo "AVISO: el tema de SDDM de Omarchy muestra el ultimo usuario que entro."
+    echo "Si no te deja teclear otro nombre, vuelve a fijar el autologin con:"
+    echo "    omarchy-arm-usuario <cuenta>"
+    ;;
+
+  *)
+    U="$1"
+    id "$U" >/dev/null 2>&1 || { echo "no existe la cuenta '$U'. Las que hay:"; usuarios | sed "s/^/  /"; exit 2; }
+    [ "$(id -u "$U")" -ge 1000 ] || { echo "'$U' es una cuenta de sistema; no vale para entrar."; exit 2; }
+    # Se conserva la sesion que ya estuviera puesta: si el bundle se creo con
+    # 'omarchy' y ahi pone Session=omarchy, cambiar de usuario no debe cambiar
+    # de escritorio.
+    SES=$([ -f "$CONF" ] && sed -n 's/^Session=//p' "$CONF" | tail -1)
+    [ -n "$SES" ] || SES=$(ls /usr/local/share/wayland-sessions /usr/share/wayland-sessions 2>/dev/null \
+                            | grep -m1 '\.desktop$' | sed 's/\.desktop$//')
+    [ -n "$SES" ] || SES=hyprland-uwsm
+    printf '[Autologin]\nUser=%s\nSession=%s\n' "$U" "$SES" | sudo tee "$CONF" >/dev/null || exit 1
+    echo "Hecho: a partir del proximo arranque entra como '$U' (sesion $SES)."
+    ;;
+esac

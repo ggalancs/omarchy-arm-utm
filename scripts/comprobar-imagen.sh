@@ -35,7 +35,16 @@ mkdir -p "$TMP/iso"
 # Por defecto el chequeo de distribucion. GUEST_SCRIPT permite mandar otro
 # script por el mismo canal: la consola serie destroza $ y comillas, y el
 # ISO es el unico camino fiable para diagnosticar dentro de la imagen.
-cp "${GUEST_SCRIPT:-scripts/chequeo-invitado.sh}" "$TMP/iso/chequeo.sh"
+# Si el script no se puede copiar, se para AQUI. Sin esto el ISO salia vacio,
+# la VM arrancaba igual y se perdian diez minutos para acabar diciendo
+# "No such file or directory" dentro del invitado.
+GS="${GUEST_SCRIPT:-scripts/chequeo-invitado.sh}"
+[ -r "$GS" ] || { echo "no puedo leer el script de invitado: $GS" >&2; exit 2; }
+cp "$GS" "$TMP/iso/chequeo.sh" || { echo "no pude preparar el ISO" >&2; exit 2; }
+# La lista base viaja SIEMPRE, con su propio nombre. Asi un GUEST_SCRIPT de
+# diagnostico puede invocarla -por ejemplo para saboteary comprobar que las
+# comprobaciones saben ponerse en rojo- sin duplicarla.
+cp scripts/chequeo-invitado.sh "$TMP/iso/chequeo-base.sh"
 hdiutil makehybrid -quiet -iso -joliet -default-volume-name CHEQUEO \
   -o "$TMP/chequeo.iso" "$TMP/iso" >/dev/null || { echo "no pude crear el ISO"; exit 2; }
 

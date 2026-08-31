@@ -351,6 +351,13 @@ cat > /etc/sddm.conf.d/autologin.conf <<EOF
 User=$VM_USER
 Session=$SESSION
 EOF
+# Cambiar el autologin sin editar ficheros a mano. Sin esto, quien cree una
+# segunda cuenta se queda entrando siempre con la primera: el tema de SDDM de
+# Omarchy pinta el ultimo usuario, no una lista donde elegir.
+if [ -f /root/prov/omarchy-arm-usuario ]; then
+  install -Dm755 /root/prov/omarchy-arm-usuario /usr/local/bin/omarchy-arm-usuario
+  echo "  omarchy-arm-usuario instalado"
+fi
 sed -i '/-auth.*pam_gnome_keyring\.so/d;/-password.*pam_gnome_keyring\.so/d' /etc/pam.d/sddm 2>/dev/null || true
 echo "  sesion=$SESSION"
 ls /usr/local/share/wayland-sessions /usr/share/wayland-sessions 2>/dev/null

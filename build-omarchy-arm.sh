@@ -471,6 +471,7 @@ cp "$PROV/stage2.sh" "$PROV/stage3.sh" "$PROV/config.env" \
 [ -f "$PROV/clipbrd.sh" ] && cp "$PROV/clipbrd.sh" /mnt/root/prov/omarchy-arm-clipboard
 [ -f "$PROV/vdagent.py" ] && cp "$PROV/vdagent.py" /mnt/root/prov/omarchy-arm-vdagent
 [ -f "$PROV/share.sh" ] && cp "$PROV/share.sh" /mnt/root/prov/omarchy-arm-share
+[ -f "$PROV/usuario.sh" ] && cp "$PROV/usuario.sh" /mnt/root/prov/omarchy-arm-usuario
 cat > /mnt/root/prov/fsinfo.env <<EOF
 ROOTFS=$ROOTFS
 ROOT_MOUNT_OPTS=$MOPT_ROOT
@@ -851,6 +852,13 @@ cat > /etc/sddm.conf.d/autologin.conf <<EOF
 User=$VM_USER
 Session=$SESSION
 EOF
+# Cambiar el autologin sin editar ficheros a mano. Sin esto, quien cree una
+# segunda cuenta se queda entrando siempre con la primera: el tema de SDDM de
+# Omarchy pinta el ultimo usuario, no una lista donde elegir.
+if [ -f /root/prov/omarchy-arm-usuario ]; then
+  install -Dm755 /root/prov/omarchy-arm-usuario /usr/local/bin/omarchy-arm-usuario
+  echo "  omarchy-arm-usuario instalado"
+fi
 sed -i '/-auth.*pam_gnome_keyring\.so/d;/-password.*pam_gnome_keyring\.so/d' /etc/pam.d/sddm 2>/dev/null || true
 echo "  sesion=$SESSION"
 ls /usr/local/share/wayland-sessions /usr/share/wayland-sessions 2>/dev/null
@@ -1540,6 +1548,7 @@ cp "$PROV/$FIXSCRIPT" /mnt/root/prov/
 [ -f "$PROV/clipbrd.sh" ] && cp "$PROV/clipbrd.sh" /mnt/root/prov/omarchy-arm-clipboard
 [ -f "$PROV/vdagent.py" ] && cp "$PROV/vdagent.py" /mnt/root/prov/omarchy-arm-vdagent
 [ -f "$PROV/share.sh" ] && cp "$PROV/share.sh" /mnt/root/prov/omarchy-arm-share
+[ -f "$PROV/usuario.sh" ] && cp "$PROV/usuario.sh" /mnt/root/prov/omarchy-arm-usuario
 [ -f "$PROV/fsinfo.env" ] && cp "$PROV/fsinfo.env" /mnt/root/prov/
 [ -f "$PROV/stage3.sh" ] && cp "$PROV/stage3.sh" /mnt/root/prov/
 [ -f "$PROV/packages-core.txt" ] && cp "$PROV/packages-core.txt" /mnt/root/prov/
@@ -2870,6 +2879,69 @@ esac
 __PAYLOAD_PROVISION_SHARE_SH__
 chmod +x "$W/provision/share.sh"
 
+cat > "$W/provision/usuario.sh" <<'__PAYLOAD_PROVISION_USUARIO_SH__'
+#!/bin/bash
+#
+#  omarchy-arm-usuario — con que usuario entra la VM
+#  ────────────────────────────────────────────────────────────────────────────
+#  La imagen entra sola como 'omarchy'. Si creas otra cuenta, el arranque sigue
+#  entrando con la primera y no hay forma obvia de cambiarlo: el tema de SDDM
+#  de Omarchy pinta el ultimo usuario, no una lista donde elegir.
+#
+#  Esto cambia el autologin sin tener que editar ficheros a mano.
+#
+#    omarchy-arm-usuario              con quien entra ahora
+#    omarchy-arm-usuario ana          entra con 'ana' a partir del proximo arranque
+#    omarchy-arm-usuario --preguntar  no entra solo; pide usuario y contrasena
+#  ────────────────────────────────────────────────────────────────────────────
+set -uo pipefail
+CONF=/etc/sddm.conf.d/autologin.conf
+
+usuarios() { awk -F: '$3>=1000 && $3<65000 {print $1}' /etc/passwd | sort; }
+actual()   { [ -f "$CONF" ] && sed -n 's/^User=//p' "$CONF" | tail -1; }
+
+case "${1:-}" in
+  -h|--help) sed -n '3,15p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 0 ;;
+
+  "")
+    A=$(actual)
+    if [ -n "$A" ]; then echo "Entra sola como: $A"
+    else echo "No entra sola: SDDM pide usuario y contrasena."; fi
+    echo
+    echo "Cuentas en la maquina:"
+    usuarios | sed "s/^/  /"
+    echo
+    echo "Cambiarlo:  omarchy-arm-usuario <cuenta>   |   omarchy-arm-usuario --preguntar"
+    ;;
+
+  --preguntar)
+    [ -f "$CONF" ] || { echo "Ya pedia usuario y contrasena."; exit 0; }
+    sudo rm -f "$CONF" || exit 1
+    echo "Hecho: en el proximo arranque SDDM pedira usuario y contrasena."
+    echo
+    echo "AVISO: el tema de SDDM de Omarchy muestra el ultimo usuario que entro."
+    echo "Si no te deja teclear otro nombre, vuelve a fijar el autologin con:"
+    echo "    omarchy-arm-usuario <cuenta>"
+    ;;
+
+  *)
+    U="$1"
+    id "$U" >/dev/null 2>&1 || { echo "no existe la cuenta '$U'. Las que hay:"; usuarios | sed "s/^/  /"; exit 2; }
+    [ "$(id -u "$U")" -ge 1000 ] || { echo "'$U' es una cuenta de sistema; no vale para entrar."; exit 2; }
+    # Se conserva la sesion que ya estuviera puesta: si el bundle se creo con
+    # 'omarchy' y ahi pone Session=omarchy, cambiar de usuario no debe cambiar
+    # de escritorio.
+    SES=$([ -f "$CONF" ] && sed -n 's/^Session=//p' "$CONF" | tail -1)
+    [ -n "$SES" ] || SES=$(ls /usr/local/share/wayland-sessions /usr/share/wayland-sessions 2>/dev/null \
+                            | grep -m1 '\.desktop$' | sed 's/\.desktop$//')
+    [ -n "$SES" ] || SES=hyprland-uwsm
+    printf '[Autologin]\nUser=%s\nSession=%s\n' "$U" "$SES" | sudo tee "$CONF" >/dev/null || exit 1
+    echo "Hecho: a partir del proximo arranque entra como '$U' (sesion $SES)."
+    ;;
+esac
+__PAYLOAD_PROVISION_USUARIO_SH__
+chmod +x "$W/provision/usuario.sh"
+
 mkdir -p "$W/scripts"
 cat > "$W/scripts/build.exp" <<'__PAYLOAD_SCRIPTS_BUILD_EXP__'
 #!/usr/bin/expect -f
@@ -3631,10 +3703,17 @@ sudo pacman -S zsh        # o fish
 chsh -s /bin/zsh          # para tu usuario
 ```
 
-**Si creas un segundo usuario**, ten en cuenta que el tema de SDDM de Omarchy
-no tiene selector: entra siempre con el que diga el autologin. Cámbialo o
-quítalo en `/etc/sddm.conf.d/autologin.conf`; sin ese fichero, SDDM pide
-usuario y contraseña.
+**Si creas un segundo usuario**, la VM sigue entrando sola con el primero: el
+tema de SDDM de Omarchy pinta el último usuario, no una lista donde elegir.
+Para cambiarlo no hace falta editar nada:
+
+```bash
+omarchy-arm-usuario              # con quién entra ahora, y qué cuentas hay
+omarchy-arm-usuario ana          # entra con 'ana' a partir del próximo arranque
+omarchy-arm-usuario --preguntar  # que no entre sola y pida usuario y contraseña
+```
+
+Conserva la sesión de escritorio que ya estuviera configurada.
 
 ## Teclado
 

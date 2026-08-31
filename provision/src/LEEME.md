@@ -48,10 +48,17 @@ sudo pacman -S zsh        # o fish
 chsh -s /bin/zsh          # para tu usuario
 ```
 
-**Si creas un segundo usuario**, ten en cuenta que el tema de SDDM de Omarchy
-no tiene selector: entra siempre con el que diga el autologin. Cámbialo o
-quítalo en `/etc/sddm.conf.d/autologin.conf`; sin ese fichero, SDDM pide
-usuario y contraseña.
+**Si creas un segundo usuario**, la VM sigue entrando sola con el primero: el
+tema de SDDM de Omarchy pinta el último usuario, no una lista donde elegir.
+Para cambiarlo no hace falta editar nada:
+
+```bash
+omarchy-arm-usuario              # con quién entra ahora, y qué cuentas hay
+omarchy-arm-usuario ana          # entra con 'ana' a partir del próximo arranque
+omarchy-arm-usuario --preguntar  # que no entre sola y pida usuario y contraseña
+```
+
+Conserva la sesión de escritorio que ya estuviera configurada.
 
 ## Teclado
 
