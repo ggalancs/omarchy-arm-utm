@@ -761,6 +761,28 @@ echo "  spice-webdavd habilitado (modo SPICE WebDAV de UTM)"
 # nofail para que un arranque sin carpeta configurada no caiga a emergencia,
 # y x-systemd.automount para no pagar el montaje si no se usa.
 mkdir -p /mnt/share
+# Un cartel en /mnt, NO dentro de /mnt/share. Se probo ponerlo debajo del punto
+# de automontaje y NO se ve: con el autofs activo y sin nada detras,
+# `ls /mnt/share` da "No such file or directory" y no llega al directorio real.
+cat > /mnt/LEEME-carpeta-compartida.txt <<'AVISO'
+Si /mnt/share da error al listarlo ("No such device", "No such file or
+directory"), UTM no esta ofreciendo ninguna carpeta compartida, o la ofrece en
+un modo distinto del que espera el montaje automatico de /etc/fstab (VirtFS).
+
+  1. Apaga la VM. Con la VM arrancada, UTM muestra los ajustes de Compartir en
+     gris y no deja cambiarlos.
+  2. UTM -> Ajustes de la VM -> Compartir -> elige una carpeta del anfitrion.
+     Aunque el nombre ya aparezca, vuelve a seleccionarla: el permiso que macOS
+     le da a UTM va atado a cada VM y NO se hereda al importar otra.
+  3. Enciende la VM.
+  4. VirtFS se monta solo. Con SPICE WebDAV, ejecuta:
+
+       omarchy-arm-share
+
+     Para ver que esta pasando:
+
+       omarchy-arm-share --status
+AVISO
 # La entrada de fstab solo vale para VirtFS, y el usuario puede haber elegido
 # SPICE WebDAV. En vez de fijar un modo, se instala omarchy-arm-share, que
 # detecta cual esta activo. La entrada de fstab se deja igualmente con nofail:
@@ -2775,7 +2797,16 @@ URL=http://localhost:9843/
 
 hay_9p()     { grep -qw 9p /proc/filesystems 2>/dev/null && [ -e /sys/bus/virtio/drivers/9pnet_virtio ]; }
 hay_webdav() { [ -e "$PUERTO_WEBDAV" ]; }
-montado()    { mountpoint -q "$PUNTO"; }
+# OJO: `mountpoint -q` NO vale aqui. La entrada de fstab lleva
+# x-systemd.automount, asi que /mnt/share es SIEMPRE un punto de montaje -el
+# del autofs- aunque no haya nada detras. Con mountpoint, este script decia
+# "ya esta montado" y no montaba nunca: en modo SPICE WebDAV no funcionaba
+# jamas y el usuario veia "No such device" al listar.
+montado() {
+  local t
+  t=$(findmnt -n -o FSTYPE "$PUNTO" 2>/dev/null | tail -1)
+  [ -n "$t" ] && [ "$t" != autofs ]
+}
 
 estado() {
   echo "  punto de montaje: $PUNTO"
@@ -2799,6 +2830,11 @@ montar() {
 
   # 2) SPICE WebDAV
   if hay_webdav; then
+    # El autofs de fstab ocupa el punto y solo sabe montar 9p. Mientras siga
+    # ahi, davfs no puede montar encima. Se suelta; si luego eliges VirtFS,
+    # vuelve solo en el siguiente arranque.
+    sudo systemctl stop mnt-share.automount 2>/dev/null || true
+    sudo mkdir -p "$PUNTO"
     sudo systemctl start spice-webdavd 2>/dev/null || true
     for _ in 1 2 3 4 5 6 7 8 9 10; do
       curl -s -m 2 -o /dev/null "$URL" && break
@@ -3584,6 +3620,21 @@ Entra solo, sin pedir contraseña.
 
 **Cambia la contraseña nada más entrar:** abre un terminal y ejecuta `passwd`.
 
+**El shell es `bash`**, como en Omarchy: la lista de paquetes de Omarchy no
+trae `zsh` ni `fish`, y esta imagen no añade nada que Omarchy no ponga. Si
+quieres otro, instálalo **antes** de usarlo — `useradd -s /bin/zsh` falla si
+`zsh` no está:
+
+```bash
+sudo pacman -S zsh        # o fish
+chsh -s /bin/zsh          # para tu usuario
+```
+
+**Si creas un segundo usuario**, ten en cuenta que el tema de SDDM de Omarchy
+no tiene selector: entra siempre con el que diga el autologin. Cámbialo o
+quítalo en `/etc/sddm.conf.d/autologin.conf`; sin ese fichero, SDDM pide
+usuario y contraseña.
+
 ## Teclado
 
 macOS se queda con la tecla Cmd antes de que UTM la reciba (Cmd+Space abre
@@ -3650,6 +3701,12 @@ ejecuta `omarchy-arm-share`. Detecta solo si UTM está en modo VirtFS o en modo
 SPICE WebDAV y la monta en `/mnt/share` de la forma que corresponda.
 `omarchy-arm-share --status` para ver cómo quedó, `--umount` para soltarla.
 
+Si `ls /mnt/share` da **«No such device»** o **«No such file or directory»**,
+UTM no está ofreciendo ninguna carpeta. Vuelve a seleccionarla en *Sharing*
+aunque el nombre ya aparezca: el permiso que macOS le da a UTM va atado a cada
+VM y **no se hereda al importar otra**. Que la ruta se vea en gris claro es lo
+normal, no significa que esté desactivada.
+
 ## Las apps que no vienen dentro
 
 1Password, Obsidian, Typora, LocalSend y Google Chrome **no están en la
@@ -3667,6 +3724,19 @@ omarchy-arm-extras --all      # todas las que falten
 ```
 
 El listado marca `[ya instalada]` lo que la imagen ya trae, y `--all` lo omite.
+
+**Si instalas una app y su ventana sale transparente o en negro** —le pasa a
+algunas de Flutter y Electron bajo Wayland, no a las que trae la imagen—,
+lánzala sobre XWayland, que va instalado:
+
+```bash
+GDK_BACKEND=x11 la-aplicacion
+```
+
+Para dejarlo fijo, copia su `.desktop` de `/usr/share/applications` a
+`~/.local/share/applications` y antepón `env GDK_BACKEND=x11 ` en la línea
+`Exec=`. Algunas de AUR necesitan además `libayatana-appindicator` para el
+icono de la bandeja.
 
 También está en el menú de aplicaciones como **«Instalar apps que faltan (ARM)»**.
 

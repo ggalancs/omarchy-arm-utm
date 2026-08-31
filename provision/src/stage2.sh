@@ -261,6 +261,28 @@ echo "  spice-webdavd habilitado (modo SPICE WebDAV de UTM)"
 # nofail para que un arranque sin carpeta configurada no caiga a emergencia,
 # y x-systemd.automount para no pagar el montaje si no se usa.
 mkdir -p /mnt/share
+# Un cartel en /mnt, NO dentro de /mnt/share. Se probo ponerlo debajo del punto
+# de automontaje y NO se ve: con el autofs activo y sin nada detras,
+# `ls /mnt/share` da "No such file or directory" y no llega al directorio real.
+cat > /mnt/LEEME-carpeta-compartida.txt <<'AVISO'
+Si /mnt/share da error al listarlo ("No such device", "No such file or
+directory"), UTM no esta ofreciendo ninguna carpeta compartida, o la ofrece en
+un modo distinto del que espera el montaje automatico de /etc/fstab (VirtFS).
+
+  1. Apaga la VM. Con la VM arrancada, UTM muestra los ajustes de Compartir en
+     gris y no deja cambiarlos.
+  2. UTM -> Ajustes de la VM -> Compartir -> elige una carpeta del anfitrion.
+     Aunque el nombre ya aparezca, vuelve a seleccionarla: el permiso que macOS
+     le da a UTM va atado a cada VM y NO se hereda al importar otra.
+  3. Enciende la VM.
+  4. VirtFS se monta solo. Con SPICE WebDAV, ejecuta:
+
+       omarchy-arm-share
+
+     Para ver que esta pasando:
+
+       omarchy-arm-share --status
+AVISO
 # La entrada de fstab solo vale para VirtFS, y el usuario puede haber elegido
 # SPICE WebDAV. En vez de fijar un modo, se instala omarchy-arm-share, que
 # detecta cual esta activo. La entrada de fstab se deja igualmente con nofail:

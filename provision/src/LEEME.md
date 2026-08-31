@@ -38,6 +38,21 @@ Entra solo, sin pedir contraseña.
 
 **Cambia la contraseña nada más entrar:** abre un terminal y ejecuta `passwd`.
 
+**El shell es `bash`**, como en Omarchy: la lista de paquetes de Omarchy no
+trae `zsh` ni `fish`, y esta imagen no añade nada que Omarchy no ponga. Si
+quieres otro, instálalo **antes** de usarlo — `useradd -s /bin/zsh` falla si
+`zsh` no está:
+
+```bash
+sudo pacman -S zsh        # o fish
+chsh -s /bin/zsh          # para tu usuario
+```
+
+**Si creas un segundo usuario**, ten en cuenta que el tema de SDDM de Omarchy
+no tiene selector: entra siempre con el que diga el autologin. Cámbialo o
+quítalo en `/etc/sddm.conf.d/autologin.conf`; sin ese fichero, SDDM pide
+usuario y contraseña.
+
 ## Teclado
 
 macOS se queda con la tecla Cmd antes de que UTM la reciba (Cmd+Space abre
@@ -104,6 +119,12 @@ ejecuta `omarchy-arm-share`. Detecta solo si UTM está en modo VirtFS o en modo
 SPICE WebDAV y la monta en `/mnt/share` de la forma que corresponda.
 `omarchy-arm-share --status` para ver cómo quedó, `--umount` para soltarla.
 
+Si `ls /mnt/share` da **«No such device»** o **«No such file or directory»**,
+UTM no está ofreciendo ninguna carpeta. Vuelve a seleccionarla en *Sharing*
+aunque el nombre ya aparezca: el permiso que macOS le da a UTM va atado a cada
+VM y **no se hereda al importar otra**. Que la ruta se vea en gris claro es lo
+normal, no significa que esté desactivada.
+
 ## Las apps que no vienen dentro
 
 1Password, Obsidian, Typora, LocalSend y Google Chrome **no están en la
@@ -121,6 +142,19 @@ omarchy-arm-extras --all      # todas las que falten
 ```
 
 El listado marca `[ya instalada]` lo que la imagen ya trae, y `--all` lo omite.
+
+**Si instalas una app y su ventana sale transparente o en negro** —le pasa a
+algunas de Flutter y Electron bajo Wayland, no a las que trae la imagen—,
+lánzala sobre XWayland, que va instalado:
+
+```bash
+GDK_BACKEND=x11 la-aplicacion
+```
+
+Para dejarlo fijo, copia su `.desktop` de `/usr/share/applications` a
+`~/.local/share/applications` y antepón `env GDK_BACKEND=x11 ` en la línea
+`Exec=`. Algunas de AUR necesitan además `libayatana-appindicator` para el
+icono de la bandeja.
 
 También está en el menú de aplicaciones como **«Instalar apps que faltan (ARM)»**.
 

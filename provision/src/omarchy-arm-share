@@ -19,7 +19,16 @@ URL=http://localhost:9843/
 
 hay_9p()     { grep -qw 9p /proc/filesystems 2>/dev/null && [ -e /sys/bus/virtio/drivers/9pnet_virtio ]; }
 hay_webdav() { [ -e "$PUERTO_WEBDAV" ]; }
-montado()    { mountpoint -q "$PUNTO"; }
+# OJO: `mountpoint -q` NO vale aqui. La entrada de fstab lleva
+# x-systemd.automount, asi que /mnt/share es SIEMPRE un punto de montaje -el
+# del autofs- aunque no haya nada detras. Con mountpoint, este script decia
+# "ya esta montado" y no montaba nunca: en modo SPICE WebDAV no funcionaba
+# jamas y el usuario veia "No such device" al listar.
+montado() {
+  local t
+  t=$(findmnt -n -o FSTYPE "$PUNTO" 2>/dev/null | tail -1)
+  [ -n "$t" ] && [ "$t" != autofs ]
+}
 
 estado() {
   echo "  punto de montaje: $PUNTO"
@@ -43,6 +52,11 @@ montar() {
 
   # 2) SPICE WebDAV
   if hay_webdav; then
+    # El autofs de fstab ocupa el punto y solo sabe montar 9p. Mientras siga
+    # ahi, davfs no puede montar encima. Se suelta; si luego eliges VirtFS,
+    # vuelve solo en el siguiente arranque.
+    sudo systemctl stop mnt-share.automount 2>/dev/null || true
+    sudo mkdir -p "$PUNTO"
     sudo systemctl start spice-webdavd 2>/dev/null || true
     for _ in 1 2 3 4 5 6 7 8 9 10; do
       curl -s -m 2 -o /dev/null "$URL" && break
