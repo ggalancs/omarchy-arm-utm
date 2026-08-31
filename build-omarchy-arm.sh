@@ -471,7 +471,10 @@ cp "$PROV/stage2.sh" "$PROV/stage3.sh" "$PROV/config.env" \
 [ -f "$PROV/clipbrd.sh" ] && cp "$PROV/clipbrd.sh" /mnt/root/prov/omarchy-arm-clipboard
 [ -f "$PROV/vdagent.py" ] && cp "$PROV/vdagent.py" /mnt/root/prov/omarchy-arm-vdagent
 [ -f "$PROV/share.sh" ] && cp "$PROV/share.sh" /mnt/root/prov/omarchy-arm-share
-[ -f "$PROV/usuario.sh" ] && cp "$PROV/usuario.sh" /mnt/root/prov/omarchy-arm-usuario
+# Sin `&&` mudo: si falta, se dice. El guard silencioso de esta linea dejo
+# una imagen entera sin el comando y nadie se entero hasta arrancarla.
+if [ -f "$PROV/usuario.sh" ]; then cp "$PROV/usuario.sh" /mnt/root/prov/omarchy-arm-usuario
+else echo "  !! falta usuario.sh en el ISO: la imagen saldra sin omarchy-arm-usuario"; fi
 cat > /mnt/root/prov/fsinfo.env <<EOF
 ROOTFS=$ROOTFS
 ROOT_MOUNT_OPTS=$MOPT_ROOT
@@ -3408,7 +3411,12 @@ ph_build() {
   # el rootfs viaja dentro del ISO de aprovisionamiento
   local d; d=$(mktemp -d)
   cp "$W/provision"/{stage1.sh,stage2.sh,stage3.sh,config.env,packages-core.txt,packages-extra.txt} "$d"/
-  cp "$W/provision"/{extras.sh,armsync.sh,clipbrd.sh,vdagent.py,share.sh} "$d"/
+  # OJO: esta lista se mantiene A MANO y no perdona olvidos. `usuario.sh` se
+  # quedo fuera al anadirlo: el payload se generaba, stage1 hacia
+  # `[ -f "$PROV/usuario.sh" ] && cp ...`, el fichero no estaba, y el guard se
+  # lo trago en silencio. Ochenta y dos minutos de construccion para descubrir
+  # que el comando nuevo no existia dentro. Si anades un payload, anadelo aqui.
+  cp "$W/provision"/{extras.sh,armsync.sh,clipbrd.sh,vdagent.py,share.sh,usuario.sh} "$d"/
   ln "$W/dl/alarm-rootfs.tgz" "$d/alarm-rootfs.tgz" 2>/dev/null || cp "$W/dl/alarm-rootfs.tgz" "$d/"
   rm -f "$W/provision/provision.iso"
   hdiutil makehybrid -iso -joliet -default-volume-name PROVISION -o "$W/provision/provision.iso" "$d" >/dev/null
