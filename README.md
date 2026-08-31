@@ -268,6 +268,34 @@ omarchy-arm-extras --all      # everything missing
 Spotify has no native ARM client, but the web app works — it needs Widevine,
 which ships inside Google Chrome arm64 (`omarchy-arm-extras chrome spotify-web`).
 
+## Your own apps: `scripts/mis-apps.sh`
+
+`omarchy-arm-extras` covers a fixed list. For anything else, copy
+[`scripts/mis-apps.sh`](scripts/mis-apps.sh) into the VM, write a plain list of
+package names, and run it.
+
+```bash
+./mis-apps.sh --ejemplo > mis-apps.txt   # a starter list
+./mis-apps.sh --comprobar mis-apps.txt   # check only, install nothing
+./mis-apps.sh mis-apps.txt               # check, then install
+```
+
+It exists for one reason specific to ARM: a lot of Arch software has **no
+aarch64 build**, and finding that out one package at a time costs an afternoon.
+The script resolves every name first — official repo, AUR, or nowhere — prints
+the verdict, and only then offers to install, so you never end up half done.
+Packages with no aarch64 build are named explicitly rather than failing
+mid-transaction.
+
+To bake your apps into an image you hand to someone else, install them in the
+VM and repackage from the host:
+
+```bash
+./build-omarchy-arm.sh --from sanitize
+```
+
+That strips identity and credentials and produces a distributable `.zip`.
+
 ## Things that were hard to find
 
 - **The ESP is mounted after extracting the rootfs.** The ALARM tarball has

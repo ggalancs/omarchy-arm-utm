@@ -237,6 +237,34 @@ También aparece en el menú de aplicaciones como «Instalar apps que faltan (AR
 Spotify no tiene cliente nativo ARM, pero la web sí funciona: necesita Widevine,
 que viene dentro de Google Chrome arm64 (`omarchy-arm-extras chrome spotify-web`).
 
+## Tus propias aplicaciones: `scripts/mis-apps.sh`
+
+`omarchy-arm-extras` cubre una lista fija. Para cualquier otra cosa, copia
+[`scripts/mis-apps.sh`](scripts/mis-apps.sh) dentro de la VM, escribe una lista
+de paquetes y ejecútalo.
+
+```bash
+./mis-apps.sh --ejemplo > mis-apps.txt   # una lista de partida
+./mis-apps.sh --comprobar mis-apps.txt   # solo comprueba, no instala
+./mis-apps.sh mis-apps.txt               # comprueba e instala
+```
+
+Existe por una razón concreta de ARM: mucho software de Arch **no tiene build
+aarch64**, y descubrirlo paquete a paquete cuesta una tarde. El script resuelve
+todos los nombres primero —repositorio oficial, AUR o ninguno—, te enseña el
+veredicto, y solo entonces ofrece instalar. Así no te quedas a medias, y los
+que no existen para aarch64 salen por su nombre en vez de reventar a mitad de
+la transacción.
+
+Para que tus aplicaciones queden dentro de una imagen que vayas a repartir,
+instálalas en la VM y vuelve a empaquetar desde el anfitrión:
+
+```bash
+./build-omarchy-arm.sh --from sanitize
+```
+
+Eso limpia identidad y credenciales y genera un `.zip` distribuible.
+
 ## Estructura
 
 ```
