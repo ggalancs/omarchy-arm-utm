@@ -349,10 +349,37 @@ for spec in \
   "omapkgs:omacalc" "omapkgs:omacut" "omapkgs:omawrite" \
   "omapkgs:herdr" "omapkgs:tensaku" "omapkgs:hyprland-preview-share-picker"; do
   src=${spec%%:*}; pkg=${spec#*:}
-  if build_omarchy_tool "$src" "$pkg"; then TOOLS_OK+=("$pkg"); else TOOLS_KO+=("$pkg"); fi
+  # Segundo intento antes de rendirse. Los dos fallos reales que hemos visto
+  # -herdr y ttf-ia-writer- fueron descargas de GitHub que se cayeron, no
+  # codigo que no compila: reintentar los arregla y no reintentar obliga a
+  # repetir una construccion de 70 minutos por un paquete de red perdido.
+  if build_omarchy_tool "$src" "$pkg"; then
+    TOOLS_OK+=("$pkg")
+  else
+    echo "  reintentando $pkg (el primer intento fallo)"
+    sleep 5
+    if build_omarchy_tool "$src" "$pkg"; then
+      TOOLS_OK+=("$pkg")
+      # Se retira el log del intento fallido: si quedara, la comprobacion de
+      # "nada fallo al compilar" daria rojo sobre algo que si acabo entrando.
+      rm -f "$HOME/.omarchy-arm-prov/fallos/$pkg.log"
+    else
+      TOOLS_KO+=("$pkg")
+    fi
+  fi
 done
 echo "  compiladas: ${TOOLS_OK[*]:-ninguna}"
 [ ${#TOOLS_KO[@]} -gt 0 ] && warn "no compilaron: ${TOOLS_KO[*]}"
+# Registro en RUTA FIJA del sistema, no en $HOME. El de ~/.omarchy-arm-prov no
+# sobrevivia: la imagen distribuible renombra al usuario de construccion y ese
+# rastro se pierde por el camino. La comprobacion que lo miraba era por tanto
+# una comprobacion que no podia fallar -- justo lo que lleva toda la semana
+# colandonos cosas. Aqui se escribe siempre, aunque este vacio: un fichero que
+# falta no debe confundirse con "no fallo nada".
+sudo install -d -m755 /usr/local/share/omarchy-arm
+printf '%s\n' "${TOOLS_KO[@]:-}" | sed '/^$/d' \
+  | sudo tee /usr/local/share/omarchy-arm/no-compilaron.txt >/dev/null
+echo "  registro de fallos: /usr/local/share/omarchy-arm/no-compilaron.txt ($((${#TOOLS_KO[@]})) entradas)"
 rm -rf "$HOME/.cache/omabuild"
 fi
 # Omarchy sustituye a proposito dos iconos de Yaru por los de Adwaita; si Yaru

@@ -80,6 +80,13 @@ git config --global user.name "Prueba Negativa" 2>/dev/null \
 systemctl stop spice-vdagentd 2>/dev/null \
   && { echo "   + demonio del portapapeles parado"; ESPERADOS+=("demonio inactivo"); }
 
+# La comprobacion que caza toda la clase "algo no compilo". Se falsifica el
+# registro que deja stage3, que es exactamente lo que habria en una imagen a
+# la que le falte una herramienta.
+echo "paquete-inventado" >> /usr/local/share/omarchy-arm/no-compilaron.txt
+echo "   + entrada en el registro de compilaciones fallidas"
+ESPERADOS+=("no compilaron")
+
 echo
 echo "   sabotajes: ${#ESPERADOS[@]}"
 

@@ -60,6 +60,24 @@ echo "== higiene =="
 [ "$(systemctl is-enabled sshd 2>&1)" = disabled ] && bien "sshd deshabilitado" || mal "sshd: $(systemctl is-enabled sshd 2>&1)"
 [ "$(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l)" -eq 0 ] && bien "sin claves ssh de host" || mal "quedan claves ssh"
 [ -f /root/failed-packages.txt ] && mal "queda /root/failed-packages.txt" || bien "sin residuos en /root"
+# Una sola comprobacion para toda una clase de fallos. stage3 escribe que
+# herramientas no compilaron; hasta ahora nadie lo miraba y la imagen salia en
+# verde sin ellas. Paso con herdr, y despues con ttf-ia-writer, que ni estaba
+# en esta lista porque hasta ese dia no habia fallado nunca.
+#
+# El fichero tiene que EXISTIR. Si no esta, la construccion no llego a
+# escribirlo y no se sabe nada: eso es un fallo, no un aprobado. La primera
+# version de esta comprobacion miraba ~/.omarchy-arm-prov/fallos, que no
+# sobrevive al renombrado del usuario, y por tanto no podia fallar nunca.
+REG=/usr/local/share/omarchy-arm/no-compilaron.txt
+if [ ! -f "$REG" ]; then
+  mal "no hay registro de compilacion ($REG): no se puede saber si algo fallo"
+elif [ -s "$REG" ]; then
+  mal "$(wc -l < "$REG") no compilaron"
+  sed 's/^/         /' "$REG"
+else
+  bien "nada fallo al compilar"
+fi
 # Huerfanos: si viajan, la primera actualizacion del usuario le pregunta por ellos.
 H=$(pacman -Qtdq 2>/dev/null | wc -l)
 [ "$H" -eq 0 ] && bien "sin paquetes huerfanos" || { mal "$H huerfanos"; pacman -Qtdq 2>/dev/null | sed "s/^/         /"; }
