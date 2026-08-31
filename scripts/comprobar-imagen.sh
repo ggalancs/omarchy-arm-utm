@@ -27,7 +27,10 @@ dd if=/dev/zero of="$TMP/efi.fd" bs=1m count=64 status=none
 # desincronizarse. Con la maquina cargada fallo uno y el arnes se colgo 20 min.
 # Un ISO son dos ordenes en total y no depende del ritmo de la consola.
 mkdir -p "$TMP/iso"
-cp scripts/chequeo-invitado.sh "$TMP/iso/chequeo.sh"
+# Por defecto el chequeo de distribucion. GUEST_SCRIPT permite mandar otro
+# script por el mismo canal: la consola serie destroza $ y comillas, y el
+# ISO es el unico camino fiable para diagnosticar dentro de la imagen.
+cp "${GUEST_SCRIPT:-scripts/chequeo-invitado.sh}" "$TMP/iso/chequeo.sh"
 hdiutil makehybrid -quiet -iso -joliet -default-volume-name CHEQUEO \
   -o "$TMP/chequeo.iso" "$TMP/iso" >/dev/null || { echo "no pude crear el ISO"; exit 2; }
 
