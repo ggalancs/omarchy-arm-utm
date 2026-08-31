@@ -26,6 +26,11 @@ dd if=/dev/zero of="$TMP/efi.fd" bs=1m count=64 status=none
 # son 29 envios, cada uno esperando el prompt, o sea 29 ocasiones de
 # desincronizarse. Con la maquina cargada fallo uno y el arnes se colgo 20 min.
 # Un ISO son dos ordenes en total y no depende del ritmo de la consola.
+#
+# Se monta en /media, NO en /mnt: la imagen deja contenido propio en /mnt
+# -el aviso de la carpeta compartida- y montar el ISO encima lo tapaba. Una
+# comprobacion dijo que ese fichero no existia cuando si estaba: el arnes se
+# tapaba a si mismo lo que venia a mirar.
 mkdir -p "$TMP/iso"
 # Por defecto el chequeo de distribucion. GUEST_SCRIPT permite mandar otro
 # script por el mismo canal: la consola serie destroza $ y comillas, y el
@@ -62,7 +67,7 @@ expect {
 expect -re {[❯#] $|[❯#]$|\$ $} { }
 # Margen para que SDDM levante la sesion grafica y arranquen sus servicios.
 sleep 75
-send "mount -o ro /dev/vdb /mnt 2>/dev/null || mount -o ro /dev/vdc /mnt; bash /mnt/chequeo.sh '$env(OLDUSER)' > /tmp/informe.txt 2>&1; true\r"
+send "mkdir -p /media; mount -o ro /dev/vdb /media 2>/dev/null || mount -o ro /dev/vdc /media; bash /media/chequeo.sh '$env(OLDUSER)' > /tmp/informe.txt 2>&1; true\r"
 expect -re {[❯#] $|[❯#]$|\$ $} { }
 sleep 3
 send "cat /tmp/informe.txt\r"

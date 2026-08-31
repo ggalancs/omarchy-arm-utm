@@ -269,8 +269,9 @@ Si /mnt/share da error al listarlo ("No such device", "No such file or
 directory"), UTM no esta ofreciendo ninguna carpeta compartida, o la ofrece en
 un modo distinto del que espera el montaje automatico de /etc/fstab (VirtFS).
 
-  1. Apaga la VM. Con la VM arrancada, UTM muestra los ajustes de Compartir en
-     gris y no deja cambiarlos.
+  1. Apaga la VM: los cambios de Compartir se aplican al arrancar.
+     (Que la ruta salga en gris claro en UTM es NORMAL, este la VM parada o
+     arrancada. No significa que el ajuste este desactivado.)
   2. UTM -> Ajustes de la VM -> Compartir -> elige una carpeta del anfitrion.
      Aunque el nombre ya aparezca, vuelve a seleccionarla: el permiso que macOS
      le da a UTM va atado a cada VM y NO se hereda al importar otra.
