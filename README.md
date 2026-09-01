@@ -268,6 +268,24 @@ omarchy-arm-extras --all      # everything missing
 Spotify has no native ARM client, but the web app works — it needs Widevine,
 which ships inside Google Chrome arm64 (`omarchy-arm-extras chrome spotify-web`).
 
+## Omarchy's own packages (ChatGPT et al.)
+
+Menu entries like *Install > AI > ChatGPT Desktop* install from Omarchy's own
+package repo, which publishes x86_64 only — in this VM they fail with pacman's
+`error: target not found`. The community
+[omarchy-mac/omarchy-pkgs-aarch64](https://github.com/omarchy-mac/omarchy-pkgs-aarch64)
+project rebuilds those packages for aarch64. Add it to `/etc/pacman.conf`:
+
+```ini
+[omarchy-aarch64]
+SigLevel = Optional TrustAll
+Server = https://github.com/omarchy-mac/omarchy-pkgs-aarch64/releases/download/edge
+```
+
+Then `sudo pacman -Sy`, and the menu installs work (verified with ChatGPT
+Desktop, 2026-09-01). Unofficial and unsigned — the same trust model as
+Omarchy's own repo, and their README asks that packaging bugs go to them.
+
 ## Your own apps: `scripts/mis-apps.sh`
 
 `omarchy-arm-extras` covers a fixed list. For anything else, copy
