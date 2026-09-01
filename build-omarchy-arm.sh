@@ -473,8 +473,8 @@ cp "$PROV/stage2.sh" "$PROV/stage3.sh" "$PROV/config.env" \
 [ -f "$PROV/share.sh" ] && cp "$PROV/share.sh" /mnt/root/prov/omarchy-arm-share
 # Sin `&&` mudo: si falta, se dice. El guard silencioso de esta linea dejo
 # una imagen entera sin el comando y nadie se entero hasta arrancarla.
-if [ -f "$PROV/usuario.sh" ]; then cp "$PROV/usuario.sh" /mnt/root/prov/omarchy-arm-usuario
-else echo "  !! falta usuario.sh en el ISO: la imagen saldra sin omarchy-arm-usuario"; fi
+if [ -f "$PROV/user.sh" ]; then cp "$PROV/user.sh" /mnt/root/prov/omarchy-arm-user
+else echo "  !! falta user.sh en el ISO: la imagen saldra sin omarchy-arm-user"; fi
 cat > /mnt/root/prov/fsinfo.env <<EOF
 ROOTFS=$ROOTFS
 ROOT_MOUNT_OPTS=$MOPT_ROOT
@@ -768,26 +768,28 @@ mkdir -p /mnt/share
 # Un cartel en /mnt, NO dentro de /mnt/share. Se probo ponerlo debajo del punto
 # de automontaje y NO se ve: con el autofs activo y sin nada detras,
 # `ls /mnt/share` da "No such file or directory" y no llega al directorio real.
-cat > /mnt/LEEME-carpeta-compartida.txt <<'AVISO'
-Si /mnt/share da error al listarlo ("No such device", "No such file or
-directory"), UTM no esta ofreciendo ninguna carpeta compartida, o la ofrece en
-un modo distinto del que espera el montaje automatico de /etc/fstab (VirtFS).
+cat > /mnt/README-no-shared-folder.txt <<'NOTICE'
+If you can see this file, NO shared folder is mounted here.
 
-  1. Apaga la VM: los cambios de Compartir se aplican al arrancar.
-     (Que la ruta salga en gris claro en UTM es NORMAL, este la VM parada o
-     arrancada. No significa que el ajuste este desactivado.)
-  2. UTM -> Ajustes de la VM -> Compartir -> elige una carpeta del anfitrion.
-     Aunque el nombre ya aparezca, vuelve a seleccionarla: el permiso que macOS
-     le da a UTM va atado a cada VM y NO se hereda al importar otra.
-  3. Enciende la VM.
-  4. VirtFS se monta solo. Con SPICE WebDAV, ejecuta:
+That is not a fault in the image: UTM is not offering one, or it is offering it
+in a mode other than the automatic mount in /etc/fstab expects (VirtFS).
+
+  1. Power the VM off: Sharing changes take effect when it starts.
+     (The path showing in light grey in UTM is NORMAL, whether the VM is
+     running or stopped. It does not mean the setting is disabled.)
+  2. UTM -> VM Settings -> Sharing -> pick a folder on the host.
+     Select it again even if the name is already showing: the permission
+     macOS grants UTM is tied to each VM and is NOT inherited when you
+     import another one.
+  3. Start the VM.
+  4. VirtFS mounts on its own. With SPICE WebDAV, run:
 
        omarchy-arm-share
 
-     Para ver que esta pasando:
+     To see what is going on:
 
        omarchy-arm-share --status
-AVISO
+NOTICE
 # La entrada de fstab solo vale para VirtFS, y el usuario puede haber elegido
 # SPICE WebDAV. En vez de fijar un modo, se instala omarchy-arm-share, que
 # detecta cual esta activo. La entrada de fstab se deja igualmente con nofail:
@@ -858,9 +860,9 @@ EOF
 # Cambiar el autologin sin editar ficheros a mano. Sin esto, quien cree una
 # segunda cuenta se queda entrando siempre con la primera: el tema de SDDM de
 # Omarchy pinta el ultimo usuario, no una lista donde elegir.
-if [ -f /root/prov/omarchy-arm-usuario ]; then
-  install -Dm755 /root/prov/omarchy-arm-usuario /usr/local/bin/omarchy-arm-usuario
-  echo "  omarchy-arm-usuario instalado"
+if [ -f /root/prov/omarchy-arm-user ]; then
+  install -Dm755 /root/prov/omarchy-arm-user /usr/local/bin/omarchy-arm-user
+  echo "  omarchy-arm-user instalado"
 fi
 sed -i '/-auth.*pam_gnome_keyring\.so/d;/-password.*pam_gnome_keyring\.so/d' /etc/pam.d/sddm 2>/dev/null || true
 echo "  sesion=$SESSION"
@@ -1578,7 +1580,7 @@ cp "$PROV/$FIXSCRIPT" /mnt/root/prov/
 [ -f "$PROV/clipbrd.sh" ] && cp "$PROV/clipbrd.sh" /mnt/root/prov/omarchy-arm-clipboard
 [ -f "$PROV/vdagent.py" ] && cp "$PROV/vdagent.py" /mnt/root/prov/omarchy-arm-vdagent
 [ -f "$PROV/share.sh" ] && cp "$PROV/share.sh" /mnt/root/prov/omarchy-arm-share
-[ -f "$PROV/usuario.sh" ] && cp "$PROV/usuario.sh" /mnt/root/prov/omarchy-arm-usuario
+[ -f "$PROV/user.sh" ] && cp "$PROV/user.sh" /mnt/root/prov/omarchy-arm-user
 [ -f "$PROV/fsinfo.env" ] && cp "$PROV/fsinfo.env" /mnt/root/prov/
 [ -f "$PROV/stage3.sh" ] && cp "$PROV/stage3.sh" /mnt/root/prov/
 [ -f "$PROV/packages-core.txt" ] && cp "$PROV/packages-core.txt" /mnt/root/prov/
@@ -2199,7 +2201,7 @@ aur_build() {
     info "importando clave GPG ${k: -8}"
     gpg --keyserver keyserver.ubuntu.com --recv-keys "$k" >/dev/null 2>&1 \
       || gpg --keyserver keys.openpgp.org --recv-keys "$k" >/dev/null 2>&1 \
-      || warn "no pude importar ${k: -8}: la verificación de firma fallará"
+      || warn "could not import ${k: -8}: signature verification will fail"
   done
 
   if ! grep -qE "^arch=\(.*\b(aarch64|any)\b" "$dir/PKGBUILD"; then
@@ -2208,7 +2210,7 @@ aur_build() {
   fi
 
   ( cd "$dir" && makepkg -si --noconfirm --needed --noprogressbar ) >"$dir/build.log" 2>&1 && return 0
-  fail "falló la compilación de $pkg — log: $dir/build.log"
+  fail "build failed for $pkg - log: $dir/build.log"
   tail -5 "$dir/build.log" | sed 's/^/      /'
   return 1
 }
@@ -2230,7 +2232,7 @@ do_1password() {
     if gpg --verify "$WORK/1p/1p.tar.gz.sig" "$WORK/1p/1p.tar.gz" >/dev/null 2>&1; then
       ok "firma GPG de AgileBits verificada"
     else
-      fail "LA FIRMA NO VERIFICA — se aborta la instalación"; return 1
+      fail "SIGNATURE DOES NOT VERIFY - install aborted"; return 1
     fi
   else
     warn "no hay .sig disponible; se instala sin verificar la firma"
@@ -2241,7 +2243,7 @@ do_1password() {
   sudo mkdir -p /opt/1Password
   sudo cp -a "$src"/. /opt/1Password/
   ( cd /opt/1Password && sudo ./after-install.sh ) >/dev/null 2>&1 || warn "after-install.sh dio errores (suele ser inocuo)"
-  have 1password && ok "$(1password --version 2>/dev/null | head -1 || echo instalado)" || { fail "no quedó en el PATH"; return 1; }
+  have 1password && ok "$(1password --version 2>/dev/null | head -1 || echo installed)" || { fail "did not end up on the PATH"; return 1; }
   info "${c_dim}En Hyprland conviene lanzarlo con --ozone-platform=wayland${c_off}"
 }
 
@@ -2256,7 +2258,7 @@ do_obsidian() {
   url=$(curl -fsSL --max-time 30 "https://api.github.com/repos/obsidianmd/obsidian-releases/releases?per_page=15" \
         | grep -oE '"browser_download_url": *"[^"]*obsidian-[0-9.]+-arm64\.tar\.gz"' \
         | head -1 | sed 's/.*"\(https[^"]*\)"/\1/')
-  [ -n "$url" ] || { fail "no encontré ningún tarball arm64 en los últimos releases"; return 1; }
+  [ -n "$url" ] || { fail "no arm64 tarball found in the recent releases"; return 1; }
   info "$(basename "$url")"
   mkdir -p "$WORK"; curl -fL --progress-bar "$url" -o "$WORK/obsidian.tar.gz" || { fail "descarga fallida"; return 1; }
   sudo rm -rf /opt/obsidian; sudo mkdir -p /opt/obsidian
@@ -2298,15 +2300,15 @@ do_spotify_web() {
   # Omarchy trata Spotify como paquete nativo, no como webapp — y ese paquete es
   # x86_64. En ARM la via que funciona es la web, que necesita Widevine.
   if ! have google-chrome-stable; then
-    warn "sin Google Chrome la web de Spotify no reproducirá: instala antes 'chrome'"
+    warn "without Google Chrome the Spotify web app will not play: install 'chrome' first"
   fi
   if have omarchy-webapp-install; then
     omarchy-webapp-install "Spotify" "https://open.spotify.com" \
       "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/spotify.png" \
       "$(have google-chrome-stable && echo 'google-chrome-stable --app=https://open.spotify.com')" \
-      >/dev/null 2>&1 && ok "lanzador creado en el menú de aplicaciones"
+      >/dev/null 2>&1 && ok "launcher added to the application menu"
   else
-    warn "omarchy-webapp-install no está disponible"
+    warn "omarchy-webapp-install is not available"
   fi
   # Reasignar SUPER+SHIFT+M, que en Omarchy apunta al binario nativo
   local f="$HOME/.config/hypr/bindings.lua"
@@ -2317,28 +2319,28 @@ do_spotify_web() {
 -- Necesita Google Chrome, que es quien trae Widevine en arm64.
 o.bind("SUPER + SHIFT + M", "Spotify", o.launch("google-chrome-stable --app=https://open.spotify.com"))
 LUA
-    ok "SUPER+SHIFT+M reasignado (reinicia la sesión para aplicarlo)"
+    ok "SUPER+SHIFT+M rebound (log out and back in to apply)"
   fi
   info "${c_dim}Alternativa en terminal, ya instalada: spotify-player${c_off}"
 }
 
 do_pinta() {
   title "Pinta"
-  info "Microsoft sí publica .NET para linux-arm64; Arch solo lo empaqueta para x86_64."
+  info "Microsoft does publish .NET for linux-arm64; Arch only packages it for x86_64."
   info "Se instala el runtime desde el tarball oficial y luego el paquete de Pinta, que es arch=any."
   aur_build dotnet-runtime-bin dotnet-runtime-bin || { fail "sin runtime .NET no se puede seguir"; return 1; }
   local url=https://geo.mirror.pkgbuild.com/extra/os/x86_64/
   local file; file=$(curl -fsSL --max-time 30 "$url" | grep -o 'pinta-[0-9][^"]*-any\.pkg\.tar\.zst' | sort -V | tail -1)
-  [ -n "$file" ] || { fail "no encontré el paquete de Pinta"; return 1; }
+  [ -n "$file" ] || { fail "could not find the Pinta package"; return 1; }
   info "$file  ${c_dim}(la ruta dice x86_64 pero el paquete es arch=any)${c_off}"
   mkdir -p "$WORK"; curl -fL --progress-bar "$url$file" -o "$WORK/$file" || return 1
-  sudo pacman -U --noconfirm "$WORK/$file" >/dev/null 2>&1 && ok "$(pacman -Q pinta)" || { fail "pacman -U falló"; return 1; }
-  warn "queda fuera del gestor de actualizaciones: cada versión hay que repetirla a mano"
+  sudo pacman -U --noconfirm "$WORK/$file" >/dev/null 2>&1 && ok "$(pacman -Q pinta)" || { fail "pacman -U failed"; return 1; }
+  warn "outside the update manager: every new version has to be repeated by hand"
 }
 
 do_obs() {
   title "OBS Studio"
-  info "OBS compila bien en aarch64. Lo único que lo bloquea en Arch Linux ARM es el"
+  info "OBS builds fine on aarch64. The only thing blocking it on Arch Linux ARM is the"
   info "subpaquete del navegador, cuyo 'cef' solo existe para x86_64. Se desactiva."
   warn "compilar Qt6 + OBS dentro de la VM lleva un buen rato"
   local dir="$WORK/obs-studio"
@@ -2369,9 +2371,9 @@ do_obs() {
   info "PKGBUILD parcheado: aarch64, sin CEF, sin plugin de navegador"
   if makepkg -si --noconfirm --needed --noprogressbar >"$dir/build.log" 2>&1; then
     ok "$(pacman -Q obs-studio)"
-    info "${c_dim}Sin aceleración por hardware en la VM: codificará con x264 por CPU${c_off}"
+    info "${c_dim}No hardware acceleration in the VM: it will encode with x264 on the CPU${c_off}"
   else
-    fail "falló la compilación — log: $dir/build.log"
+    fail "build failed - log: $dir/build.log"
     tail -6 "$dir/build.log" | sed 's/^/      /'
     return 1
   fi
@@ -2431,7 +2433,7 @@ case "${1:-}" in
       show_list
       mapfile -t SELECTED < <(
         while read -r k; do printf '%s — %s\n' "$k" "$(catalog_title "$k")"; done < <(catalog_keys) \
-        | gum choose --no-limit --header "Selecciona qué instalar (espacio marca, enter confirma)" \
+        | gum choose --no-limit --header "Pick what to install (space selects, enter confirms)" \
         | cut -d' ' -f1
       )
     else
@@ -2453,7 +2455,7 @@ done
 title "Resumen"
 [ ${#OK_LIST[@]} -gt 0 ] && ok "instalado: ${OK_LIST[*]}"
 if [ ${#KO_LIST[@]} -gt 0 ]; then
-  fail "falló: ${KO_LIST[*]}"
+  fail "failed: ${KO_LIST[*]}"
   # No se borra el directorio de trabajo: dentro estan los build.log, que son
   # lo unico que permite averiguar por que fallo.
   info "logs en $WORK/<paquete>/build.log"
@@ -2910,10 +2912,10 @@ esac
 __PAYLOAD_PROVISION_SHARE_SH__
 chmod +x "$W/provision/share.sh"
 
-cat > "$W/provision/usuario.sh" <<'__PAYLOAD_PROVISION_USUARIO_SH__'
+cat > "$W/provision/user.sh" <<'__PAYLOAD_PROVISION_USER_SH__'
 #!/bin/bash
 #
-#  omarchy-arm-usuario — which account the VM logs in as
+#  omarchy-arm-user — which account the VM logs in as
 #  ────────────────────────────────────────────────────────────────────────────
 #  The image logs in as 'omarchy' on its own. If you create another account the
 #  VM keeps logging in as the first one, and there is no obvious way to change
@@ -2921,9 +2923,9 @@ cat > "$W/provision/usuario.sh" <<'__PAYLOAD_PROVISION_USUARIO_SH__'
 #
 #  This switches the autologin without editing files by hand.
 #
-#    omarchy-arm-usuario              who it logs in as now
-#    omarchy-arm-usuario ana          log in as 'ana' from the next boot
-#    omarchy-arm-usuario --ask        do not log in on its own; ask for
+#    omarchy-arm-user              who it logs in as now
+#    omarchy-arm-user ana          log in as 'ana' from the next boot
+#    omarchy-arm-user --ask        do not log in on its own; ask for
 #                                     username and password
 #  ────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
@@ -2943,7 +2945,7 @@ case "${1:-}" in
     echo "Accounts on this machine:"
     accounts | sed "s/^/  /"
     echo
-    echo "Change it:  omarchy-arm-usuario <account>   |   omarchy-arm-usuario --ask"
+    echo "Change it:  omarchy-arm-user <account>   |   omarchy-arm-user --ask"
     ;;
 
   --ask|--preguntar)
@@ -2953,7 +2955,7 @@ case "${1:-}" in
     echo
     echo "NOTE: the Omarchy SDDM theme shows the last user who logged in. If it"
     echo "does not let you type a different name, set the autologin again with:"
-    echo "    omarchy-arm-usuario <account>"
+    echo "    omarchy-arm-user <account>"
     ;;
 
   *)
@@ -2971,8 +2973,8 @@ case "${1:-}" in
     echo "Done: from the next boot it logs in as '$U' (session $SES)."
     ;;
 esac
-__PAYLOAD_PROVISION_USUARIO_SH__
-chmod +x "$W/provision/usuario.sh"
+__PAYLOAD_PROVISION_USER_SH__
+chmod +x "$W/provision/user.sh"
 
 mkdir -p "$W/scripts"
 cat > "$W/scripts/build.exp" <<'__PAYLOAD_SCRIPTS_BUILD_EXP__'
@@ -3440,12 +3442,12 @@ ph_build() {
   # el rootfs viaja dentro del ISO de aprovisionamiento
   local d; d=$(mktemp -d)
   cp "$W/provision"/{stage1.sh,stage2.sh,stage3.sh,config.env,packages-core.txt,packages-extra.txt} "$d"/
-  # OJO: esta lista se mantiene A MANO y no perdona olvidos. `usuario.sh` se
+  # OJO: esta lista se mantiene A MANO y no perdona olvidos. `user.sh` se
   # quedo fuera al anadirlo: el payload se generaba, stage1 hacia
-  # `[ -f "$PROV/usuario.sh" ] && cp ...`, el fichero no estaba, y el guard se
+  # `[ -f "$PROV/user.sh" ] && cp ...`, el fichero no estaba, y el guard se
   # lo trago en silencio. Ochenta y dos minutos de construccion para descubrir
   # que el comando nuevo no existia dentro. Si anades un payload, anadelo aqui.
-  cp "$W/provision"/{extras.sh,armsync.sh,clipbrd.sh,vdagent.py,share.sh,usuario.sh} "$d"/
+  cp "$W/provision"/{extras.sh,armsync.sh,clipbrd.sh,vdagent.py,share.sh,user.sh} "$d"/
   ln "$W/dl/alarm-rootfs.tgz" "$d/alarm-rootfs.tgz" 2>/dev/null || cp "$W/dl/alarm-rootfs.tgz" "$d/"
   rm -f "$W/provision/provision.iso"
   hdiutil makehybrid -iso -joliet -default-volume-name PROVISION -o "$W/provision/provision.iso" "$d" >/dev/null
@@ -3766,9 +3768,9 @@ the Omarchy SDDM theme paints the last user, not a list to pick from. You do
 not need to edit anything to change that:
 
 ```bash
-omarchy-arm-usuario              # who it logs in as, and what accounts exist
-omarchy-arm-usuario ana          # log in as 'ana' from the next boot
-omarchy-arm-usuario --ask        # do not log in on its own; ask instead
+omarchy-arm-user              # who it logs in as, and what accounts exist
+omarchy-arm-user ana          # log in as 'ana' from the next boot
+omarchy-arm-user --ask        # do not log in on its own; ask instead
 ```
 
 It keeps whatever desktop session was already configured.
@@ -3899,7 +3901,7 @@ own, it will skip it with a warning rather than install it.
 ## Your own apps
 
 `omarchy-arm-extras` covers a fixed list. For anything else, grab
-[`scripts/mis-apps.sh`](https://github.com/ggalancs/omarchy-arm-utm/blob/main/scripts/mis-apps.sh)
+[`scripts/my-apps.sh`](https://github.com/ggalancs/omarchy-arm-utm/blob/main/scripts/my-apps.sh)
 from the repository: you write a plain list of package names and it resolves
 every one of them — official repo, AUR, or nowhere — before installing
 anything, so packages with no aarch64 build are named up front instead of

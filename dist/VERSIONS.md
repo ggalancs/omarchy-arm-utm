@@ -37,7 +37,7 @@ Arch Linux ARM aarch64 · Hyprland 0.56.1 · the Omarchy 4 desktop · 442
   nothing, while `ls` said `No such device`. It now checks the filesystem type and
   ignores autofs, and releases the automount before handing the point to davfs.
   Verified on a real VM: mounts, writes, and syncs both ways.
-- **`omarchy-arm-usuario`.** The image logs in as `omarchy` on its own, and the
+- **`omarchy-arm-user`.** The image logs in as `omarchy` on its own, and the
   Omarchy SDDM theme paints the last user rather than a list to pick from — so
   creating a second account left you stuck on the first. One command now switches
   the autologin, or turns it off, without editing files. It keeps whatever desktop

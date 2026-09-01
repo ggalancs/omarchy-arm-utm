@@ -105,7 +105,7 @@ aur_build() {
     info "importando clave GPG ${k: -8}"
     gpg --keyserver keyserver.ubuntu.com --recv-keys "$k" >/dev/null 2>&1 \
       || gpg --keyserver keys.openpgp.org --recv-keys "$k" >/dev/null 2>&1 \
-      || warn "no pude importar ${k: -8}: la verificación de firma fallará"
+      || warn "could not import ${k: -8}: signature verification will fail"
   done
 
   if ! grep -qE "^arch=\(.*\b(aarch64|any)\b" "$dir/PKGBUILD"; then
@@ -114,7 +114,7 @@ aur_build() {
   fi
 
   ( cd "$dir" && makepkg -si --noconfirm --needed --noprogressbar ) >"$dir/build.log" 2>&1 && return 0
-  fail "falló la compilación de $pkg — log: $dir/build.log"
+  fail "build failed for $pkg - log: $dir/build.log"
   tail -5 "$dir/build.log" | sed 's/^/      /'
   return 1
 }
@@ -136,7 +136,7 @@ do_1password() {
     if gpg --verify "$WORK/1p/1p.tar.gz.sig" "$WORK/1p/1p.tar.gz" >/dev/null 2>&1; then
       ok "firma GPG de AgileBits verificada"
     else
-      fail "LA FIRMA NO VERIFICA — se aborta la instalación"; return 1
+      fail "SIGNATURE DOES NOT VERIFY - install aborted"; return 1
     fi
   else
     warn "no hay .sig disponible; se instala sin verificar la firma"
@@ -147,7 +147,7 @@ do_1password() {
   sudo mkdir -p /opt/1Password
   sudo cp -a "$src"/. /opt/1Password/
   ( cd /opt/1Password && sudo ./after-install.sh ) >/dev/null 2>&1 || warn "after-install.sh dio errores (suele ser inocuo)"
-  have 1password && ok "$(1password --version 2>/dev/null | head -1 || echo instalado)" || { fail "no quedó en el PATH"; return 1; }
+  have 1password && ok "$(1password --version 2>/dev/null | head -1 || echo installed)" || { fail "did not end up on the PATH"; return 1; }
   info "${c_dim}En Hyprland conviene lanzarlo con --ozone-platform=wayland${c_off}"
 }
 
@@ -162,7 +162,7 @@ do_obsidian() {
   url=$(curl -fsSL --max-time 30 "https://api.github.com/repos/obsidianmd/obsidian-releases/releases?per_page=15" \
         | grep -oE '"browser_download_url": *"[^"]*obsidian-[0-9.]+-arm64\.tar\.gz"' \
         | head -1 | sed 's/.*"\(https[^"]*\)"/\1/')
-  [ -n "$url" ] || { fail "no encontré ningún tarball arm64 en los últimos releases"; return 1; }
+  [ -n "$url" ] || { fail "no arm64 tarball found in the recent releases"; return 1; }
   info "$(basename "$url")"
   mkdir -p "$WORK"; curl -fL --progress-bar "$url" -o "$WORK/obsidian.tar.gz" || { fail "descarga fallida"; return 1; }
   sudo rm -rf /opt/obsidian; sudo mkdir -p /opt/obsidian
@@ -204,15 +204,15 @@ do_spotify_web() {
   # Omarchy trata Spotify como paquete nativo, no como webapp — y ese paquete es
   # x86_64. En ARM la via que funciona es la web, que necesita Widevine.
   if ! have google-chrome-stable; then
-    warn "sin Google Chrome la web de Spotify no reproducirá: instala antes 'chrome'"
+    warn "without Google Chrome the Spotify web app will not play: install 'chrome' first"
   fi
   if have omarchy-webapp-install; then
     omarchy-webapp-install "Spotify" "https://open.spotify.com" \
       "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/spotify.png" \
       "$(have google-chrome-stable && echo 'google-chrome-stable --app=https://open.spotify.com')" \
-      >/dev/null 2>&1 && ok "lanzador creado en el menú de aplicaciones"
+      >/dev/null 2>&1 && ok "launcher added to the application menu"
   else
-    warn "omarchy-webapp-install no está disponible"
+    warn "omarchy-webapp-install is not available"
   fi
   # Reasignar SUPER+SHIFT+M, que en Omarchy apunta al binario nativo
   local f="$HOME/.config/hypr/bindings.lua"
@@ -223,28 +223,28 @@ do_spotify_web() {
 -- Necesita Google Chrome, que es quien trae Widevine en arm64.
 o.bind("SUPER + SHIFT + M", "Spotify", o.launch("google-chrome-stable --app=https://open.spotify.com"))
 LUA
-    ok "SUPER+SHIFT+M reasignado (reinicia la sesión para aplicarlo)"
+    ok "SUPER+SHIFT+M rebound (log out and back in to apply)"
   fi
   info "${c_dim}Alternativa en terminal, ya instalada: spotify-player${c_off}"
 }
 
 do_pinta() {
   title "Pinta"
-  info "Microsoft sí publica .NET para linux-arm64; Arch solo lo empaqueta para x86_64."
+  info "Microsoft does publish .NET for linux-arm64; Arch only packages it for x86_64."
   info "Se instala el runtime desde el tarball oficial y luego el paquete de Pinta, que es arch=any."
   aur_build dotnet-runtime-bin dotnet-runtime-bin || { fail "sin runtime .NET no se puede seguir"; return 1; }
   local url=https://geo.mirror.pkgbuild.com/extra/os/x86_64/
   local file; file=$(curl -fsSL --max-time 30 "$url" | grep -o 'pinta-[0-9][^"]*-any\.pkg\.tar\.zst' | sort -V | tail -1)
-  [ -n "$file" ] || { fail "no encontré el paquete de Pinta"; return 1; }
+  [ -n "$file" ] || { fail "could not find the Pinta package"; return 1; }
   info "$file  ${c_dim}(la ruta dice x86_64 pero el paquete es arch=any)${c_off}"
   mkdir -p "$WORK"; curl -fL --progress-bar "$url$file" -o "$WORK/$file" || return 1
-  sudo pacman -U --noconfirm "$WORK/$file" >/dev/null 2>&1 && ok "$(pacman -Q pinta)" || { fail "pacman -U falló"; return 1; }
-  warn "queda fuera del gestor de actualizaciones: cada versión hay que repetirla a mano"
+  sudo pacman -U --noconfirm "$WORK/$file" >/dev/null 2>&1 && ok "$(pacman -Q pinta)" || { fail "pacman -U failed"; return 1; }
+  warn "outside the update manager: every new version has to be repeated by hand"
 }
 
 do_obs() {
   title "OBS Studio"
-  info "OBS compila bien en aarch64. Lo único que lo bloquea en Arch Linux ARM es el"
+  info "OBS builds fine on aarch64. The only thing blocking it on Arch Linux ARM is the"
   info "subpaquete del navegador, cuyo 'cef' solo existe para x86_64. Se desactiva."
   warn "compilar Qt6 + OBS dentro de la VM lleva un buen rato"
   local dir="$WORK/obs-studio"
@@ -275,9 +275,9 @@ do_obs() {
   info "PKGBUILD parcheado: aarch64, sin CEF, sin plugin de navegador"
   if makepkg -si --noconfirm --needed --noprogressbar >"$dir/build.log" 2>&1; then
     ok "$(pacman -Q obs-studio)"
-    info "${c_dim}Sin aceleración por hardware en la VM: codificará con x264 por CPU${c_off}"
+    info "${c_dim}No hardware acceleration in the VM: it will encode with x264 on the CPU${c_off}"
   else
-    fail "falló la compilación — log: $dir/build.log"
+    fail "build failed - log: $dir/build.log"
     tail -6 "$dir/build.log" | sed 's/^/      /'
     return 1
   fi
@@ -337,7 +337,7 @@ case "${1:-}" in
       show_list
       mapfile -t SELECTED < <(
         while read -r k; do printf '%s — %s\n' "$k" "$(catalog_title "$k")"; done < <(catalog_keys) \
-        | gum choose --no-limit --header "Selecciona qué instalar (espacio marca, enter confirma)" \
+        | gum choose --no-limit --header "Pick what to install (space selects, enter confirms)" \
         | cut -d' ' -f1
       )
     else
@@ -359,7 +359,7 @@ done
 title "Resumen"
 [ ${#OK_LIST[@]} -gt 0 ] && ok "instalado: ${OK_LIST[*]}"
 if [ ${#KO_LIST[@]} -gt 0 ]; then
-  fail "falló: ${KO_LIST[*]}"
+  fail "failed: ${KO_LIST[*]}"
   # No se borra el directorio de trabajo: dentro estan los build.log, que son
   # lo unico que permite averiguar por que fallo.
   info "logs en $WORK/<paquete>/build.log"

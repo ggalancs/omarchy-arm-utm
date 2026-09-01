@@ -112,8 +112,8 @@ cp "$PROV/stage2.sh" "$PROV/stage3.sh" "$PROV/config.env" \
 [ -f "$PROV/share.sh" ] && cp "$PROV/share.sh" /mnt/root/prov/omarchy-arm-share
 # Sin `&&` mudo: si falta, se dice. El guard silencioso de esta linea dejo
 # una imagen entera sin el comando y nadie se entero hasta arrancarla.
-if [ -f "$PROV/usuario.sh" ]; then cp "$PROV/usuario.sh" /mnt/root/prov/omarchy-arm-usuario
-else echo "  !! falta usuario.sh en el ISO: la imagen saldra sin omarchy-arm-usuario"; fi
+if [ -f "$PROV/user.sh" ]; then cp "$PROV/user.sh" /mnt/root/prov/omarchy-arm-user
+else echo "  !! falta user.sh en el ISO: la imagen saldra sin omarchy-arm-user"; fi
 cat > /mnt/root/prov/fsinfo.env <<EOF
 ROOTFS=$ROOTFS
 ROOT_MOUNT_OPTS=$MOPT_ROOT

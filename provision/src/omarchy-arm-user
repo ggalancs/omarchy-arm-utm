@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#  omarchy-arm-usuario — which account the VM logs in as
+#  omarchy-arm-user — which account the VM logs in as
 #  ────────────────────────────────────────────────────────────────────────────
 #  The image logs in as 'omarchy' on its own. If you create another account the
 #  VM keeps logging in as the first one, and there is no obvious way to change
@@ -8,9 +8,9 @@
 #
 #  This switches the autologin without editing files by hand.
 #
-#    omarchy-arm-usuario              who it logs in as now
-#    omarchy-arm-usuario ana          log in as 'ana' from the next boot
-#    omarchy-arm-usuario --ask        do not log in on its own; ask for
+#    omarchy-arm-user              who it logs in as now
+#    omarchy-arm-user ana          log in as 'ana' from the next boot
+#    omarchy-arm-user --ask        do not log in on its own; ask for
 #                                     username and password
 #  ────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
@@ -30,7 +30,7 @@ case "${1:-}" in
     echo "Accounts on this machine:"
     accounts | sed "s/^/  /"
     echo
-    echo "Change it:  omarchy-arm-usuario <account>   |   omarchy-arm-usuario --ask"
+    echo "Change it:  omarchy-arm-user <account>   |   omarchy-arm-user --ask"
     ;;
 
   --ask|--preguntar)
@@ -40,7 +40,7 @@ case "${1:-}" in
     echo
     echo "NOTE: the Omarchy SDDM theme shows the last user who logged in. If it"
     echo "does not let you type a different name, set the autologin again with:"
-    echo "    omarchy-arm-usuario <account>"
+    echo "    omarchy-arm-user <account>"
     ;;
 
   *)

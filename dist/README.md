@@ -59,9 +59,9 @@ the Omarchy SDDM theme paints the last user, not a list to pick from. You do
 not need to edit anything to change that:
 
 ```bash
-omarchy-arm-usuario              # who it logs in as, and what accounts exist
-omarchy-arm-usuario ana          # log in as 'ana' from the next boot
-omarchy-arm-usuario --ask        # do not log in on its own; ask instead
+omarchy-arm-user              # who it logs in as, and what accounts exist
+omarchy-arm-user ana          # log in as 'ana' from the next boot
+omarchy-arm-user --ask        # do not log in on its own; ask instead
 ```
 
 It keeps whatever desktop session was already configured.

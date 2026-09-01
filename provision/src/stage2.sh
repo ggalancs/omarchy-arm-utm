@@ -264,26 +264,28 @@ mkdir -p /mnt/share
 # Un cartel en /mnt, NO dentro de /mnt/share. Se probo ponerlo debajo del punto
 # de automontaje y NO se ve: con el autofs activo y sin nada detras,
 # `ls /mnt/share` da "No such file or directory" y no llega al directorio real.
-cat > /mnt/LEEME-carpeta-compartida.txt <<'AVISO'
-Si /mnt/share da error al listarlo ("No such device", "No such file or
-directory"), UTM no esta ofreciendo ninguna carpeta compartida, o la ofrece en
-un modo distinto del que espera el montaje automatico de /etc/fstab (VirtFS).
+cat > /mnt/README-no-shared-folder.txt <<'NOTICE'
+If you can see this file, NO shared folder is mounted here.
 
-  1. Apaga la VM: los cambios de Compartir se aplican al arrancar.
-     (Que la ruta salga en gris claro en UTM es NORMAL, este la VM parada o
-     arrancada. No significa que el ajuste este desactivado.)
-  2. UTM -> Ajustes de la VM -> Compartir -> elige una carpeta del anfitrion.
-     Aunque el nombre ya aparezca, vuelve a seleccionarla: el permiso que macOS
-     le da a UTM va atado a cada VM y NO se hereda al importar otra.
-  3. Enciende la VM.
-  4. VirtFS se monta solo. Con SPICE WebDAV, ejecuta:
+That is not a fault in the image: UTM is not offering one, or it is offering it
+in a mode other than the automatic mount in /etc/fstab expects (VirtFS).
+
+  1. Power the VM off: Sharing changes take effect when it starts.
+     (The path showing in light grey in UTM is NORMAL, whether the VM is
+     running or stopped. It does not mean the setting is disabled.)
+  2. UTM -> VM Settings -> Sharing -> pick a folder on the host.
+     Select it again even if the name is already showing: the permission
+     macOS grants UTM is tied to each VM and is NOT inherited when you
+     import another one.
+  3. Start the VM.
+  4. VirtFS mounts on its own. With SPICE WebDAV, run:
 
        omarchy-arm-share
 
-     Para ver que esta pasando:
+     To see what is going on:
 
        omarchy-arm-share --status
-AVISO
+NOTICE
 # La entrada de fstab solo vale para VirtFS, y el usuario puede haber elegido
 # SPICE WebDAV. En vez de fijar un modo, se instala omarchy-arm-share, que
 # detecta cual esta activo. La entrada de fstab se deja igualmente con nofail:
@@ -354,9 +356,9 @@ EOF
 # Cambiar el autologin sin editar ficheros a mano. Sin esto, quien cree una
 # segunda cuenta se queda entrando siempre con la primera: el tema de SDDM de
 # Omarchy pinta el ultimo usuario, no una lista donde elegir.
-if [ -f /root/prov/omarchy-arm-usuario ]; then
-  install -Dm755 /root/prov/omarchy-arm-usuario /usr/local/bin/omarchy-arm-usuario
-  echo "  omarchy-arm-usuario instalado"
+if [ -f /root/prov/omarchy-arm-user ]; then
+  install -Dm755 /root/prov/omarchy-arm-user /usr/local/bin/omarchy-arm-user
+  echo "  omarchy-arm-user instalado"
 fi
 sed -i '/-auth.*pam_gnome_keyring\.so/d;/-password.*pam_gnome_keyring\.so/d' /etc/pam.d/sddm 2>/dev/null || true
 echo "  sesion=$SESSION"
