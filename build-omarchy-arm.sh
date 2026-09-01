@@ -1673,6 +1673,17 @@ rm -rf "/home/$NEW/.local/share/omarchy"
 ln -sfn /usr/share/omarchy "/home/$NEW/.local/share/omarchy"
 chown -h "$NEW:$NEW" "/home/$NEW/.local/share/omarchy"
 
+# El layout de teclado heredado del Mac del constructor (VM_XKB, p.ej. "es")
+# viajaba dentro de la imagen distribuida: un usuario con teclado US recibia
+# la puntuacion cambiada de sitio desde el primer arranque. Para distribuir se
+# fija "us"; kb_options (altwin:swap_lalt_lwin, Option = SUPER) se conserva.
+if sed -i 's/^\(\s*kb_layout\s*=\s*\)"[^"]*"/\1"us"/' "/home/$NEW/.config/hypr/input.lua" 2>/dev/null; then
+  echo "  teclado: kb_layout -> us (kb_options intactos)"
+else
+  warn "no pude fijar kb_layout=us en /home/$NEW/.config/hypr/input.lua"
+fi
+printf 'KEYMAP=us\nXKBLAYOUT=us\n' > /etc/vconsole.conf
+
 log "3/10 SDDM: autologin al usuario generico"
 cat > /etc/sddm.conf.d/20-autologin.conf <<EOF
 [Autologin]

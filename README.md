@@ -251,6 +251,11 @@ via `altwin:swap_lalt_lwin`:
 
 ⌥+Space opens the Omarchy menu, ⌥+Return a terminal, ⌥+K the full keybinding list.
 
+The distributed image ships the `us` keyboard layout (earlier builds leaked the
+builder's own layout into the zip). For another layout:
+`hyprctl keyword input:kb_layout es` for the session, or edit
+`~/.config/hypr/input.lua` to persist it.
+
 ## Proprietary apps
 
 1Password, Obsidian, Typora, LocalSend and Google Chrome are **not** in the
