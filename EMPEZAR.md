@@ -216,7 +216,7 @@ open *.utm
 Usuario `omarchy`, contraseña `omarchy` (también para root). **Cámbiala nada más
 entrar con `passwd`.** El resto está en el `LEEME.md` que viene dentro del zip.
 
-Su `sha256` es `81b64fcc6b065953…`. Al lado hay un `omarchy-arm-utm.zip` de
+Su `sha256` es `96d4ac82915f8e80…`. Al lado hay un `omarchy-arm-utm.zip` de
 6,5 GB: es la primera entrega, y conserva el nombre corto para que los enlaces y
 checksums publicados con ella sigan apuntando a los bytes exactos para los que
 se escribieron. Esa es la única razón de que la buena lleve `-v2` en el nombre.

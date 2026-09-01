@@ -6,12 +6,12 @@
 |---|---|---|
 | | **← download this one** | the first release |
 | Size | 3.6 GB (3.8 GB unpacked) | 6.5 GB (13 GB unpacked) |
-| Published | 2026-08-29 | 2026-08-23 |
+| Published | 2026-09-01 | 2026-08-23 |
 | Shared clipboard | **works, verified both ways** | does not work |
 | "Update System" notification | gone | repeats on every boot |
 | "Reboot?" after each update | gone | repeats forever |
 | `sshd` | disabled | enabled, with a trivial password |
-| `sha256` | `81b64fcc6b065953a685cb7a0e6e2a3b49227b6c77c541362c25e5db86c66f1b` | `9d6afb16843bd868c9503dbfdaaa5f1ff7634b23f9a972b344ec27ca0a795fb4` |
+| `sha256` | `96d4ac82915f8e8044eeb7a1d02312cc8b69728619bdafd09a25fd08b511cde9` | `9d6afb16843bd868c9503dbfdaaa5f1ff7634b23f9a972b344ec27ca0a795fb4` |
 
 The plain name belongs to the first release and keeps it, so links and checksums
 published back in August still resolve to the exact bytes they were written
@@ -27,6 +27,36 @@ User `omarchy`, password `omarchy` (also root). **Change it with `passwd`.**
 
 Arch Linux ARM aarch64 · Hyprland 0.56.1 · the Omarchy 4 desktop · 442
 `omarchy-*` commands · 17 tools built for ARM · OBS Studio and Pinta.
+
+## What changed on 2026-09-01
+
+- **Shared folders work in SPICE WebDAV mode.** They never had. `omarchy-arm-share`
+  asked `mountpoint -q /mnt/share` before mounting, and the `fstab` entry carries
+  `x-systemd.automount`, so that path is *always* a mount point — the autofs one —
+  even with nothing behind it. The script answered "already mounted" and mounted
+  nothing, while `ls` said `No such device`. It now checks the filesystem type and
+  ignores autofs, and releases the automount before handing the point to davfs.
+  Verified on a real VM: mounts, writes, and syncs both ways.
+- **`omarchy-arm-usuario`.** The image logs in as `omarchy` on its own, and the
+  Omarchy SDDM theme paints the last user rather than a list to pick from — so
+  creating a second account left you stuck on the first. One command now switches
+  the autologin, or turns it off, without editing files. It keeps whatever desktop
+  session was configured.
+- **A note where you will actually find it.** `/mnt/share` exists even when nothing
+  is shared, so an empty or erroring directory looked like a broken feature.
+  `/mnt/LEEME-carpeta-compartida.txt` explains what to do. It sits in `/mnt`, not
+  inside `/mnt/share`, because with autofs active and nothing behind it that
+  directory cannot even be listed.
+- **A build that fails is a build that fails.** Tools that did not compile were
+  recorded in the build user's home, which does not survive the rename to
+  `omarchy` — so nothing checked them, and images shipped without `herdr` once and
+  without `ttf-ia-writer` another time. The list now lives at
+  `/usr/local/share/omarchy-arm/no-compilaron.txt`, is always written, and the
+  image check fails if it is missing or non-empty. Downloads are also retried
+  once: both real failures were GitHub timing out, not code that would not build.
+- Documented, from a user's report: the shell is `bash` as in Omarchy (so
+  `useradd -s /bin/zsh` fails until you install it), and Flutter/Electron apps that
+  render transparent under Wayland can be launched with `GDK_BACKEND=x11`.
 
 ## What changed on 2026-08-29
 
