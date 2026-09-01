@@ -1808,25 +1808,26 @@ rm -f /var/lib/systemd/random-seed /var/lib/systemd/credential.secret 2>/dev/nul
 log "8/10 aviso al destinatario"
 cat > /etc/motd <<'EOF'
 
-  Omarchy sobre Arch Linux ARM (aarch64) — imagen para UTM en Apple Silicon
+  Omarchy on Arch Linux ARM (aarch64) - a UTM image for Apple Silicon
 
-  Usuario: omarchy   Contrasena: omarchy   (tambien para root)
+  User: omarchy   Password: omarchy   (root too)
 
-  >> CAMBIA LA CONTRASENA AHORA:  passwd
+  >> CHANGE THE PASSWORD NOW:  passwd
 
-  Teclas: la tecla Option (⌥) del Mac actua como SUPER.
-          ⌥+Space  menu de Omarchy      ⌥+Return  terminal
+  Keys: the Mac's Option key acts as SUPER.
+        Option+Space  Omarchy menu      Option+Return  terminal
 
-  ¿Echas en falta 1Password, Obsidian, Typora, Spotify o LocalSend?
-  No vienen dentro por licencia, pero todas tienen build ARM64 oficial:
+  Missing 1Password, Obsidian, Typora, Spotify or LocalSend?
+  They are not inside for licensing reasons, but all have official ARM64
+  builds:
 
-      omarchy-arm-extras --list     ver que puede instalar
-      omarchy-arm-extras            menu interactivo
+      omarchy-arm-extras --list     see what it can install
+      omarchy-arm-extras            interactive menu
 
 EOF
 install -d -o "$NEW" -g "$NEW" "/home/$NEW/Desktop"
-cp /etc/motd "/home/$NEW/Desktop/LEEME.txt"
-chown "$NEW:$NEW" "/home/$NEW/Desktop/LEEME.txt"
+cp /etc/motd "/home/$NEW/Desktop/README.txt"
+chown "$NEW:$NEW" "/home/$NEW/Desktop/README.txt"
 
 log "8a/10 hook de actualizacion para ARM"
 # omarchy-update-dev no actualiza el arbol cuando OMARCHY_PATH es
@@ -2818,16 +2819,16 @@ chmod +x "$W/provision/vdagent.py"
 cat > "$W/provision/share.sh" <<'__PAYLOAD_PROVISION_SHARE_SH__'
 #!/bin/bash
 #
-#  omarchy-arm-share — monta la carpeta que compartes desde UTM.
+#  omarchy-arm-share — mounts the folder you share from UTM.
 #
-#  UTM tiene dos modos y el usuario elige uno en Ajustes de la VM → Compartir:
+#  UTM has two modes and you pick one in VM Settings -> Sharing:
 #
-#    VirtFS       dispositivo 9p con mount_tag "share". Se monta directo.
-#    SPICE WebDAV puerto virtio org.spice-space.webdav.0. spice-webdavd lo
-#                 sirve en http://localhost:9843/ y se monta con davfs2.
+#    VirtFS       a 9p device with mount_tag "share". Mounted directly.
+#    SPICE WebDAV the org.spice-space.webdav.0 virtio port. spice-webdavd
+#                 serves it on http://localhost:9843/ and davfs2 mounts it.
 #
-#  Este script detecta cuál está activo y hace lo que toque. Sin argumentos
-#  monta; con --umount desmonta; con --status dice qué hay.
+#  This detects which one is active and does the right thing. With no
+#  arguments it mounts; --umount unmounts; --status reports what it sees.
 #
 set -uo pipefail
 PUNTO="${OMARCHY_SHARE_MNT:-/mnt/share}"
@@ -2849,23 +2850,23 @@ montado() {
 }
 
 estado() {
-  echo "  punto de montaje: $PUNTO"
-  echo "  montado:          $(montado && echo sí || echo no)"
-  echo "  modo VirtFS (9p): $(hay_9p && echo disponible || echo no)"
-  echo "  modo SPICE WebDAV:$(hay_webdav && echo ' disponible' || echo ' no')"
+  echo "  mount point:   $PUNTO"
+  echo "  mounted:       $(montado && echo yes || echo no)"
+  echo "  VirtFS (9p):   $(hay_9p && echo available || echo no)"
+  echo "  SPICE WebDAV:  $(hay_webdav && echo available || echo no)"
   if hay_webdav; then
     echo "  spice-webdavd:    $(systemctl is-active spice-webdavd 2>&1)"
   fi
-  montado && { echo "  contenido:"; ls -la "$PUNTO" 2>/dev/null | head -6 | sed 's/^/    /'; }
+  montado && { echo "  contents:"; ls -la "$PUNTO" 2>/dev/null | head -6 | sed 's/^/    /'; }
 }
 
 montar() {
-  montado && { echo "ya está montado en $PUNTO"; return 0; }
+  montado && { echo "already mounted on $PUNTO"; return 0; }
   sudo mkdir -p "$PUNTO"
 
   # 1) VirtFS: lo más simple, si el dispositivo está
   if sudo mount -t 9p -o trans=virtio,version=9p2000.L,rw,msize=512000 "$TAG" "$PUNTO" 2>/dev/null; then
-    echo "montado por VirtFS (9p) en $PUNTO"; return 0
+    echo "mounted over VirtFS (9p) on $PUNTO"; return 0
   fi
 
   # 2) SPICE WebDAV
@@ -2881,30 +2882,30 @@ montar() {
       sleep 1
     done
     if ! curl -s -m 3 -o /dev/null "$URL"; then
-      echo "spice-webdavd no responde en $URL" >&2
+      echo "spice-webdavd is not answering on $URL" >&2
       echo "  systemctl status spice-webdavd" >&2
       return 1
     fi
     # davfs2 pregunta usuario y contraseña: aquí no hacen falta
     if printf '\n\n' | sudo mount -t davfs -o rw,uid=$(id -u),gid=$(id -g) "$URL" "$PUNTO" 2>/dev/null; then
-      echo "montado por SPICE WebDAV en $PUNTO"; return 0
+      echo "mounted over SPICE WebDAV on $PUNTO"; return 0
     fi
-    echo "davfs2 no pudo montar $URL" >&2
+    echo "davfs2 could not mount $URL" >&2
     return 1
   fi
 
-  echo "no encuentro ninguna carpeta compartida." >&2
-  echo "En UTM: Ajustes de la VM → Compartir → elige una ruta (VirtFS o SPICE WebDAV)," >&2
-  echo "y apaga y enciende la VM." >&2
+  echo "no shared folder found." >&2
+  echo "In UTM: VM Settings -> Sharing -> pick a folder (VirtFS or SPICE WebDAV)," >&2
+  echo "then power the VM off and on again." >&2
   return 1
 }
 
 case "${1:-}" in
-  --umount|-u) sudo umount "$PUNTO" && echo "desmontado" ;;
+  --umount|-u) sudo umount "$PUNTO" && echo "unmounted" ;;
   --status|-s) estado ;;
   -h|--help)   sed -n '3,14p' "$0" | sed 's/^#\{0,2\} \{0,1\}//' ;;
   "")          montar ;;
-  *)           echo "opción desconocida: $1" >&2; exit 1 ;;
+  *)           echo "unknown option: $1" >&2; exit 1 ;;
 esac
 __PAYLOAD_PROVISION_SHARE_SH__
 chmod +x "$W/provision/share.sh"
@@ -2912,61 +2913,62 @@ chmod +x "$W/provision/share.sh"
 cat > "$W/provision/usuario.sh" <<'__PAYLOAD_PROVISION_USUARIO_SH__'
 #!/bin/bash
 #
-#  omarchy-arm-usuario — con que usuario entra la VM
+#  omarchy-arm-usuario — which account the VM logs in as
 #  ────────────────────────────────────────────────────────────────────────────
-#  La imagen entra sola como 'omarchy'. Si creas otra cuenta, el arranque sigue
-#  entrando con la primera y no hay forma obvia de cambiarlo: el tema de SDDM
-#  de Omarchy pinta el ultimo usuario, no una lista donde elegir.
+#  The image logs in as 'omarchy' on its own. If you create another account the
+#  VM keeps logging in as the first one, and there is no obvious way to change
+#  it: the Omarchy SDDM theme paints the last user, not a list to pick from.
 #
-#  Esto cambia el autologin sin tener que editar ficheros a mano.
+#  This switches the autologin without editing files by hand.
 #
-#    omarchy-arm-usuario              con quien entra ahora
-#    omarchy-arm-usuario ana          entra con 'ana' a partir del proximo arranque
-#    omarchy-arm-usuario --preguntar  no entra solo; pide usuario y contrasena
+#    omarchy-arm-usuario              who it logs in as now
+#    omarchy-arm-usuario ana          log in as 'ana' from the next boot
+#    omarchy-arm-usuario --ask        do not log in on its own; ask for
+#                                     username and password
 #  ────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 CONF=/etc/sddm.conf.d/autologin.conf
 
-usuarios() { awk -F: '$3>=1000 && $3<65000 {print $1}' /etc/passwd | sort; }
-actual()   { [ -f "$CONF" ] && sed -n 's/^User=//p' "$CONF" | tail -1; }
+accounts() { awk -F: '$3>=1000 && $3<65000 {print $1}' /etc/passwd | sort; }
+current()  { [ -f "$CONF" ] && sed -n 's/^User=//p' "$CONF" | tail -1; }
 
 case "${1:-}" in
-  -h|--help) sed -n '3,15p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 0 ;;
+  -h|--help) sed -n '3,16p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 0 ;;
 
   "")
-    A=$(actual)
-    if [ -n "$A" ]; then echo "Entra sola como: $A"
-    else echo "No entra sola: SDDM pide usuario y contrasena."; fi
+    A=$(current)
+    if [ -n "$A" ]; then echo "Logs in automatically as: $A"
+    else echo "No autologin: SDDM asks for username and password."; fi
     echo
-    echo "Cuentas en la maquina:"
-    usuarios | sed "s/^/  /"
+    echo "Accounts on this machine:"
+    accounts | sed "s/^/  /"
     echo
-    echo "Cambiarlo:  omarchy-arm-usuario <cuenta>   |   omarchy-arm-usuario --preguntar"
+    echo "Change it:  omarchy-arm-usuario <account>   |   omarchy-arm-usuario --ask"
     ;;
 
-  --preguntar)
-    [ -f "$CONF" ] || { echo "Ya pedia usuario y contrasena."; exit 0; }
+  --ask|--preguntar)
+    [ -f "$CONF" ] || { echo "It was already asking for username and password."; exit 0; }
     sudo rm -f "$CONF" || exit 1
-    echo "Hecho: en el proximo arranque SDDM pedira usuario y contrasena."
+    echo "Done: from the next boot SDDM will ask for username and password."
     echo
-    echo "AVISO: el tema de SDDM de Omarchy muestra el ultimo usuario que entro."
-    echo "Si no te deja teclear otro nombre, vuelve a fijar el autologin con:"
-    echo "    omarchy-arm-usuario <cuenta>"
+    echo "NOTE: the Omarchy SDDM theme shows the last user who logged in. If it"
+    echo "does not let you type a different name, set the autologin again with:"
+    echo "    omarchy-arm-usuario <account>"
     ;;
 
   *)
     U="$1"
-    id "$U" >/dev/null 2>&1 || { echo "no existe la cuenta '$U'. Las que hay:"; usuarios | sed "s/^/  /"; exit 2; }
-    [ "$(id -u "$U")" -ge 1000 ] || { echo "'$U' es una cuenta de sistema; no vale para entrar."; exit 2; }
-    # Se conserva la sesion que ya estuviera puesta: si el bundle se creo con
-    # 'omarchy' y ahi pone Session=omarchy, cambiar de usuario no debe cambiar
-    # de escritorio.
+    id "$U" >/dev/null 2>&1 || { echo "no such account '$U'. Available:"; accounts | sed "s/^/  /"; exit 2; }
+    [ "$(id -u "$U")" -ge 1000 ] || { echo "'$U' is a system account; it cannot be used to log in."; exit 2; }
+    # Keep whatever session was already set: if the bundle was built with
+    # 'omarchy' and Session=omarchy is in there, switching user must not
+    # switch desktop.
     SES=$([ -f "$CONF" ] && sed -n 's/^Session=//p' "$CONF" | tail -1)
     [ -n "$SES" ] || SES=$(ls /usr/local/share/wayland-sessions /usr/share/wayland-sessions 2>/dev/null \
                             | grep -m1 '\.desktop$' | sed 's/\.desktop$//')
     [ -n "$SES" ] || SES=hyprland-uwsm
     printf '[Autologin]\nUser=%s\nSession=%s\n' "$U" "$SES" | sudo tee "$CONF" >/dev/null || exit 1
-    echo "Hecho: a partir del proximo arranque entra como '$U' (sesion $SES)."
+    echo "Done: from the next boot it logs in as '$U' (session $SES)."
     ;;
 esac
 __PAYLOAD_PROVISION_USUARIO_SH__
@@ -3670,11 +3672,11 @@ ph_package() {
   if [[ "$DNAME" != "$(printf '%s' "$DNAME" | tr -cd 'A-Za-z0-9 .-')" ]]; then
     die "el nombre de distribucion '$DNAME' lleva caracteres raros; usa letras, digitos, espacio, punto o guion"
   fi
-  write_readme "$W/dist/LEEME.md"
+  write_readme "$W/dist/README.md"
 
   info "comprimiendo..."
   ( cd "$W/dist" && rm -f "$DIST_ZIP" \
-      && zip -r -q -1 "$DIST_ZIP" "$DNAME.utm" LEEME.md \
+      && zip -r -q -1 "$DIST_ZIP" "$DNAME.utm" README.md \
       && shasum -a 256 "$DIST_ZIP" > "$DIST_ZIP.sha256" )
   rm -f "$W/dist/dist.qcow2" "$W/dist/slim.qcow2"
   ok "listo: $W/dist/$DIST_ZIP ($(du -h "$W/dist/$DIST_ZIP" | cut -f1))"
@@ -3709,202 +3711,210 @@ write_readme() {
   # 439, «el zip ocupa 7 GB» cuando eran 3,6 -- y hasta con una nota interna
   # para el mantenedor dentro.
   cat > "$1" <<'__PAYLOAD_LEEME_MD__'
-# Omarchy sobre Arch Linux ARM — imagen para UTM en Apple Silicon
+# Omarchy on Arch Linux ARM — a UTM image for Apple Silicon
 
-Imagen construida con
+Built with
 [`build-omarchy-arm.sh`](https://github.com/ggalancs/omarchy-arm-utm).
 
-Máquina virtual **aarch64 nativa** (acelerada con HVF, sin emulación) con
-Arch Linux ARM + Hyprland y la configuración, temas y herramientas de
+A **native aarch64** virtual machine (HVF-accelerated, no emulation) running
+Arch Linux ARM + Hyprland with the configuration, themes and tools of
 [Omarchy 4](https://omarchy.org).
 
-## Requisitos
+## Requirements
 
-- Mac con Apple Silicon (M1 o superior)
-- [UTM](https://mac.getutm.app) 4.7 o posterior
-- ~8 GB de disco libre para empezar: el `.zip` ocupa 3,6 GB y la imagen
-  descomprimida otros 3,6 GB. Puedes borrar el `.zip` una vez importada.
-- El disco de la VM **crece con el uso**: parte de 3,6 GB y se expande según
-  lo que instales, con un techo de 80 GB. Tras un día de uso normal ronda
-  los 4,7 GB.
+- A Mac with Apple Silicon (M1 or newer)
+- [UTM](https://mac.getutm.app) 4.7 or later
+- ~8 GB of free disk to start: the `.zip` is 3.6 GB and the unpacked image
+  another 3.6 GB. You can delete the `.zip` once it is imported.
+- The VM disk **grows as you use it**: it starts at 3.6 GB and expands with
+  whatever you install, capped at 80 GB. After a normal day it sits around
+  4.7 GB.
 
-(Estas cifras son las de `omarchy-arm-utm-v2.zip`. La primera entrega,
-`omarchy-arm-utm.zip`, ocupa 6,5 GB y pide bastante más sitio; `VERSIONS.md`
-compara las dos.)
+(These are the figures for `omarchy-arm-utm-v2.zip`. The first release,
+`omarchy-arm-utm.zip`, is 6.5 GB and needs considerably more room;
+`VERSIONS.md` compares the two.)
 
-## Instalación
+## Install
 
-1. Descomprime el `.zip`.
-2. Doble clic en el `.utm` que aparece (o **Archivo → Importar** en UTM).
-3. Arranca la VM.
+1. Unzip.
+2. Double-click the `.utm` that appears (or **File → Import** in UTM).
+3. Start the VM.
 
-Entra solo, sin pedir contraseña.
+It logs in on its own, with no password prompt.
 
-## Credenciales
+## Credentials
 
 | | |
 |---|---|
-| Usuario | `omarchy` |
-| Contraseña | `omarchy` (también para root) |
+| User | `omarchy` |
+| Password | `omarchy` (root too) |
 
-**Cambia la contraseña nada más entrar:** abre un terminal y ejecuta `passwd`.
+**Change the password as soon as you are in:** open a terminal and run `passwd`.
 
-**El shell es `bash`**, como en Omarchy: la lista de paquetes de Omarchy no
-trae `zsh` ni `fish`, y esta imagen no añade nada que Omarchy no ponga. Si
-quieres otro, instálalo **antes** de usarlo — `useradd -s /bin/zsh` falla si
-`zsh` no está:
-
-```bash
-sudo pacman -S zsh        # o fish
-chsh -s /bin/zsh          # para tu usuario
-```
-
-**Si creas un segundo usuario**, la VM sigue entrando sola con el primero: el
-tema de SDDM de Omarchy pinta el último usuario, no una lista donde elegir.
-Para cambiarlo no hace falta editar nada:
+**The shell is `bash`**, as in Omarchy: Omarchy's own package list carries
+neither `zsh` nor `fish`, and this image adds nothing Omarchy does not ship. If
+you want another one, install it **before** you use it — `useradd -s /bin/zsh`
+fails while `zsh` is missing:
 
 ```bash
-omarchy-arm-usuario              # con quién entra ahora, y qué cuentas hay
-omarchy-arm-usuario ana          # entra con 'ana' a partir del próximo arranque
-omarchy-arm-usuario --preguntar  # que no entre sola y pida usuario y contraseña
+sudo pacman -S zsh        # or fish
+chsh -s /bin/zsh          # for your own account
 ```
 
-Conserva la sesión de escritorio que ya estuviera configurada.
+**If you create a second account**, the VM keeps logging in as the first one:
+the Omarchy SDDM theme paints the last user, not a list to pick from. You do
+not need to edit anything to change that:
 
-## Teclado
+```bash
+omarchy-arm-usuario              # who it logs in as, and what accounts exist
+omarchy-arm-usuario ana          # log in as 'ana' from the next boot
+omarchy-arm-usuario --ask        # do not log in on its own; ask instead
+```
 
-macOS se queda con la tecla Cmd antes de que UTM la reciba (Cmd+Space abre
-Spotlight), así que la VM está configurada con Alt y Super intercambiados:
+It keeps whatever desktop session was already configured.
 
-| Tecla del Mac | En la VM |
+## Keyboard
+
+macOS takes the Cmd key before UTM ever sees it (Cmd+Space opens Spotlight), so
+this VM ships with Alt and Super swapped:
+
+| Mac key | In the VM |
 |---|---|
 | **Option (⌥)** | SUPER |
 | Cmd (⌘) | ALT |
 
-Atajos principales: **⌥+Space** abre el menú de Omarchy, **⌥+Return** un
-terminal, **⌥+K** el listado completo de atajos.
+Main shortcuts: **⌥+Space** opens the Omarchy menu, **⌥+Return** a terminal,
+**⌥+K** the full shortcut list.
 
-Si prefieres el comportamiento original, quita `altwin:swap_lalt_lwin` de
-`~/.config/hypr/input.lua` y activa la captura de entrada de UTM (requiere dar
-permisos de Accesibilidad y Monitorización de entrada a UTM en Ajustes del
-Sistema → Privacidad y seguridad).
+If you prefer the original behaviour, drop `altwin:swap_lalt_lwin` from
+`~/.config/hypr/input.lua` and turn on UTM's input capture (which needs
+Accessibility and Input Monitoring permissions for UTM in System Settings →
+Privacy & Security).
 
-## Qué esperar
+## What to expect
 
-Funciona: el escritorio Hyprland completo con la barra de Omarchy, temas,
-menú, terminal, navegador, y los 442 comandos `omarchy-*`.
+Works: the full Hyprland desktop with Omarchy's bar, themes, menu, terminal,
+browser, and the 442 `omarchy-*` commands.
 
-Incluye además las herramientas propias de Omarchy **compiladas para aarch64**,
-que no se publican para ARM: `tensaku` (anotación de capturas), `omacalc`,
-`omacut`, `omawrite`, `aether` (temas), `cliamp` (reproductor), `ttfx` (efectos
-del salvapantallas), `omarchy-nvim`, `mise`, `tzupdate`, `yaru-icon-theme`,
+It also carries Omarchy's own tools **compiled for aarch64**, which upstream
+does not publish for ARM: `tensaku` (screenshot annotation), `omacalc`,
+`omacut`, `omawrite`, `aether` (themes), `cliamp` (player), `ttfx` (screensaver
+effects), `omarchy-nvim`, `mise`, `tzupdate`, `yaru-icon-theme`,
 `ttf-ia-writer`, `hyprland-preview-share-picker`, `xdg-terminal-exec`,
-`tobi-try`, `ufw-docker` y `yay`.
+`tobi-try`, `ufw-docker` and `yay`.
 
-Y dos aplicaciones de software libre ya compiladas para ARM: **OBS Studio
-32.2.2** (sin el plugin de navegador, cuyo CEF es x86-only) y **Pinta 3.1.2**
-(sobre el .NET arm64 oficial de Microsoft).
+Plus two open-source applications already built for ARM: **OBS Studio 32.2.2**
+(without the browser plugin, whose CEF is x86-only) and **Pinta 3.1.2** (on
+Microsoft's official arm64 .NET).
 
-Limitaciones propias de correr Omarchy en ARM:
+Limits that come from running Omarchy on ARM:
 
-- **Sin aceleración GL dentro de la VM.** Las ventanas se dibujan por software
-  (llvmpipe). Bajo virtio-gpu los clientes GPU se mapean pero no se pintan; el
-  blur y las sombras vienen desactivados para compensar. Es fluido para uso
-  normal, no para vídeo ni 3D.
-- **El disco viene comprimido** dentro del `.qcow2`. Ocupa la mitad y se
-  descomprime al vuelo; si prefieres velocidad de lectura sobre espacio,
-  `qemu-img convert -O qcow2 disco.qcow2 sin-comprimir.qcow2`.
+- **No GL acceleration inside the VM.** Windows are drawn in software
+  (llvmpipe). Under virtio-gpu, GPU clients map but never paint; blur and
+  shadows ship disabled to compensate. Smooth for ordinary use, not for video
+  or 3D.
+- **The disk ships compressed** inside the `.qcow2`. It takes half the space
+  and decompresses on the fly; if you would rather have read speed than space,
+  `qemu-img convert -O qcow2 disk.qcow2 uncompressed.qcow2`.
 
-## Portapapeles y carpeta compartida
+## Clipboard and shared folder
 
-**El portapapeles funciona en los dos sentidos**: copias en el Mac y pegas en
-la VM, y al revés. Solo texto. Dos condiciones:
+**The clipboard works both ways**: copy on the Mac, paste in the VM, and back.
+Text only. Two conditions:
 
-- **«Share clipboard» activado** en UTM (*Preferencias de la VM → Sharing*).
-- **La VM abierta como ventana.** Arrancada sin ventana (`utmctl start`) no hay
-  ningún cliente SPICE conectado, así que el canal existe pero no lleva nada.
+- **"Share clipboard" enabled** in UTM (*VM Settings → Sharing*).
+- **The VM open as a window.** Started headless (`utmctl start`) there is no
+  SPICE client attached, so the channel exists but carries nothing.
 
-Si no va, esto dice en cuál de los tres saltos se corta —cliente SPICE →
-`spice-vdagentd` → sesión de Hyprland—:
-
-```bash
-systemctl is-active spice-vdagentd              # el demonio
-systemctl --user status omarchy-arm-vdagent     # el agente de tu sesión
-```
-
-**Carpeta compartida**: elige una en *Preferencias de la VM → Sharing* y dentro
-ejecuta `omarchy-arm-share`. Detecta solo si UTM está en modo VirtFS o en modo
-SPICE WebDAV y la monta en `/mnt/share` de la forma que corresponda.
-`omarchy-arm-share --status` para ver cómo quedó, `--umount` para soltarla.
-
-Si `ls /mnt/share` da **«No such device»** o **«No such file or directory»**,
-UTM no está ofreciendo ninguna carpeta. Vuelve a seleccionarla en *Sharing*
-aunque el nombre ya aparezca: el permiso que macOS le da a UTM va atado a cada
-VM y **no se hereda al importar otra**. Que la ruta se vea en gris claro es lo
-normal, no significa que esté desactivada.
-
-## Las apps que no vienen dentro
-
-1Password, Obsidian, Typora, LocalSend y Google Chrome **no están en la
-imagen**, pero no porque no funcionen: todas tienen build ARM64 oficial. No van
-dentro porque son propietarias y empaquetarlas en una imagen que se distribuye
-sería redistribuir binarios de terceros.
-
-La imagen trae un instalador que las descarga de su fuente oficial:
+If it does not work, this tells you which of the three hops is broken — SPICE
+client → `spice-vdagentd` → Hyprland session:
 
 ```bash
-omarchy-arm-extras --list     # ver qué puede instalar
-omarchy-arm-extras            # menú interactivo
-omarchy-arm-extras obsidian   # una concreta
-omarchy-arm-extras --all      # todas las que falten
+systemctl is-active spice-vdagentd              # the daemon
+systemctl --user status omarchy-arm-vdagent     # your session's agent
 ```
 
-El listado marca `[ya instalada]` lo que la imagen ya trae, y `--all` lo omite.
+**Shared folder**: pick one in *VM Settings → Sharing* and run
+`omarchy-arm-share` inside. It works out on its own whether UTM is in VirtFS or
+SPICE WebDAV mode and mounts it on `/mnt/share` accordingly.
+`omarchy-arm-share --status` shows how it went, `--umount` releases it.
 
-**Si instalas una app y su ventana sale transparente o en negro** —le pasa a
-algunas de Flutter y Electron bajo Wayland, no a las que trae la imagen—,
-lánzala sobre XWayland, que va instalado:
+If `ls /mnt/share` reports **"No such device"** or **"No such file or
+directory"**, UTM is not offering any folder. Select it again under *Sharing*
+even if the name is already showing: the permission macOS grants UTM is tied to
+each VM and **is not inherited when you import another one**. The path showing
+in light grey is normal — it does not mean the setting is disabled.
+
+## The apps that are not inside
+
+1Password, Obsidian, Typora, LocalSend and Google Chrome are **not in the
+image** — not because they would not work (they all have official ARM64
+builds) but because they are proprietary, and packaging them into an image that
+gets redistributed would mean redistributing third-party binaries.
+
+The image carries an installer that fetches them from their official source:
 
 ```bash
-GDK_BACKEND=x11 la-aplicacion
+omarchy-arm-extras --list     # what it can install
+omarchy-arm-extras            # interactive menu
+omarchy-arm-extras obsidian   # a specific one
+omarchy-arm-extras --all      # everything still missing
 ```
 
-Para dejarlo fijo, copia su `.desktop` de `/usr/share/applications` a
-`~/.local/share/applications` y antepón `env GDK_BACKEND=x11 ` en la línea
-`Exec=`. Algunas de AUR necesitan además `libayatana-appindicator` para el
-icono de la bandeja.
+The listing marks what the image already has, and `--all` skips those.
 
-También está en el menú de aplicaciones como **«Instalar apps que faltan (ARM)»**.
+**If you install an app and its window comes up transparent or black** — some
+Flutter and Electron apps do that under Wayland, none of the ones the image
+ships — launch it on XWayland, which is installed:
 
-| Clave | Qué hace |
+```bash
+GDK_BACKEND=x11 the-application
+```
+
+To make it stick, copy its `.desktop` from `/usr/share/applications` into
+`~/.local/share/applications` and prepend `env GDK_BACKEND=x11 ` to the `Exec=`
+line. Some AUR builds also need `libayatana-appindicator` for the tray icon.
+
+It is in the application menu too, as **"Install missing apps (ARM)"**.
+
+| Key | What it does |
 |---|---|
-| `1password` | Tarball arm64 oficial, con verificación de firma GPG |
-| `1password-cli` | El comando `op`, binario estático arm64 |
-| `obsidian` | Tarball arm64 oficial |
-| `typora` | Paquete arm64 oficial vía AUR |
-| `localsend` | Build arm64 oficial |
-| `chrome` | Trae Widevine para arm64: habilita Spotify y Netflix web |
-| `spotify-web` | Lanzador de la web + reasigna `⌥+Shift+M` |
-| `pinta` | Ya viene instalada; la clave sirve para reinstalarla |
-| `obs` | Ya viene instalado; la clave sirve para reinstalarlo |
+| `1password` | Official arm64 tarball, GPG signature verified |
+| `1password-cli` | The `op` command, static arm64 binary |
+| `obsidian` | Official arm64 tarball |
+| `typora` | Official arm64 package via AUR |
+| `localsend` | Official arm64 build |
+| `chrome` | Brings Widevine for arm64: enables Spotify and Netflix on the web |
+| `spotify-web` | Web launcher, and rebinds `⌥+Shift+M` |
+| `pinta` | Already installed; the key is there to reinstall it |
+| `obs` | Already installed; the key is there to reinstall it |
 
-**Sobre Spotify**: no hay cliente nativo para ARM, pero la web sí funciona —
-necesita Widevine, que viene dentro de Google Chrome arm64. Instala `chrome` y
-luego `spotify-web`. En terminal ya tienes `spotify-player` instalado.
-- **`omarchy-update` funciona**, pero cuando Omarchy introduzca un paquete
-  propio nuevo, lo omitirá con un aviso en vez de instalarlo.
+**About Spotify**: there is no native ARM client, but the web app works — it
+needs Widevine, which ships inside Google Chrome arm64. Install `chrome`, then
+`spotify-web`. In the terminal you already have `spotify-player`.
 
-## Resolución
+**`omarchy-update` works**, but the day Omarchy introduces a new package of its
+own, it will skip it with a warning rather than install it.
 
-Fija en 1920x1200. Para cambiarla, edita `~/.config/hypr/monitors.lua` y
-**reinicia la VM** — cambiar el modo en caliente deja la pantalla en blanco bajo
+## Your own apps
+
+`omarchy-arm-extras` covers a fixed list. For anything else, grab
+[`scripts/mis-apps.sh`](https://github.com/ggalancs/omarchy-arm-utm/blob/main/scripts/mis-apps.sh)
+from the repository: you write a plain list of package names and it resolves
+every one of them — official repo, AUR, or nowhere — before installing
+anything, so packages with no aarch64 build are named up front instead of
+failing halfway through.
+
+## Resolution
+
+Fixed at 1920x1200. To change it, edit `~/.config/hypr/monitors.lua` and
+**restart the VM** — switching mode while running leaves the screen blank under
 virtio-gpu.
 
-## Nota
+## Note
 
-Imagen no oficial, sin relación con Basecamp ni con el proyecto Omarchy.
-Omarchy solo soporta x86_64; esto es una reconstrucción equivalente sobre
-Arch Linux ARM.
+Unofficial image, unaffiliated with Basecamp or the Omarchy project. Omarchy
+supports x86_64 only; this is an equivalent rebuild on Arch Linux ARM.
 __PAYLOAD_LEEME_MD__
 }
 

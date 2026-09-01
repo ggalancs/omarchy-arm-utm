@@ -197,25 +197,26 @@ rm -f /var/lib/systemd/random-seed /var/lib/systemd/credential.secret 2>/dev/nul
 log "8/10 aviso al destinatario"
 cat > /etc/motd <<'EOF'
 
-  Omarchy sobre Arch Linux ARM (aarch64) — imagen para UTM en Apple Silicon
+  Omarchy on Arch Linux ARM (aarch64) - a UTM image for Apple Silicon
 
-  Usuario: omarchy   Contrasena: omarchy   (tambien para root)
+  User: omarchy   Password: omarchy   (root too)
 
-  >> CAMBIA LA CONTRASENA AHORA:  passwd
+  >> CHANGE THE PASSWORD NOW:  passwd
 
-  Teclas: la tecla Option (⌥) del Mac actua como SUPER.
-          ⌥+Space  menu de Omarchy      ⌥+Return  terminal
+  Keys: the Mac's Option key acts as SUPER.
+        Option+Space  Omarchy menu      Option+Return  terminal
 
-  ¿Echas en falta 1Password, Obsidian, Typora, Spotify o LocalSend?
-  No vienen dentro por licencia, pero todas tienen build ARM64 oficial:
+  Missing 1Password, Obsidian, Typora, Spotify or LocalSend?
+  They are not inside for licensing reasons, but all have official ARM64
+  builds:
 
-      omarchy-arm-extras --list     ver que puede instalar
-      omarchy-arm-extras            menu interactivo
+      omarchy-arm-extras --list     see what it can install
+      omarchy-arm-extras            interactive menu
 
 EOF
 install -d -o "$NEW" -g "$NEW" "/home/$NEW/Desktop"
-cp /etc/motd "/home/$NEW/Desktop/LEEME.txt"
-chown "$NEW:$NEW" "/home/$NEW/Desktop/LEEME.txt"
+cp /etc/motd "/home/$NEW/Desktop/README.txt"
+chown "$NEW:$NEW" "/home/$NEW/Desktop/README.txt"
 
 log "8a/10 hook de actualizacion para ARM"
 # omarchy-update-dev no actualiza el arbol cuando OMARCHY_PATH es

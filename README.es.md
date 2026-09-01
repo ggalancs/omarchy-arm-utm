@@ -237,16 +237,16 @@ También aparece en el menú de aplicaciones como «Instalar apps que faltan (AR
 Spotify no tiene cliente nativo ARM, pero la web sí funciona: necesita Widevine,
 que viene dentro de Google Chrome arm64 (`omarchy-arm-extras chrome spotify-web`).
 
-## Tus propias aplicaciones: `scripts/mis-apps.sh`
+## Tus propias aplicaciones: `scripts/my-apps.sh`
 
 `omarchy-arm-extras` cubre una lista fija. Para cualquier otra cosa, copia
-[`scripts/mis-apps.sh`](scripts/mis-apps.sh) dentro de la VM, escribe una lista
+[`scripts/my-apps.sh`](scripts/my-apps.sh) dentro de la VM, escribe una lista
 de paquetes y ejecútalo.
 
 ```bash
-./mis-apps.sh --ejemplo > mis-apps.txt   # una lista de partida
-./mis-apps.sh --comprobar mis-apps.txt   # solo comprueba, no instala
-./mis-apps.sh mis-apps.txt               # comprueba e instala
+./my-apps.sh --ejemplo > my-apps.txt   # una lista de partida
+./my-apps.sh --comprobar my-apps.txt   # solo comprueba, no instala
+./my-apps.sh my-apps.txt               # comprueba e instala
 ```
 
 Existe por una razón concreta de ARM: mucho software de Arch **no tiene build
