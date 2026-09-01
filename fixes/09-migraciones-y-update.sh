@@ -10,7 +10,7 @@ log() { echo ""; echo "==> $*"; }
 STATE="$HOME/.local/state/omarchy/migrations"
 MIGR=/usr/share/omarchy/migrations
 
-log "1/5 sellando las migraciones existentes (como un install limpio)"
+log "1/5 sealing the existing migrations (as a clean install does)"
 mkdir -p "$STATE"
 n=0
 for f in "$MIGR"/*.sh; do
@@ -18,13 +18,13 @@ for f in "$MIGR"/*.sh; do
   [ -e "$STATE/$b" ] || { : > "$STATE/$b"; n=$((n+1)); }
 done
 echo "  selladas $n nuevas; total $(ls -1 "$STATE" | wc -l) de $(ls -1 "$MIGR"/*.sh | wc -l)"
-echo "  pendientes ahora: $(omarchy-migrate --pending 2>/dev/null | wc -l)"
+echo "  pending now: $(omarchy-migrate --pending 2>/dev/null | wc -l)"
 
 log "2/5 recuperando dust (lo quito la migracion fallida)"
 sudo pacman -S --noconfirm --needed dust 2>&1 | tail -3
 pacman -Q dust 2>&1
 
-log "3/5 blindando omarchy-pkg-add frente a paquetes que no existen en ARM"
+log "3/5 hardening omarchy-pkg-add against packages that do not exist on ARM"
 sudo tee /usr/local/bin/omarchy-pkg-add >/dev/null <<'WRAP'
 #!/bin/bash
 # A wrapper for Arch Linux ARM.
@@ -53,7 +53,7 @@ sudo chmod +x /usr/local/bin/omarchy-pkg-add
 echo "  probando el envoltorio:"
 omarchy-pkg-add tensaku jq 2>&1 | tail -3
 
-log "4/5 limpiando huerfanos de las compilaciones AUR"
+log "4/5 cleaning orphans left by the AUR builds"
 orph=$(pacman -Qdtq 2>/dev/null)
 [ -n "$orph" ] && sudo pacman -Rns --noconfirm $orph 2>&1 | tail -3 || echo "  (ninguno)"
 

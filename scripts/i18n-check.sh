@@ -1,6 +1,6 @@
 #!/bin/bash
 # Verifies a translation: no code line moved, and syntax still valid.
-#   i18n-check.sh <fichero> <copia-previa>
+#   i18n-check.sh <file> <previous-copy>
 set -u
 F="$1"; B="$2"
 python3 scripts/i18n-audit.py guard "$B" "$F" || exit 1

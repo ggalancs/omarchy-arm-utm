@@ -7,19 +7,19 @@ PROV=/media/prov
 log() { echo ""; echo "==> [repair] $*"; }
 trap 'rc=$?; [ "$rc" -ne 0 ] && echo "TOK_REPAIR_$rc"' EXIT
 
-log "modulos del kernel"
+log "kernel modules"
 # Mounting btrfs/vfat only needs the kernel module, not the userspace tools:
 # this stage does NOT depend on having a network.
 for m in btrfs vfat fat nls_cp437 nls_iso8859-1 nls_utf8 crc32c-generic xxhash_generic; do
   modprobe "$m" 2>/dev/null || true
 done
-grep -qw btrfs /proc/filesystems || { echo "!! el kernel del live no soporta btrfs"; exit 1; }
+grep -qw btrfs /proc/filesystems || { echo "!! the live kernel does not support btrfs"; exit 1; }
 echo "  filesystems: $(tr '\n' ' ' < /proc/filesystems | tr -s ' ')"
 
-log "red (best-effort, solo por comodidad)"
+log "network (best-effort, purely for convenience)"
 ip link set eth0 up 2>/dev/null || true
 udhcpc -i eth0 -q -n -t 8 >/dev/null 2>&1 || true
-ip -4 addr show eth0 2>/dev/null | grep -o 'inet [0-9.]*' || echo "  (sin red; se continua igualmente)"
+ip -4 addr show eth0 2>/dev/null | grep -o 'inet [0-9.]*' || echo "  (no network; continuing anyway)"
 
 log "montando el sistema instalado"
 umount -R /mnt 2>/dev/null || true
@@ -41,7 +41,7 @@ rm -f /mnt/etc/resolv.conf
 printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /mnt/etc/resolv.conf
 df -h /mnt /mnt/boot
 
-log "ejecutando $FIXSCRIPT dentro del chroot"
+log "running $FIXSCRIPT inside the chroot"
 mkdir -p /mnt/root/prov
 cp "$PROV/$FIXSCRIPT" /mnt/root/prov/
 [ -f "$PROV/config.env" ] && cp "$PROV/config.env" /mnt/root/prov/
@@ -63,7 +63,7 @@ set -e
 
 # The working directory must not stay inside the system: every repair script
 # from every pass would pile up in there.
-log "retirando /root/prov del sistema instalado"
+log "removing /root/prov from the installed system"
 ls /mnt/root/prov 2>/dev/null | tr '\n' ' '; echo
 rm -rf /mnt/root/prov
 

@@ -59,7 +59,7 @@ script_anfitrion() {
 # folder you have shared in the VM's UTM settings.
 #   ./clipboard-mac.sh ~/ruta/de/la/carpeta/compartida
 set -uo pipefail
-DIR="${1:?uso: $0 <carpeta compartida con la VM>}"
+DIR="${1:?usage: $0 <folder shared with the VM>}"
 F="$DIR/.clipboard"
 mkdir -p "$DIR"; touch "$F"
 ultimo_local=""; ultimo_remoto="$(cat "$F" 2>/dev/null || true)"
@@ -78,10 +78,10 @@ MACEOF
 }
 
 vigilar() {
-  command -v wl-paste >/dev/null || { echo "falta wl-clipboard" >&2; exit 1; }
+  command -v wl-paste >/dev/null || { echo "wl-clipboard is missing" >&2; exit 1; }
   if [ ! -d "$SHARE" ]; then
-    echo "no hay carpeta compartida en $SHARE." >&2
-    echo "En UTM: Ajustes de la VM -> Compartir -> elige una carpeta, y reinicia." >&2
+    echo "there is no shared folder at $SHARE." >&2
+    echo "In UTM: VM Settings -> Sharing -> pick a folder, then restart." >&2
     exit 1
   fi
   touch "$FILE" 2>/dev/null || { echo "no puedo escribir en $FILE" >&2; exit 1; }
@@ -89,13 +89,13 @@ vigilar() {
   ultimo_local="$(wl-paste --no-newline 2>/dev/null || true)"
   ultimo_remoto="$(cat "$FILE" 2>/dev/null || true)"
   while :; do
-    # invitado -> fichero
+    # guest -> file
     actual="$(wl-paste --no-newline 2>/dev/null || true)"
     if [ "$actual" != "$ultimo_local" ] && [ -n "$actual" ]; then
       printf '%s' "$actual" > "$FILE"
       ultimo_local="$actual"; ultimo_remoto="$actual"
     fi
-    # fichero -> invitado
+    # file -> guest
     remoto="$(cat "$FILE" 2>/dev/null || true)"
     if [ "$remoto" != "$ultimo_remoto" ] && [ -n "$remoto" ]; then
       printf '%s' "$remoto" | wl-copy

@@ -18,7 +18,7 @@ ln -sfn "$OM" /usr/share/omarchy
 ls -ld /usr/share/omarchy
 ls /usr/share/omarchy/default/hypr/ | head
 
-log "2/8 binarios de Omarchy en el PATH del sistema"
+log "2/8 Omarchy binaries on the system PATH"
 # The package publishes them as /usr/bin/omarchy-*; /usr/local/bin is used here
 # so as not to invade pacman's territory. It comes before /usr/bin and is in
 # sudo's secure_path, so SDDM and systemd see it too.
@@ -37,7 +37,7 @@ install -Dm644 "$OM/etc/profile.d/omarchy.sh" /etc/profile.d/omarchy.sh
 install -Dm644 "$OM/default/uwsm/env.d/10-omarchy" /usr/share/uwsm/env.d/10-omarchy
 cat /etc/profile.d/omarchy.sh
 
-log "4/8 configuracion de sistema del repo (lo aplicable a una VM)"
+log "4/8 system configuration from the repo (what applies to a VM)"
 cp -a "$OM/etc/sysctl.d/."  /etc/sysctl.d/  2>/dev/null || true
 cp -a "$OM/etc/security/."  /etc/security/  2>/dev/null || true
 for d in system.conf.d user.conf.d logind.conf.d oomd.conf.d; do
@@ -79,11 +79,11 @@ install -d -m700 -o $USR -g $USR /home/$USR/.ssh
 chown $USR:$USR /home/$USR/.ssh/authorized_keys
 chmod 600 /home/$USR/.ssh/authorized_keys
 
-log "8/8 tema como usuario, ya con el entorno correcto"
+log "8/8 theme as the user, now with the right environment"
 su - $USR -c 'export OMARCHY_PATH=/usr/share/omarchy; export PATH=/usr/local/bin:$PATH; mkdir -p ~/.config/omarchy/themes; omarchy-theme-set "Tokyo Night" 2>&1 | tail -5' || echo "  (theme-set fallo)"
 su - $USR -c 'ls -l ~/.config/omarchy/current/ 2>/dev/null; echo "OMARCHY_PATH=[$OMARCHY_PATH]"; command -v omarchy-menu start-hyprland' || true
 
-log "comprobacion"
+log "verification"
 echo "  bootstrap.lua: $(ls /usr/share/omarchy/default/hypr/bootstrap.lua 2>&1)"
 echo "  bashrc:        $(su - $USR -c 'bash -ic true' 2>&1 | tail -1)"
 echo ""

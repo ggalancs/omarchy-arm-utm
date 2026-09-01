@@ -18,7 +18,7 @@ hdiutil makehybrid -iso -joliet -default-volume-name PROVISION \
   -o provision/provision.iso provision/iso/ >/dev/null
 ls -lh provision/provision.iso
 
-echo "=== disco destino limpio ==="
+echo "=== target disk clean ==="
 rm -f vm/omarchy-arm.qcow2 vm/efi-vars.fd
 qemu-img create -f qcow2 vm/omarchy-arm.qcow2 80G >/dev/null
 dd if=/dev/zero of=vm/efi-vars.fd bs=1m count=64 status=none

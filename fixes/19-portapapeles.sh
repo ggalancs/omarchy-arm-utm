@@ -41,7 +41,7 @@ else
   echo "  ✓ canal SPICE presente"
 fi
 pacman -Q spice-vdagent >/dev/null 2>&1 && echo "  ✓ spice-vdagent instalado" \
-  || { echo "  ✗ falta spice-vdagent: sudo pacman -S spice-vdagent"; fallo=1; }
+  || { echo "  x spice-vdagent missing: sudo pacman -S spice-vdagent"; fallo=1; }
 [ "$fallo" -ne 0 ] && { echo; echo "Corrige lo anterior y repite."; exit 1; }
 
 echo
@@ -80,7 +80,7 @@ printf 'SPICE_VDAGENTD_EXTRA_ARGS=-X\n' | sudo tee /etc/conf.d/spice-vdagentd >/
 sudo systemctl daemon-reload
 
 echo
-echo "==> un solo agente"
+echo "==> a single agent"
 # vdagentd disconnects both if it sees two agents in the same session.
 sudo systemctl --global mask spice-vdagent.service 2>/dev/null || true
 pkill -x spice-vdagent 2>/dev/null || true
@@ -134,7 +134,7 @@ case "$(systemctl is-enabled spice-vdagentd.socket 2>/dev/null)" in
 esac
 
 echo
-echo "==> servicio de usuario"
+echo "==> user service"
 mkdir -p ~/.config/systemd/user
 cat > ~/.config/systemd/user/omarchy-arm-vdagent.service <<'UNIT'
 [Unit]

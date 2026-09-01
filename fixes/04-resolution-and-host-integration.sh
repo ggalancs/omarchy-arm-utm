@@ -8,10 +8,10 @@ export WAYLAND_DISPLAY=$(ls /run/user/1000 2>/dev/null | grep -m1 '^wayland-[0-9
 export OMARCHY_PATH=/usr/share/omarchy
 export PATH=/usr/local/bin:$PATH
 
-log "plantilla de autostart del usuario (para conocer la API)"
+log "the user's autostart template (to learn the API)"
 cat /usr/share/omarchy/config/hypr/autostart.lua 2>/dev/null | head -6
 
-log "monitors.lua: 1920x1200 por defecto"
+log "monitors.lua: 1920x1200 by default"
 cat > ~/.config/hypr/monitors.lua <<'LUA'
 -- See https://wiki.hypr.land/Configuring/Basics/Monitors/
 -- Modos disponibles:  hyprctl monitors all
@@ -28,13 +28,13 @@ hl.monitor({ output = "Virtual-1", mode = "1920x1200@60", position = "0x0", scal
 LUA
 hyprctl reload 2>&1 | head -2
 sleep 3
-echo "  resolucion ahora: $(hyprctl monitors 2>/dev/null | sed -n 2p | tr -s ' ')"
+echo "  resolution now: $(hyprctl monitors 2>/dev/null | sed -n 2p | tr -s ' ')"
 echo "  configerrors: [$(hyprctl configerrors 2>&1 | head -2)]"
 
-log "portapapeles compartido con macOS (spice-vdagent)"
+log "clipboard shared with macOS (spice-vdagent)"
 sudo systemctl start spice-vdagentd.socket 2>&1 | tail -2 || true
 sudo systemctl enable spice-vdagentd.socket 2>&1 | tail -1 || true
-# En Wayland spice-vdagent aporta portapapeles (la resolucion la lleva virtio-gpu).
+# On Wayland spice-vdagent provides the clipboard (resolution is virtio-gpu's job).
 # Started with the session from the user's autostart.
 cat > ~/.config/hypr/autostart.lua <<'LUA'
 -- Procesos extra al iniciar la sesion.

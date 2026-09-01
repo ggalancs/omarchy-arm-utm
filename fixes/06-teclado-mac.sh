@@ -20,7 +20,7 @@ XKBLAYOUT=es
 EOF
 cat /etc/vconsole.conf
 
-log "input.lua: layout es + Option como SUPER"
+log "input.lua: chosen layout + Option as SUPER"
 cat > ~/.config/hypr/input.lua <<'LUA'
 -- Ajustes de teclado para esta VM sobre macOS.
 --
@@ -46,10 +46,10 @@ log "recargando Hyprland"
 hyprctl reload 2>&1 | head -2
 sleep 2
 echo "  configerrors: [$(hyprctl configerrors 2>&1 | head -2)]"
-echo "  teclado ahora:"
+echo "  keyboard now:"
 hyprctl devices 2>/dev/null | sed -n '/Keyboards:/,$p' | head -8
 
-log "abriendo un terminal para que haya algo con lo que interactuar"
+log "opening a terminal so there is something to interact with"
 hyprctl dispatch exec alacritty 2>&1 | head -2
 sleep 5
 hyprctl clients 2>/dev/null | grep -E "^Window|class:" | head -6

@@ -34,7 +34,7 @@ for f in /usr/share/omarchy/bin/*; do
 done
 echo "   $n comandos enlazados en /usr/bin"
 
-echo "==> A2. unidades de usuario donde systemd las busca"
+echo "==> A2. user units where systemd looks for them"
 # This was the missing step: without the .service files installed,
 # enable-user-units.sh cannot work however many paths are fixed.
 if [ -d /usr/share/omarchy/default/systemd/user ]; then
@@ -45,7 +45,7 @@ else
   echo "   no encuentro /usr/share/omarchy/default/systemd/user"
 fi
 
-echo "==> B. envoltorio para el aviso de kernel"
+echo "==> B. wrapper for the kernel notice"
 sudo install -Dm755 /dev/stdin /usr/local/bin/omarchy-update-restart <<'KRN'
 #!/bin/bash
 if [ -z "${OMARCHY_SKIP_KERNEL_CHECK:-}" ]; then
@@ -66,10 +66,10 @@ fi
 KRN
 echo "   /usr/local/bin/omarchy-update-restart"
 
-echo "==> C. completar first-run para que deje de repetirse"
+echo "==> C. complete first-run so it stops repeating"
 bash /usr/share/omarchy/install/user/first-run/enable-user-units.sh \
   && echo "   enable-user-units.sh: works now" \
-  || echo "   sigue fallando: mira 'systemctl --user status' de las seis unidades"
+  || echo "   still failing: check 'systemctl --user status' for the six units"
 omarchy-provision-first-run --force 2>&1 | tail -3
 
 echo "==> verification"

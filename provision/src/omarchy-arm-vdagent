@@ -94,7 +94,7 @@ class Agente:
                     texto = datos.decode("utf-8", "replace")
                     escribir_portapapeles(texto)
                     self.ultimo_local = texto
-                    log("  recibido del anfitrion:", len(texto), "bytes")
+                    log("  received from the host:", len(texto), "bytes")
 
             elif tipo == VERSION:
                 log("  vdagentd version:", datos.decode("utf8", "replace").strip())
@@ -131,7 +131,7 @@ def resolucion():
 
 
 def vigilar(ag):
-    """Si el usuario copia dentro de la VM, se lo ofrecemos al anfitrión."""
+    """If the user copies inside the VM, offer it to the host."""
     while True:
         t = leer_portapapeles()
         if t is not None and t != ag.ultimo_local:
@@ -146,7 +146,7 @@ def main():
     for c in ("wl-paste", "wl-copy"):
         if subprocess.run(["sh", "-c", f"command -v {c}"],
                           capture_output=True).returncode != 0:
-            print(f"falta {c} (paquete wl-clipboard)", file=sys.stderr); return 1
+            print(f"{c} is missing (wl-clipboard package)", file=sys.stderr); return 1
     if not os.path.exists(SOCK):
         print(f"no existe {SOCK}.", file=sys.stderr)
         print("Arranca el demonio:  sudo systemctl start spice-vdagentd",

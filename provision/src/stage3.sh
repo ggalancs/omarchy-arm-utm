@@ -32,7 +32,7 @@ cp "$OMARCHY_PATH/default/bashrc" ~/.bashrc
 ls ~/.config | tr '\n' ' '; echo
 
 # ------------------------------------------------------------ AUR
-log "AUR: piezas de Omarchy que no están en los repos de Arch Linux ARM"
+log "AUR: Omarchy pieces that are not in the Arch Linux ARM repositories"
 mkdir -p /tmp/aur
 aur_install() {
   local p="$1"
@@ -57,7 +57,7 @@ echo "  AUR falló: ${AUR_KO[*]:-ninguno}"
 # A stand-in if xdg-terminal-exec did not build: Omarchy uses
 # $TERMINAL=xdg-terminal-exec
 if ! command -v xdg-terminal-exec >/dev/null 2>&1; then
-  warn "xdg-terminal-exec ausente: instalando un envoltorio sobre alacritty"
+  warn "xdg-terminal-exec missing: installing a wrapper over alacritty"
   sudo install -m 0755 /dev/stdin /usr/local/bin/xdg-terminal-exec <<'EOF'
 #!/bin/sh
 # A minimal wrapper: Omarchy exports TERMINAL=xdg-terminal-exec.
@@ -95,7 +95,7 @@ echo "  terminal preferido: $(head -1 ~/.config/xdg-terminals.list)"
 # x86_64, so it is reproduced by hand here. Without it OMARCHY_PATH is empty
 # and Hyprland comes up in emergency mode, unable to find
 # default/hypr/bootstrap.lua.
-log "integrando Omarchy en las rutas de sistema (sustituye al paquete pacman)"
+log "wiring Omarchy into the system paths (stands in for the pacman package)"
 sudo ln -sfn "$OMARCHY_PATH" /usr/share/omarchy
 # The commands go to /usr/bin, which is where upstream's package() puts them.
 # Putting them in /usr/local/bin looked cleaner (no clash with pacman) but
@@ -127,7 +127,7 @@ echo "  $n binarios en /usr/bin -> /usr/share/omarchy/bin"
 if [ -d "$OMARCHY_PATH/default/systemd/user" ]; then
   sudo install -d /usr/lib/systemd/user
   sudo cp -a "$OMARCHY_PATH/default/systemd/user/." /usr/lib/systemd/user/
-  echo "  $(ls "$OMARCHY_PATH/default/systemd/user"/*.service 2>/dev/null | wc -l) unidades de usuario en /usr/lib/systemd/user"
+  echo "  $(ls "$OMARCHY_PATH/default/systemd/user"/*.service 2>/dev/null | wc -l) user units in /usr/lib/systemd/user"
 fi
 for d in system-sleep zram-generator.conf.d; do
   [ -d "$OMARCHY_PATH/default/systemd/$d" ] && \
@@ -183,7 +183,7 @@ ln -snf ~/.local/state/omarchy/current/theme/btop.theme ~/.config/btop/themes/cu
 ls -l ~/.local/state/omarchy/current/ 2>/dev/null
 
 # ------------------------------------------------------------ ajustes de VM
-log "ajustes para máquina virtual"
+log "virtual machine tweaks"
 # quattro uses Lua configuration: writing monitors.conf would do nothing.
 cat > ~/.config/hypr/monitors.lua <<'LUA'
 -- See https://wiki.hypr.land/Configuring/Basics/Monitors/
@@ -235,7 +235,7 @@ cp "$OMARCHY_PATH/logo.txt" ~/.config/omarchy/branding/screensaver.txt 2>/dev/nu
 # CRITICAL: /usr/local/bin/omarchy-pkg-add is a symlink into the tree. Writing
 # with `tee` would follow it and replace Omarchy's ORIGINAL script with this
 # wrapper, whose REAL would then point at itself: an infinite loop. It has to
-# borrar el symlink y crear un fichero real.
+# delete the symlink and create a real file.
 sudo rm -f /usr/local/bin/omarchy-pkg-add
 sudo install -Dm755 /dev/stdin /usr/local/bin/omarchy-pkg-add <<'WRAP'
 #!/bin/bash
@@ -346,10 +346,10 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
 
 if [ "${HACER_TOOLS:-si}" != "si" ]; then
   warn "compilacion de herramientas desactivada: faltaran ttfx, tensaku, omacalc,"
-  warn "omacut, omawrite, aether, cliamp y omarchy-nvim (se pueden anadir despues"
-  warn "con: yay -S <paquete>)"
+  warn "omacut, omawrite, aether, cliamp and omarchy-nvim (they can be added later"
+  warn "with: yay -S <package>)"
 else
-log "compilando las herramientas de Omarchy ausentes en aarch64"
+log "building the Omarchy tools that are missing on aarch64"
 TOOLS_OK=(); TOOLS_KO=()
 for spec in \
   "aur:yaru-icon-theme" "aur:ttf-ia-writer" "aur:tzupdate" "aur:ufw-docker" \
@@ -377,7 +377,7 @@ for spec in \
     fi
   fi
 done
-echo "  compiladas: ${TOOLS_OK[*]:-ninguna}"
+echo "  built: ${TOOLS_OK[*]:-none}"
 [ ${#TOOLS_KO[@]} -gt 0 ] && warn "no compilaron: ${TOOLS_KO[*]}"
 # Recorded at a FIXED system path, not in $HOME. The ~/.omarchy-arm-prov one
 # did not survive: the distributable image renames the build account and that
@@ -445,7 +445,7 @@ echo "  /usr/local/bin/omarchy-update-restart"
 
 # --- ttfx: screensaver text effects (Rust, ~12 min) ----------------------
 if ! command -v ttfx >/dev/null 2>&1 && command -v cargo >/dev/null 2>&1; then
-  log "compilando ttfx desde fuente (no existe para aarch64)"
+  log "building ttfx from source (it does not exist for aarch64)"
   rm -rf /tmp/ttfx-src
   # The build path stays INSIDE the binary: Rust puts the source path into
   # panic messages (.rodata), where strip does not reach. Built from $HOME, the
@@ -461,7 +461,7 @@ if ! command -v ttfx >/dev/null 2>&1 && command -v cargo >/dev/null 2>&1; then
     sudo install -Dm755 /tmp/ttfx-src/target/release/ttfx /usr/local/bin/ttfx
     echo "  ttfx $(ttfx --version 2>/dev/null | head -1)"
   else
-    warn "ttfx no compilo; el salvapantallas mostrara el logo sin efectos"
+    warn "ttfx did not build; the screensaver will show the logo without effects"
   fi
   rm -rf /tmp/ttfx-src /tmp/cargo-ttfx
 fi
@@ -495,7 +495,7 @@ cat > ~/.config/uwsm/env.d/20-vm-graphics <<'ENVEOF'
 export LIBGL_ALWAYS_SOFTWARE=1
 ENVEOF
 
-# Directorios de usuario
+# User directories
 xdg-user-dirs-update 2>/dev/null || true
 mkdir -p ~/Pictures/Screenshots ~/Videos ~/Desktop ~/Documents ~/Downloads
 
@@ -518,14 +518,14 @@ Terminal=false
 Type=Application
 Categories=System;PackageManager;
 DESK
-  echo "  disponible como comando y en el menu de aplicaciones"
+  echo "  available as a command and in the application menu"
 fi
 
 # --- clipboard shared with the host --------------------------------------
-# El portapapeles de SPICE va en tres saltos:
+# The SPICE clipboard travels in three hops:
 #   cliente SPICE (UTM) <-virtio-> spice-vdagentd <-socket unix-> agente
 # The daemon talks to the host; the session agent only talks to the daemon.
-# demonio. El agente OFICIAL entrega el portapapeles a X11 (vdagent.c:421 ->
+# daemon. The STOCK agent delivers the clipboard to X11 (vdagent.c:421 ->
 # vdagent_clipboards_new(vdagent_display_get_x11(...)), cero referencias a
 # wlr-data-control) and under Hyprland it dies with "cannot open display".
 #
@@ -535,7 +535,7 @@ fi
 # virtio port directly leaves the daemon without a channel ("Device or resource
 # busy") and the host ignores everything.
 if [ -f "$HOME/.omarchy-arm-prov/omarchy-arm-vdagent" ]; then
-  log "agente de portapapeles para Wayland"
+  log "clipboard agent for Wayland"
   sudo install -Dm755 "$HOME/.omarchy-arm-prov/omarchy-arm-vdagent" /usr/local/bin/omarchy-arm-vdagent
   # The stock agent must not start: vdagentd disconnects both if it sees two
   # agents in the same session ("multiple agents in one session").
@@ -562,17 +562,17 @@ WantedBy=graphical-session.target
 UNIT
   systemctl --user daemon-reload 2>/dev/null || true
   systemctl --user enable omarchy-arm-vdagent.service 2>/dev/null || true
-  echo "  /usr/local/bin/omarchy-arm-vdagent + servicio de usuario"
+  echo "  /usr/local/bin/omarchy-arm-vdagent + user service"
 fi
 # A shared-folder bridge, as a fallback when the SPICE channel is unavailable
 # (with Apple's virtualization backend, for instance).
 if [ -f "$HOME/.omarchy-arm-prov/omarchy-arm-clipboard" ]; then
   sudo install -Dm755 "$HOME/.omarchy-arm-prov/omarchy-arm-clipboard" /usr/local/bin/omarchy-arm-clipboard
-  echo "  /usr/local/bin/omarchy-arm-clipboard (alternativa por carpeta compartida)"
+  echo "  /usr/local/bin/omarchy-arm-clipboard (shared-folder fallback)"
 fi
 if [ -f "$HOME/.omarchy-arm-prov/omarchy-arm-share" ]; then
   sudo install -Dm755 "$HOME/.omarchy-arm-prov/omarchy-arm-share" /usr/local/bin/omarchy-arm-share
-  echo "  /usr/local/bin/omarchy-arm-share (monta la carpeta, sea VirtFS o WebDAV)"
+  echo "  /usr/local/bin/omarchy-arm-share (mounts the folder, VirtFS or WebDAV)"
 
   # OBS Studio and Pinta are free software: they can travel inside the image,
   # and that is how it is distributed. They are installed with the same
@@ -582,12 +582,12 @@ if [ -f "$HOME/.omarchy-arm-prov/omarchy-arm-share" ]; then
   # This is the most expensive part of the build: ~45 min. HACER_LIBRES=no
   # skips it.
   if [ "${HACER_LIBRES:-si}" = "si" ]; then
-    log "OBS Studio y Pinta (software libre, van dentro de la imagen; ~45 min)"
+    log "OBS Studio and Pinta (free software, they ship inside the image; ~45 min)"
     if /usr/local/bin/omarchy-arm-extras pinta obs; then
-      echo "  pinta: $(pacman -Q pinta 2>/dev/null || echo FALTA)"
-      echo "  obs:   $(pacman -Q obs-studio 2>/dev/null || echo FALTA)"
+      echo "  pinta: $(pacman -Q pinta 2>/dev/null || echo MISSING)"
+      echo "  obs:   $(pacman -Q obs-studio 2>/dev/null || echo MISSING)"
     else
-      warn "OBS o Pinta no se instalaron; se pueden anadir despues con:"
+      warn "OBS or Pinta did not install; they can be added later with:"
       warn "  omarchy-arm-extras pinta obs"
     fi
   else
@@ -606,7 +606,7 @@ log "actualizaciones: snapper + hook post-update"
 sudo pacman -S --noconfirm --needed --disable-download-timeout snapper >/dev/null 2>&1 || warn "snapper no disponible"
 if command -v snapper >/dev/null 2>&1; then
   sudo bash -euo pipefail "$OMARCHY_PATH/install/config/snapper.sh" >/dev/null 2>&1 \
-    && echo "  snapper configurado: instantanea antes de cada actualizacion" \
+    && echo "  snapper configured: a snapshot before every update" \
     || warn "no se pudo configurar snapper"
 fi
 if [ -f "$HOME/.omarchy-arm-prov/10-arm-sync" ]; then
@@ -621,9 +621,9 @@ git config --global init.defaultBranch master
 
 # ------------------------------------------------------------ resumen
 log "resumen"
-echo "  omarchy:   $(ls -d "$OMARCHY_PATH" 2>/dev/null || echo FALTA)"
+echo "  omarchy:   $(ls -d "$OMARCHY_PATH" 2>/dev/null || echo MISSING)"
 echo "  ~/.config: $(ls ~/.config | wc -l) entradas"
-echo "  tema:      $(readlink -f ~/.config/omarchy/current/theme 2>/dev/null || echo 'sin enlazar')"
+echo "  theme:     $(readlink -f ~/.config/omarchy/current/theme 2>/dev/null || echo 'not linked')"
 echo "  hyprland:  $(command -v Hyprland || command -v hyprland || echo 'NO')"
 echo "  omarchy-shell: $(command -v omarchy-shell || echo 'NO')"
 echo "  terminal:  $(command -v xdg-terminal-exec || echo 'NO')"

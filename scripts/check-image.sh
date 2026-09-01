@@ -13,7 +13,7 @@ set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 BUNDLE="${1:-}"; OLD="${2:-builder}"
-[ -d "$BUNDLE" ] || { echo "uso: $0 <bundle.utm> [usuario-de-construccion]"; exit 2; }
+[ -d "$BUNDLE" ] || { echo "usage: $0 <bundle.utm> [build-account]"; exit 2; }
 DISK=$(find "$BUNDLE/Data" -name '*.qcow2' | head -1)
 [ -s "$DISK" ] || { echo "no encuentro el qcow2 en $BUNDLE"; exit 2; }
 
@@ -40,14 +40,14 @@ mkdir -p "$TMP/iso"
 # empty, the VM booted anyway and ten minutes were lost only to report
 # "No such file or directory" inside the guest.
 GS="${GUEST_SCRIPT:-scripts/guest-check.sh}"
-[ -r "$GS" ] || { echo "no puedo leer el script de invitado: $GS" >&2; exit 2; }
-cp "$GS" "$TMP/iso/check.sh" || { echo "no pude preparar el ISO" >&2; exit 2; }
+[ -r "$GS" ] || { echo "cannot read the guest script: $GS" >&2; exit 2; }
+cp "$GS" "$TMP/iso/check.sh" || { echo "could not prepare the ISO" >&2; exit 2; }
 # The base list travels ALWAYS, under its own name. That way a diagnostic
 # GUEST_SCRIPT can invoke it -- for instance to sabotage the image and confirm
 # the checks know how to go red -- without duplicating it.
 cp scripts/guest-check.sh "$TMP/iso/guest-check-base.sh"
 hdiutil makehybrid -quiet -iso -joliet -default-volume-name CHEQUEO \
-  -o "$TMP/check.iso" "$TMP/iso" >/dev/null || { echo "no pude crear el ISO"; exit 2; }
+  -o "$TMP/check.iso" "$TMP/iso" >/dev/null || { echo "could not create the ISO"; exit 2; }
 
 cat > "$TMP/t.exp" <<'EXPEOF'
 set timeout 1200
@@ -85,7 +85,7 @@ expect { -re {END_CHECK} { } timeout { puts "TIMEOUT_REPORT" } }
 sleep 2
 EXPEOF
 
-TR="${TRANSCRIPT:-/tmp/comprobar-imagen-sesion.log}"; : > "$TR"
+TR="${TRANSCRIPT:-/tmp/check-image-session.log}"; : > "$TR"
 echo "  arrancando $(basename "$BUNDLE") ... (~4 min)"
 # The transcript goes somewhere that SURVIVES the exit trap: when this hangs,
 # it is the only thing that says where. It has been lost twice already by
@@ -101,5 +101,5 @@ FW="$(brew --prefix qemu)/share/qemu/edk2-aarch64-code.fd" \
 # whereas log_file writes unbuffered. Trusting stdout has twice failed a gate
 # over an image that was perfectly fine.
 sed 's/\x1b\[[0-9;?=]*[a-zA-Z]//g' "$TR" | grep -av '^]3008' \
-  | sed -n '/^== identidad ==/,/^VEREDICTO_/p'
+  | sed -n '/^== identity ==/,/^VERDICT_/p'
 grep -q "VERDICT_CLEAN" "$TR" 2>/dev/null

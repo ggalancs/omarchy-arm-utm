@@ -24,7 +24,7 @@ LIBGL_ALWAYS_SOFTWARE=1
 EOF
 cat /etc/environment.d/90-vm-graphics.conf
 
-log "looknfeel: sin blur (caro con renderizado por software)"
+log "looknfeel: no blur (expensive with software rendering)"
 cat > ~/.config/hypr/looknfeel.lua <<'LUA'
 -- Ajustes para VM: el renderizado va por llvmpipe (ver 90-vm-graphics.conf),
 -- asi que el blur sale caro. Sin el, el escritorio va fluido.
@@ -36,6 +36,6 @@ hl.config({
 })
 LUA
 
-log "reiniciando para que todo el arbol de la sesion herede el entorno"
+log "restarting so the whole session tree inherits the environment"
 sync
 sudo systemctl reboot

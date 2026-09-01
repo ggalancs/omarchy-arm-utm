@@ -13,7 +13,7 @@
 #  Uso:
 #    omarchy-arm-extras                    menu interactivo
 #    omarchy-arm-extras --list             see what it can install
-#    omarchy-arm-extras 1password obsidian instalar elementos concretos
+#    omarchy-arm-extras 1password obsidian install specific items
 #    omarchy-arm-extras --all              everything still missing
 #    omarchy-arm-extras --force <key>      reinstall even if already present
 #
@@ -38,11 +38,11 @@ CATALOG=(
   "1password-cli|1Password CLI|El comando op. Binario estatico arm64 oficial"
   "obsidian|Obsidian|Notas en markdown. AppImage arm64 oficial"
   "typora|Typora|Editor markdown WYSIWYG. Paquete arm64 oficial via AUR"
-  "localsend|LocalSend|Enviar ficheros entre dispositivos. Build arm64 oficial"
-  "chrome|Google Chrome|Trae Widevine para arm64: habilita Spotify y Netflix web"
+  "localsend|LocalSend|Send files between devices. Official arm64 build"
+  "chrome|Google Chrome|Brings Widevine for arm64: enables Spotify and Netflix on the web"
   "spotify-web|Spotify (webapp)|Lanzador de open.spotify.com + reasigna SUPER+SHIFT+M"
-  "pinta|Pinta|Editor de imagenes. Compilado con el .NET arm64 de Microsoft"
-  "obs|OBS Studio|Captura y streaming. Compilado sin el plugin de navegador"
+  "pinta|Pinta|Image editor. Built with Microsoft's arm64 .NET"
+  "obs|OBS Studio|Capture and streaming. Built without the browser plugin"
 )
 
 catalog_keys()  { printf '%s\n' "${CATALOG[@]}" | cut -d'|' -f1; }
@@ -72,8 +72,8 @@ is_installed() {
 
 need_sudo() {
   sudo -n true 2>/dev/null && return 0
-  info "Se necesita sudo para instalar paquetes."
-  sudo -v || { fail "sin privilegios"; return 1; }
+  info "sudo is needed to install packages."
+  sudo -v || { fail "no privileges"; return 1; }
 }
 
 # Builds an AUR package, working around the usual ARM traps:
@@ -112,7 +112,7 @@ aur_build() {
 
   if ! grep -qE "^arch=\(.*\b(aarch64|any)\b" "$dir/PKGBUILD"; then
     sed -i "s/^arch=(\(.*\))/arch=(\1 'aarch64')/" "$dir/PKGBUILD"
-    info "arch= parcheado para incluir aarch64"
+    info "arch= patched to include aarch64"
   fi
 
   ( cd "$dir" && makepkg -si --noconfirm --needed --noprogressbar ) >"$dir/build.log" 2>&1 && return 0
@@ -125,7 +125,7 @@ aur_build() {
 
 do_1password() {
   title "1Password"
-  info "AgileBits publica arm64 SOLO como tarball: no hay .deb ni .rpm para esta arquitectura."
+  info "AgileBits publishes arm64 ONLY as a tarball: there is no .deb or .rpm for this architecture."
   local url=https://downloads.1password.com/linux/tar/stable/aarch64/1password-latest.tar.gz
   mkdir -p "$WORK"; rm -rf "$WORK/1p"; mkdir -p "$WORK/1p"
   curl -fL --progress-bar "$url" -o "$WORK/1p/1p.tar.gz" || { fail "descarga fallida"; return 1; }
@@ -141,23 +141,23 @@ do_1password() {
       fail "SIGNATURE DOES NOT VERIFY - install aborted"; return 1
     fi
   else
-    warn "no hay .sig disponible; se instala sin verificar la firma"
+    warn "no .sig available; installing without verifying the signature"
   fi
   tar -xzf "$WORK/1p/1p.tar.gz" -C "$WORK/1p" || { fail "no se pudo extraer"; return 1; }
   local src; src=$(find "$WORK/1p" -maxdepth 1 -type d -name '1password-*' | head -1)
   [ -n "$src" ] || { fail "el tarball no tiene la forma esperada"; return 1; }
   sudo mkdir -p /opt/1Password
   sudo cp -a "$src"/. /opt/1Password/
-  ( cd /opt/1Password && sudo ./after-install.sh ) >/dev/null 2>&1 || warn "after-install.sh dio errores (suele ser inocuo)"
+  ( cd /opt/1Password && sudo ./after-install.sh ) >/dev/null 2>&1 || warn "after-install.sh reported errors (usually harmless)"
   have 1password && ok "$(1password --version 2>/dev/null | head -1 || echo installed)" || { fail "did not end up on the PATH"; return 1; }
-  info "${c_dim}En Hyprland conviene lanzarlo con --ozone-platform=wayland${c_off}"
+  info "${c_dim}Under Hyprland it is best launched with --ozone-platform=wayland${c_off}"
 }
 
 do_1password_cli() { title "1Password CLI"; aur_build 1password-cli && ok "$(op --version 2>/dev/null)"; }
 
 do_obsidian() {
   title "Obsidian"
-  info "Hay AppImage y tarball arm64 oficiales. Se usa el tarball: no depende de fuse2."
+  info "Official arm64 AppImage and tarball both exist. The tarball is used: it does not need fuse2."
   # CAREFUL: releases/latest can be an Android-ONLY release (a lone .apk).
   # We have to find the most recent one that actually publishes the arm64
   # desktop tarball.
@@ -187,7 +187,7 @@ DESK
 
 do_typora() {
   title "Typora"
-  info "El paquete AUR 'typora' baja el .deb arm64 oficial. No uses typora-electron: pide electron42, que no existe en ARM."
+  info "The 'typora' AUR package fetches the official arm64 .deb. Do not use typora-electron: it wants electron42, which does not exist on ARM."
   aur_build typora && ok "$(pacman -Q typora)"
 }
 
@@ -195,8 +195,8 @@ do_localsend() { title "LocalSend"; aur_build localsend-bin localsend-bin && ok 
 
 do_chrome() {
   title "Google Chrome"
-  info "Chrome arm64 incluye Widevine (el DRM que exigen Spotify y Netflix web)."
-  info "Chromium de los repos NO lo trae, y el paquete chromium-widevine es solo x86_64."
+  info "Chrome arm64 includes Widevine (the DRM Spotify and Netflix on the web require)."
+  info "The repositories' Chromium does NOT carry it, and chromium-widevine is x86_64 only."
   aur_build google-chrome || return 1
   ok "$(pacman -Q google-chrome)"
   info "${c_dim}Comprueba el DRM en chrome://components → 'Widevine Content Decryption Module'${c_off}"
@@ -235,12 +235,12 @@ LUA
 do_pinta() {
   title "Pinta"
   info "Microsoft does publish .NET for linux-arm64; Arch only packages it for x86_64."
-  info "Se instala el runtime desde el tarball oficial y luego el paquete de Pinta, que es arch=any."
-  aur_build dotnet-runtime-bin dotnet-runtime-bin || { fail "sin runtime .NET no se puede seguir"; return 1; }
+  info "The runtime is installed from the official tarball, then Pinta's package, which is arch=any."
+  aur_build dotnet-runtime-bin dotnet-runtime-bin || { fail "without the .NET runtime there is no way to continue"; return 1; }
   local url=https://geo.mirror.pkgbuild.com/extra/os/x86_64/
   local file; file=$(curl -fsSL --max-time 30 "$url" | grep -o 'pinta-[0-9][^"]*-any\.pkg\.tar\.zst' | sort -V | tail -1)
   [ -n "$file" ] || { fail "could not find the Pinta package"; return 1; }
-  info "$file  ${c_dim}(la ruta dice x86_64 pero el paquete es arch=any)${c_off}"
+  info "$file  ${c_dim}(the path says x86_64 but the package is arch=any)${c_off}"
   mkdir -p "$WORK"; curl -fL --progress-bar "$url$file" -o "$WORK/$file" || return 1
   sudo pacman -U --noconfirm "$WORK/$file" >/dev/null 2>&1 && ok "$(pacman -Q pinta)" || { fail "pacman -U failed"; return 1; }
   warn "outside the update manager: every new version has to be repeated by hand"
@@ -249,12 +249,12 @@ do_pinta() {
 do_obs() {
   title "OBS Studio"
   info "OBS builds fine on aarch64. The only thing blocking it on Arch Linux ARM is the"
-  info "subpaquete del navegador, cuyo 'cef' solo existe para x86_64. Se desactiva."
-  warn "compilar Qt6 + OBS dentro de la VM lleva un buen rato"
+  info "browser subpackage, whose 'cef' only exists for x86_64. It is disabled."
+  warn "building Qt6 + OBS inside the VM takes a good while"
   local dir="$WORK/obs-studio"
   rm -rf "$dir"; mkdir -p "$WORK"
   git clone -q --depth 1 https://gitlab.archlinux.org/archlinux/packaging/packages/obs-studio.git "$dir" \
-    || { fail "no pude clonar el PKGBUILD de Arch"; return 1; }
+    || { fail "could not clone Arch's PKGBUILD"; return 1; }
   cd "$dir" || return 1
   sed -i "s/^arch=(\(.*\))/arch=(\1 'aarch64')/" PKGBUILD
   # CAREFUL: 'cef' sits on the SAME line as makedepends=, not on one of its
@@ -278,7 +278,7 @@ do_obs() {
   # The browser subpackage is no longer produced
   sed -i '/^package_obs-studio-plugin-browser()/,/^}/d' PKGBUILD
   sed -i "s/^pkgname=(.*)/pkgname=('obs-studio')/" PKGBUILD
-  info "PKGBUILD parcheado: aarch64, sin CEF, sin plugin de navegador"
+  info "PKGBUILD patched: aarch64, no CEF, no browser plugin"
   if makepkg -si --noconfirm --needed --noprogressbar >"$dir/build.log" 2>&1; then
     ok "$(pacman -Q obs-studio)"
     info "${c_dim}No hardware acceleration in the VM: it will encode with x264 on the CPU${c_off}"
@@ -293,7 +293,7 @@ run_item() {
   local k="$1"
   if [ "${FORCE:-0}" != "1" ] && is_installed "$k"; then
     title "$(catalog_title "$k")"
-    ok "ya viene instalada en esta imagen (--force para reinstalar)"
+    ok "already installed in this image (--force to reinstall)"
     return 0
   fi
   case "$k" in
@@ -312,10 +312,10 @@ run_item() {
 
 show_list() {
   echo
-  echo "${c_hi}Apps que se instalan desde su fuente oficial${c_off}"
-  echo "${c_dim}Las propietarias no vienen dentro a proposito: redistribuir sus binarios"
-  echo "en una imagen que se reparte seria problematico. Aqui se descargan en tu"
-  echo "maquina, del sitio del fabricante.${c_off}"
+  echo "${c_hi}Apps installed from their official source${c_off}"
+  echo "${c_dim}The proprietary ones are deliberately not inside: redistributing their"
+  echo "binaries in an image that gets handed out would be a problem. Here they are"
+  echo "downloaded on your machine, from the vendor's site.${c_off}"
   echo
   local k
   while read -r k; do
@@ -326,7 +326,7 @@ show_list() {
     fi
   done < <(catalog_keys)
   echo
-  echo "${c_dim}Uso: omarchy-arm-extras <clave> [clave...]   ·   --all para todo${c_off}"
+  echo "${c_dim}Usage: omarchy-arm-extras <key> [key...]   -   --all for everything${c_off}"
   echo
 }
 
@@ -352,7 +352,7 @@ case "${1:-}" in
   *) SELECTED=("$@") ;;
 esac
 
-[ ${#SELECTED[@]} -gt 0 ] || { info "nada seleccionado"; exit 0; }
+[ ${#SELECTED[@]} -gt 0 ] || { info "nothing selected"; exit 0; }
 
 need_sudo || exit 1
 mkdir -p "$WORK"

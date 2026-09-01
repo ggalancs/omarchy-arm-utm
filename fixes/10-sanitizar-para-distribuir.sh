@@ -6,7 +6,7 @@ OLD=gabriel
 NEW=omarchy
 log() { echo ""; echo "==> $*"; }
 
-log "1/10 desanclando /usr/share/omarchy del home del usuario"
+log "1/10 detaching /usr/share/omarchy from the user's home"
 # It was a symlink to /home/<user>/.local/share/omarchy, which ties the system
 # to that account. It becomes a real directory (as the pacman package would)
 # and
@@ -17,10 +17,10 @@ if [ -L /usr/share/omarchy ]; then
   cp -a "$TARGET" /usr/share/omarchy
   chown -R root:root /usr/share/omarchy
   rm -rf "$TARGET"
-  echo "  /usr/share/omarchy ahora es un directorio real ($(du -sh /usr/share/omarchy | cut -f1))"
+  echo "  /usr/share/omarchy is now a real directory ($(du -sh /usr/share/omarchy | cut -f1))"
 fi
 
-log "2/10 renombrando el usuario $OLD -> $NEW"
+log "2/10 renaming the user $OLD -> $NEW"
 if id -u "$OLD" >/dev/null 2>&1; then
   pkill -u "$OLD" 2>/dev/null || true
   usermod -l "$NEW" -d "/home/$NEW" -m "$OLD"
@@ -35,7 +35,7 @@ rm -rf "/home/$NEW/.local/share/omarchy"
 ln -sfn /usr/share/omarchy "/home/$NEW/.local/share/omarchy"
 chown -h "$NEW:$NEW" "/home/$NEW/.local/share/omarchy"
 
-log "3/10 SDDM: autologin al usuario generico"
+log "3/10 SDDM: autologin as the generic user"
 cat > /etc/sddm.conf.d/20-autologin.conf <<EOF
 [Autologin]
 User=$NEW
@@ -73,7 +73,7 @@ rm -rf "/home/$NEW/shots" "/home/$NEW"/*.sh "/home/$NEW/config.env" 2>/dev/null 
 # NetworkManager: quita redes wifi guardadas
 rm -f /etc/NetworkManager/system-connections/* 2>/dev/null || true
 
-log "7/10 logs y caches del sistema"
+log "7/10 system logs and caches"
 rm -rf /var/log/journal/* /var/log/omarchy* /var/log/pacman.log
 find /var/log -type f -name "*.log" -delete 2>/dev/null || true
 rm -rf /var/cache/pacman/pkg/* /var/tmp/* /tmp/* 2>/dev/null || true
@@ -96,12 +96,12 @@ install -d -o "$NEW" -g "$NEW" "/home/$NEW/Desktop"
 cp /etc/motd "/home/$NEW/Desktop/LEEME.txt"
 chown "$NEW:$NEW" "/home/$NEW/Desktop/LEEME.txt"
 
-log "9/10 comprobando que nada quedo atado a $OLD"
-echo "  referencias en /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null | head -5 || echo "    ninguna"
+log "9/10 checking nothing is still tied to $OLD"
+echo "  referencias en /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null | head -5 || echo "    none"
 echo "  home:"; ls -ld "/home/$NEW"; ls /home/
 echo "  propietario de ficheros sueltos:"; find /home/$NEW -maxdepth 2 ! -user "$NEW" 2>/dev/null | head -3 || echo "    todo correcto"
 
-log "10/10 liberando espacio no usado (para que comprima mejor)"
+log "10/10 freeing unused space (so it compresses better)"
 sync
 fstrim -av 2>&1 | head -3 || true
 echo ""

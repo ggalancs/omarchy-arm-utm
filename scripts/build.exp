@@ -26,7 +26,7 @@ spawn -noecho $ROOT/scripts/qemu-build.sh
 # --- Alpine live login (root, no password)
 wait_for "localhost login:" 10 "el live de Alpine no llegó al login" 300
 send "root\r"
-wait_for "localhost:~#" 11 "no hay shell de root en Alpine" 120
+wait_for "localhost:~#" 11 "no root shell in Alpine" 120
 
 send "export PS1='RDY> '; echo TOK_SH_\$?\r"
 wait_for "TOK_SH_0" 12 "no se pudo fijar el prompt" 60
@@ -36,7 +36,7 @@ send "mkdir -p /media/prov; for d in /dev/vd? /dev/sr?; do mount -t iso9660 -o r
 wait_for "TOK_PROV_0" 13 "no se encontró el ISO de aprovisionamiento" 120
 
 send "test -s /media/prov/alarm-rootfs.tgz; echo TOK_TGZ_\$?\r"
-wait_for "TOK_TGZ_0" 14 "falta el rootfs de Arch Linux ARM en el ISO" 60
+wait_for "TOK_TGZ_0" 14 "the Arch Linux ARM rootfs is missing from the ISO" 60
 
 # --- construcción completa (particionado + chroot + paquetes + dotfiles)
 set timeout -1
@@ -47,11 +47,11 @@ send "export DISK=/dev/vda; sh /media/prov/stage1.sh 2>&1 | tee /tmp/build.log\r
 expect {
     -ex "TOK_BUILD_0" {
         puts "\n\n==========================================="
-        puts "   CONSTRUCCION COMPLETADA"
+        puts "   BUILD COMPLETE"
         puts "===========================================\n"
     }
     -re {TOK_BUILD_[1-9][0-9]*} {
-        puts "\n\n!!!!!! LA CONSTRUCCION FALLO !!!!!!\n"
+        puts "\n\n!!!!!! THE BUILD FAILED !!!!!!\n"
         set timeout 300
         send "echo; echo ---- ultimas 80 lineas ----; tail -n 80 /tmp/build.log; echo TOK_TAIL_\$?\r"
         catch { wait_for "TOK_TAIL_" 15 "tail" 300 }
@@ -62,10 +62,10 @@ expect {
 
 # --- verification of the resulting disk
 set timeout 600
-send "mount -o subvol=@ /dev/vda2 /mnt 2>/dev/null || mount /dev/vda2 /mnt; mount /dev/vda1 /mnt/boot 2>/dev/null; echo '==== VERIFICACION ===='; echo '-- ESP --'; find /mnt/boot -maxdepth 3 | head -40; echo '-- kernel --'; ls -la /mnt/boot/Image* /mnt/boot/initramfs* 2>/dev/null; echo '-- usuario --'; ls -la /mnt/home/; echo '-- dotfiles --'; for h in /mnt/home/*/; do echo \"  \$h:\"; ls \"\$h/.config\" 2>/dev/null | tr '\\n' ' '; echo; done; echo; echo '-- hyprland --'; ls -la /mnt/usr/bin/Hyprland 2>/dev/null; echo TOK_VERIFY_\$?\r"
+send "mount -o subvol=@ /dev/vda2 /mnt 2>/dev/null || mount /dev/vda2 /mnt; mount /dev/vda1 /mnt/boot 2>/dev/null; echo '==== VERIFICATION ===='; echo '-- ESP --'; find /mnt/boot -maxdepth 3 | head -40; echo '-- kernel --'; ls -la /mnt/boot/Image* /mnt/boot/initramfs* 2>/dev/null; echo '-- user --'; ls -la /mnt/home/; echo '-- dotfiles --'; for h in /mnt/home/*/; do echo \"  \$h:\"; ls \"\$h/.config\" 2>/dev/null | tr '\\n' ' '; echo; done; echo; echo '-- hyprland --'; ls -la /mnt/usr/bin/Hyprland 2>/dev/null; echo TOK_VERIFY_\$?\r"
 catch { wait_for "TOK_VERIFY_" 17 "verificación" 600 }
 
 send "sync; umount -R /mnt 2>/dev/null; poweroff -f\r"
 expect eof
-puts "\n===== VM DE CONSTRUCCION APAGADA ====="
+puts "\n===== BUILD VM POWERED OFF ====="
 exit 0

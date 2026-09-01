@@ -20,8 +20,8 @@ VARS_TPL=/Applications/UTM.app/Contents/Resources/qemu/edk2-arm-vars.fd
 : "${UTM_CPUS:=8}"
 : "${UTM_MEM:=8192}"
 
-[ -f "$SRC_QCOW" ] || { echo "!! falta $SRC_QCOW"; exit 1; }
-[ -f "$VARS_TPL" ] || { echo "!! falta la plantilla de NVRAM UEFI $VARS_TPL"; exit 1; }
+[ -f "$SRC_QCOW" ] || { echo "!! $SRC_QCOW is missing"; exit 1; }
+[ -f "$VARS_TPL" ] || { echo "!! the UEFI NVRAM template $VARS_TPL is missing"; exit 1; }
 
 VM_UUID=$(uuidgen)
 # Whoever receives the bundle reads these notes in UTM before starting it:
@@ -46,15 +46,15 @@ if [ "$DEST_DIR" = "$DOCS" ] && pgrep -x UTM >/dev/null; then
   UTMCTL=/Applications/UTM.app/Contents/MacOS/utmctl
   CORRIENDO=$("$UTMCTL" list 2>/dev/null | awk '$2=="started"{print $3" "$4}' | grep -v "^$" || true)
   if [ -n "$CORRIENDO" ]; then
-    echo "==> HAY VMs EN MARCHA en UTM:"
+    echo "==> THERE ARE VMs RUNNING in UTM:"
     echo "$CORRIENDO" | sed 's/^/      /'
-    echo "    Para registrar el bundle hay que reiniciar UTM, y eso las cortaria."
+    echo "    Registering the bundle needs UTM restarted, and that would cut them off."
     if [ -t 0 ] && [ "${ASSUME_YES:-}" != "1" ]; then
-      printf "    ¿Cerrarlas y reiniciar UTM? [s/N]: "
+      printf "    Close them and restart UTM? [y/N]: "
       read -r R </dev/tty || R=""
       case "$(printf '%s' "$R" | tr '[:upper:]' '[:lower:]')" in
         s|si|y|yes) : ;;
-        *) echo "==> no se reinicia UTM: importa el bundle a mano con Archivo → Importar"; SKIP_RESTART=1 ;;
+        *) echo "==> UTM not restarted: import the bundle by hand with File -> Import"; SKIP_RESTART=1 ;;
       esac
     else
       echo "==> modo desatendido: NO se cierra UTM. Importa el bundle a mano."
@@ -62,17 +62,17 @@ if [ "$DEST_DIR" = "$DOCS" ] && pgrep -x UTM >/dev/null; then
     fi
   fi
   if [ "${SKIP_RESTART:-0}" != "1" ]; then
-    echo "==> cerrando UTM para que reescanee Documents"
+    echo "==> quitting UTM so it rescans Documents"
     osascript -e 'quit app "UTM"' >/dev/null 2>&1 || true
     for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -x UTM >/dev/null || break; sleep 1; done
     pgrep -x UTM >/dev/null && { pkill -x UTM || true; sleep 2; }
   fi
 fi
 
-echo "==> creando $BUNDLE"
+echo "==> creating $BUNDLE"
 rm -rf "$BUNDLE"
 mkdir -p "$BUNDLE/Data"
-echo "    copiando disco ($(du -h "$SRC_QCOW" | cut -f1))"
+echo "    copying disk ($(du -h "$SRC_QCOW" | cut -f1))"
 cp -c "$SRC_QCOW" "$BUNDLE/Data/$DISK_UUID.qcow2" 2>/dev/null || cp "$SRC_QCOW" "$BUNDLE/Data/$DISK_UUID.qcow2"
 # The VARS half of the aarch64 UEFI uses the edk2-ARM-vars.fd template (not
 # aarch64);
@@ -236,12 +236,12 @@ du -sh "$BUNDLE"
 ls -la "$BUNDLE" "$BUNDLE/Data"
 
 if [ "$DEST_DIR" = "$DOCS" ]; then
-  echo "==> abriendo UTM para que registre el bundle"
+  echo "==> opening UTM so it registers the bundle"
   open -a UTM
   sleep 6
   /Applications/UTM.app/Contents/MacOS/utmctl list || true
 else
-  echo "==> bundle creado fuera de la carpeta de UTM (no se registra)"
+  echo "==> bundle created outside UTM's folder (it is not registered)"
 fi
 
 echo ""

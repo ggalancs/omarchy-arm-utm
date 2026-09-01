@@ -4,7 +4,7 @@ set -uo pipefail
 NEW=omarchy
 log(){ echo; echo "==> $*"; }
 
-log "tamano antes"
+log "size before"
 df -h / | tail -1
 
 log "paquetes mas grandes"
@@ -18,9 +18,9 @@ done
 orph=$(pacman -Qdtq 2>/dev/null)
 [ -n "$orph" ] && { echo "  huerfanos: $(echo $orph | tr '\n' ' ')"; pacman -Rns --noconfirm $orph >/dev/null 2>&1; }
 
-log "comprobando que lo importante sigue"
+log "checking that what matters is still there"
 for p in obs-studio pinta dotnet-runtime-bin hyprland quickshell; do
-  printf "  %-20s %s\n" "$p" "$(pacman -Q $p 2>/dev/null || echo FALTA)"
+  printf "  %-20s %s\n" "$p" "$(pacman -Q $p 2>/dev/null || echo MISSING)"
 done
 command -v obs pinta omarchy-arm-extras | sed 's/^/  /'
 

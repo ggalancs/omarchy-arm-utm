@@ -13,7 +13,7 @@ getent passwd "$OLD" >/dev/null || { echo "sanitize: el usuario '$OLD' no existe
 log()  { echo ""; echo "==> $*"; }
 warn() { echo "!!  $*" >&2; }
 
-log "1/10 desanclando /usr/share/omarchy del home del usuario"
+log "1/10 detaching /usr/share/omarchy from the user's home"
 # It used to be a symlink to /home/<user>/.local/share/omarchy, which ties the
 # system to that account. It becomes a real directory (as the pacman package
 # would leave it) and the home now points at that instead.
@@ -37,17 +37,17 @@ if [ -L /usr/share/omarchy ]; then
     exit 1
   }
   cp -a "$TARGET" /usr/share/omarchy \
-    || volver_atras "no pude copiar $TARGET a /usr/share/omarchy"
+    || volver_atras "could not copy $TARGET to /usr/share/omarchy"
   chown -R root:root /usr/share/omarchy
   N_ORIG=$(find "$TARGET" -mindepth 1 | wc -l)
   N_COPIA=$(find /usr/share/omarchy -mindepth 1 | wc -l)
   [ "$N_COPIA" -ge "$N_ORIG" ] \
     || volver_atras "la copia quedo incompleta ($N_COPIA de $N_ORIG entradas)"
   rm -rf "$TARGET"
-  echo "  /usr/share/omarchy ahora es un directorio real ($(du -sh /usr/share/omarchy | cut -f1), $N_COPIA entradas)"
+  echo "  /usr/share/omarchy is now a real directory ($(du -sh /usr/share/omarchy | cut -f1), $N_COPIA entradas)"
 fi
 
-log "2/10 renombrando el usuario $OLD -> $NEW"
+log "2/10 renaming the user $OLD -> $NEW"
 if id -u "$OLD" >/dev/null 2>&1; then
   pkill -u "$OLD" 2>/dev/null || true
   usermod -l "$NEW" -d "/home/$NEW" -m "$OLD"
@@ -62,7 +62,7 @@ rm -rf "/home/$NEW/.local/share/omarchy"
 ln -sfn /usr/share/omarchy "/home/$NEW/.local/share/omarchy"
 chown -h "$NEW:$NEW" "/home/$NEW/.local/share/omarchy"
 
-log "3/10 SDDM: autologin al usuario generico"
+log "3/10 SDDM: autologin as the generic user"
 cat > /etc/sddm.conf.d/20-autologin.conf <<EOF
 [Autologin]
 User=$NEW
@@ -100,7 +100,7 @@ rm -rf "/home/$NEW/shots" "/home/$NEW"/*.sh "/home/$NEW/config.env" 2>/dev/null 
 # NetworkManager: drop saved wifi networks
 rm -f /etc/NetworkManager/system-connections/* 2>/dev/null || true
 
-log "7b/10 apps propietarias fuera de la imagen distribuible"
+log "7b/10 proprietary apps out of the distributable image"
 # These get installed with omarchy-arm-extras on the end user's own machine.
 # Packing them into a .zip that gets redistributed would mean redistributing
 # third-party binaries, so they are removed even if the source VM had them.
@@ -131,9 +131,9 @@ fi
 rm -f "/home/$NEW/.local/share/applications/Spotify.desktop" \
       "/home/$NEW/.local/share/applications/spotify.desktop" 2>/dev/null || true
 rm -rf "/home/$NEW/.local/share/omarchy/webapps" 2>/dev/null || true
-echo "  (se reinstalan con: omarchy-arm-extras)"
+echo "  (reinstall them with: omarchy-arm-extras)"
 
-log "7c/10 adelgazando: lo que solo hacia falta para compilar"
+log "7c/10 slimming: what was only needed to build"
 # Building the tools leaves whole toolchains behind (the .NET SDK alone is
 # 425 MiB) plus Rust and Go in the home directory. None of it is needed to use
 # the image, and it accounts for ~2 GB of the zip.
@@ -153,9 +153,9 @@ rm -f  /usr/local/bin/walker
 orph=$(pacman -Qdtq 2>/dev/null | tr '\n' ' ')
 [ -n "${orph// /}" ] && { echo "  huerfanos: $orph"; pacman -Rns --noconfirm $orph >/dev/null 2>&1; }
 rm -rf "/home/$NEW/.cargo" "/home/$NEW/go" "/home/$NEW/.rustup" "/home/$NEW/.npm" 2>/dev/null
-echo "  imprescindibles que deben seguir: $(for p in hyprland quickshell sddm; do printf '%s ' "$(pacman -Q $p 2>/dev/null || echo FALTA-$p)"; done)"
+echo "  essentials that must remain: $(for p in hyprland quickshell sddm; do printf '%s ' "$(pacman -Q $p 2>/dev/null || echo FALTA-$p)"; done)"
 
-log "7d/10 adelgazando: lo que no puede hacer falta en una VM"
+log "7d/10 slimming: what a VM cannot possibly need"
 # Measured on a real image: 675 MiB of firmware for hardware that cannot exist
 # in a QEMU VM with virtio devices. linux-firmware is deliberately not
 # installed, but the per-vendor splits come in as dependencies.
@@ -177,7 +177,7 @@ done
 mkdir -p /usr/share/man /usr/share/doc
 echo "  ocupacion tras el recorte: $(df -h / | awk 'NR==2{print $3}')"
 
-log "7/10 logs y caches del sistema"
+log "7/10 system logs and caches"
 rm -rf /var/log/journal/* /var/log/omarchy* /var/log/pacman.log
 find /var/log -type f -name "*.log" -delete 2>/dev/null || true
 rm -rf /var/cache/pacman/pkg/* /var/tmp/* /tmp/* 2>/dev/null || true
@@ -221,7 +221,7 @@ install -d -o "$NEW" -g "$NEW" "/home/$NEW/Desktop"
 cp /etc/motd "/home/$NEW/Desktop/README.txt"
 chown "$NEW:$NEW" "/home/$NEW/Desktop/README.txt"
 
-log "8a/10 hook de actualizacion para ARM"
+log "8a/10 update hook for ARM"
 # omarchy-update-dev does not update the tree when OMARCHY_PATH is
 # /usr/share/omarchy, which is our case: without this hook Omarchy freezes.
 if [ -f /root/prov/10-arm-sync ]; then
@@ -257,11 +257,11 @@ DESK
   chown "$NEW:$NEW" /usr/local/share/applications/omarchy-arm-extras.desktop 2>/dev/null || true
   echo "  /usr/local/bin/omarchy-arm-extras + entrada en el menu"
 else
-  warn "el instalador de apps opcionales no venia en el ISO: la imagen saldra sin el"
+  warn "the optional app installer was not on the ISO: the image will ship without it"
 fi
 
-log "9/10 comprobando que nada quedo atado a $OLD"
-echo "  referencias en /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null | head -5 || echo "    ninguna"
+log "9/10 checking nothing is still tied to $OLD"
+echo "  referencias en /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null | head -5 || echo "    none"
 echo "  home:"; ls -ld "/home/$NEW"; ls /home/
 echo "  propietario de ficheros sueltos:"; find /home/$NEW -maxdepth 2 ! -user "$NEW" 2>/dev/null | head -3 || echo "    todo correcto"
 
@@ -277,28 +277,28 @@ for _vuelta in 1 2 3 4; do
   [ "${#HUERFANOS[@]}" -gt 0 ] && [ -n "${HUERFANOS[0]:-}" ] || break
   echo "  vuelta $_vuelta: ${HUERFANOS[*]}"
   pacman -Rns --noconfirm "${HUERFANOS[@]}" >/dev/null 2>&1 \
-    || { warn "no pude quitar: ${HUERFANOS[*]}"; break; }
+    || { warn "could not remove: ${HUERFANOS[*]}"; break; }
 done
 echo "  huerfanos restantes: $(pacman -Qtdq 2>/dev/null | wc -l)"
 
-log "10/10 liberando espacio no usado (para que comprima mejor)"
+log "10/10 freeing unused space (so it compresses better)"
 sync
 fstrim -av 2>&1 | head -3 || true
 echo ""
-log "ficheros de respaldo de usermod (contienen el usuario y el hash antiguos)"
+log "usermod backup files (they carry the old username and hash)"
 rm -f /etc/passwd- /etc/shadow- /etc/group- /etc/gshadow-
 log "subuid/subgid"
 sed -i "s/^$OLD:/$NEW:/" /etc/subuid /etc/subgid 2>/dev/null || true
 cat /etc/subuid /etc/subgid 2>/dev/null
 
 log "barrido final de referencias a $OLD"
-echo "  /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null || echo "    ninguna"
-echo "  /home:"; grep -rl "\b$OLD\b" /home/$NEW/.config /home/$NEW/.bashrc 2>/dev/null | head -5 || echo "    ninguna"
-echo "  /usr/local/bin:"; grep -rl "\b$OLD\b" /usr/local/bin 2>/dev/null | head -5 || echo "    ninguna"
+echo "  /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null || echo "    none"
+echo "  /home:"; grep -rl "\b$OLD\b" /home/$NEW/.config /home/$NEW/.bashrc 2>/dev/null | head -5 || echo "    none"
+echo "  /usr/local/bin:"; grep -rl "\b$OLD\b" /usr/local/bin 2>/dev/null | head -5 || echo "    none"
 echo "  enlaces rotos en /usr/bin: $(find /usr/bin -xtype l 2>/dev/null | wc -l)"
-echo "  /usr/share/omarchy (no debe apuntar a /home):"; ls -ld /usr/share/omarchy
+echo "  /usr/share/omarchy (must not point into /home):"; ls -ld /usr/share/omarchy
 
-log "coherencia del sistema"
+log "system coherence"
 echo "  passwd: $(getent passwd $NEW)"
 echo "  home:   $(ls -ld /home/$NEW | awk '{print $3, $4, $9}')"
 echo "  symlink omarchy: $(readlink /home/$NEW/.local/share/omarchy)"
@@ -317,12 +317,12 @@ log "nombre real en passwd (aparece en el greeter)"
 chfn -f "Omarchy" "$NEW" 2>/dev/null || usermod -c "Omarchy" "$NEW"
 getent passwd "$NEW"
 
-log "user-dirs con rutas absolutas"
+log "user-dirs with absolute paths"
 for f in /home/$NEW/.config/user-dirs.dirs; do
   [ -f "$f" ] && sed -i "s#/home/$OLD#/home/$NEW#g" "$f"
 done
 
-log "symlinks que apuntan al home antiguo"
+log "symlinks pointing at the old home"
 # grep -rl only looks at file CONTENT: a symlink's target is not content, so
 # the text sweep declares them clean. Omarchy stores the active theme and
 # wallpaper as links (~/.local/state/omarchy/current/{theme,background}), so a
@@ -360,21 +360,21 @@ done
 if strings /usr/local/bin/ttfx 2>/dev/null | grep -q "$OLD"; then
   echo "  ttfx: AUN menciona a '$OLD' tras el strip"
 else
-  echo "  ttfx: sin rastro del constructor"
+  echo "  ttfx: no trace of the build account"
 fi
 
-log "estado final para distribuir"
-echo "  usuario:    $(getent passwd $NEW | cut -d: -f1,5,6)"
+log "final state for distribution"
+echo "  user:       $(getent passwd $NEW | cut -d: -f1,5,6)"
 echo "  autologin:  $(grep -h User= /etc/sddm.conf.d/*.conf 2>/dev/null | sort -u | tr '\n' ' ')"
 echo "  sshd:       $(systemctl is-enabled sshd 2>&1)"
-echo "  instalador opcional: $(test -x /usr/local/bin/omarchy-arm-extras && echo si || echo FALTA)"
-echo "  entrada de menu:     $(test -f /usr/local/share/applications/omarchy-arm-extras.desktop && echo si || echo FALTA)"
+echo "  optional installer:  $(test -x /usr/local/bin/omarchy-arm-extras && echo yes || echo MISSING)"
+echo "  menu entry:          $(test -f /usr/local/share/applications/omarchy-arm-extras.desktop && echo yes || echo MISSING)"
 echo "  machine-id: $(wc -c < /etc/machine-id) bytes (vacio = se regenera)"
 echo ""
-echo "  AVISO: a partir de aqui la imagen no debe volver a arrancarse. El primer"
-echo "  arranque regenera machine-id, semilla de aleatoriedad y logs, y esos"
-echo "  quedarian identicos en todas las copias distribuidas. Si hay que"
-echo "  arrancarla para verificar algo, repite esta fase despues."
+echo "  WARNING: from here on the image must not be booted again. The first"
+echo "  boot regenerates machine-id, the random seed and the logs, and those"
+echo "  would be identical across every distributed copy. If it has to be"
+echo "  booted to verify something, run this phase again afterwards."
 echo "  claves ssh host: $(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l) (0 = se regeneran)"
 echo "  hostname:   $(cat /etc/hostname)"
 sync
@@ -385,7 +385,7 @@ fstrim -av 2>&1 | head -2 || true
 # on an echo, so its rc was 0 no matter what happened. repair.sh picked up that
 # 0, the host saw TOK_REPAIR_0 and called the image clean. If usermod failed,
 # an image went out carrying the builder's username and password.
-log "invariantes de la imagen distribuible"
+log "invariants of the distributable image"
 FALLOS=0
 mal() { echo "  ✗ $*"; FALLOS=$((FALLOS+1)); }
 bien() { echo "  ✓ $*"; }
@@ -393,14 +393,14 @@ bien() { echo "  ✓ $*"; }
 getent passwd "$NEW" >/dev/null && bien "existe el usuario $NEW" || mal "no existe el usuario $NEW"
 if [ "$OLD" != "$NEW" ]; then
   getent passwd "$OLD" >/dev/null && mal "el usuario del constructor ($OLD) sigue existiendo" \
-                                  || bien "el usuario del constructor ya no existe"
+                                  || bien "the build account no longer exists"
 fi
 [ -d /usr/share/omarchy ] && [ ! -L /usr/share/omarchy ] \
   && bien "/usr/share/omarchy es un directorio real" \
   || mal "/usr/share/omarchy no es un directorio real"
 
 N_CMD=$(find /usr/bin -maxdepth 1 -name 'omarchy-*' | wc -l)
-[ "$N_CMD" -ge 400 ] && bien "$N_CMD comandos omarchy-*" || mal "solo $N_CMD comandos omarchy-* (esperaba >=400)"
+[ "$N_CMD" -ge 400 ] && bien "$N_CMD comandos omarchy-*" || mal "only $N_CMD omarchy-* commands (expected >=400)"
 
 N_ROTO=$(find /usr/bin /usr/local/bin /home/"$NEW" -xdev -xtype l 2>/dev/null | wc -l)
 [ "$N_ROTO" -le 5 ] && bien "$N_ROTO enlaces colgando" || mal "$N_ROTO enlaces colgando"
@@ -419,33 +419,33 @@ if [ "$OLD" != "$NEW" ]; then
   mapfile -t PORNOMBRE < <(find /home/"$NEW" /etc /usr/local /opt -xdev -mindepth 1 \
       -regextype posix-extended -regex "$RX_OLD" 2>/dev/null)
   if [ "${#PORNOMBRE[@]}" -gt 0 ] && [ -n "${PORNOMBRE[0]:-}" ]; then
-    echo "  quitando ${#PORNOMBRE[@]} fichero(s) cuyo NOMBRE lleva '$OLD':"
+    echo "  removing ${#PORNOMBRE[@]} file(s) whose NAME carries '$OLD':"
     for f in "${PORNOMBRE[@]}"; do echo "    $f"; rm -rf "$f"; done
   fi
   RESTAN=$(find /home/"$NEW" /etc /usr/local /opt -xdev -mindepth 1 \
       -regextype posix-extended -regex "$RX_OLD" 2>/dev/null | wc -l)
-  [ "$RESTAN" -eq 0 ] && bien "ningun nombre de fichero menciona a $OLD" || mal "$RESTAN nombres siguen mencionando a $OLD"
+  [ "$RESTAN" -eq 0 ] && bien "no filename mentions $OLD" || mal "$RESTAN names still mention $OLD"
 fi
 
 # The clipboard: the five pieces that can break it.
-[ -x /usr/local/bin/omarchy-arm-vdagent ] && bien "agente del portapapeles instalado" || mal "falta /usr/local/bin/omarchy-arm-vdagent"
+[ -x /usr/local/bin/omarchy-arm-vdagent ] && bien "clipboard agent installed" || mal "/usr/local/bin/omarchy-arm-vdagent is missing"
 # We are in a chroot here and the daemon is not running, so this checks the
 # file that passes it the flag. On the booted image the process itself is
 # checked, which is stronger (scripts/guest-check.sh).
 grep -qs -- '-X' /etc/conf.d/spice-vdagentd \
-  && bien "spice-vdagentd recibira -X" || mal "spice-vdagentd sin -X: el portapapeles no funcionara"
+  && bien "spice-vdagentd recibira -X" || mal "spice-vdagentd without -X: the clipboard will not work"
 [ -e /etc/systemd/system/spice-vdagentd.service.d/override.conf ] \
-  && mal "queda el override antiguo de spice-vdagentd" || bien "sin override antiguo"
+  && mal "the old spice-vdagentd override is still there" || bien "no old override left"
 [ -e "/home/$NEW/.config/systemd/user/graphical-session.target.wants/omarchy-arm-vdagent.service" ] \
   && bien "agente habilitado en la sesion grafica" \
-  || mal "el agente no quedo habilitado para $NEW"
+  || mal "the agent was not enabled for $NEW"
 if grep -vs -- '^[[:space:]]*--' "/home/$NEW/.config/hypr/autostart.lua" 2>/dev/null | grep -qs spice-vdagent; then
-  mal "autostart.lua lanza el agente oficial: vdagentd desconectara a los dos"
+  mal "autostart.lua launches the stock agent: vdagentd will disconnect both"
 else
   bien "autostart.lua no lanza el agente oficial"
 fi
 
-[ "$(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l)" -eq 0 ] && bien "sin claves ssh de host" || mal "quedan claves ssh de host"
+[ "$(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l)" -eq 0 ] && bien "no ssh host keys" || mal "ssh host keys left behind"
 
 # Binaries built inside the VM: the build path stays in their debug info.
 # grep -rl does not see them because it looks at text, not symbols.
@@ -453,27 +453,27 @@ if [ "$OLD" != "$NEW" ]; then
   # strings may be absent (it ships in binutils); if it is, say so and do not
   # inventa un veredicto.
   if ! command -v strings >/dev/null 2>&1; then
-    echo "  ? binarios de /usr/local/bin: sin 'strings' no se puede comprobar"
+    echo "  ? /usr/local/bin binaries: without 'strings' this cannot be checked"
   else
     SUCIOS=""
     for b in /usr/local/bin/*; do
       [ -f "$b" ] || continue
       strings "$b" 2>/dev/null | grep -q "/home/$OLD" && SUCIOS="$SUCIOS $b"
     done
-    [ -z "$SUCIOS" ] && bien "ningun binario de /usr/local/bin menciona al constructor" \
-                     || mal "binarios con la ruta del constructor dentro:$SUCIOS (ver RUSTFLAGS/CARGO_HOME en stage3)"
+    [ -z "$SUCIOS" ] && bien "no /usr/local/bin binary mentions the build account" \
+                     || mal "binaries carrying the build path inside:$SUCIOS (see RUSTFLAGS/CARGO_HOME in stage3)"
   fi
 fi
-[ -f /root/failed-packages.txt ] && mal "queda /root/failed-packages.txt" \
-                                 || bien "sin residuos del constructor en /root"
+[ -f /root/failed-packages.txt ] && mal "/root/failed-packages.txt left behind" \
+                                 || bien "no build-account leftovers in /root"
 
 N_HUERF=$(pacman -Qtdq 2>/dev/null | wc -l)
-[ "$N_HUERF" -eq 0 ] && bien "sin paquetes huerfanos" \
-                     || mal "$N_HUERF paquetes huerfanos: la primera actualizacion preguntara por ellos"
+[ "$N_HUERF" -eq 0 ] && bien "no orphan packages" \
+                     || mal "$N_HUERF orphan packages: the first update will prompt about them"
 
 echo ""
 if [ "$FALLOS" -ne 0 ]; then
-  echo "==> SANITIZE_FALLO: $FALLOS invariante(s) rotos; esta imagen NO se puede distribuir"
+  echo "==> SANITIZE_FAILED: $FALLOS broken invariant(s); this image must NOT be distributed"
   exit 1
 fi
 echo ""

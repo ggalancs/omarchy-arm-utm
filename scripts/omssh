@@ -1,8 +1,8 @@
 #!/bin/bash
-# Atajo para entrar por SSH en la VM durante el desarrollo.
+# Shortcut for SSH-ing into the VM during development.
 #   OM_HOST=192.168.64.20 OM_USER=builder ./scripts/omssh "comando"
-# La IP se puede sacar con:  utmctl ip-address "Omarchy ARM"
+# The IP can be obtained with:  utmctl ip-address "Omarchy ARM"
 : "${OM_USER:=builder}"
-: "${OM_HOST:?falta OM_HOST (la IP de la VM)}"
+: "${OM_HOST:?OM_HOST is missing (the VM's IP)}"
 exec ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
         -o LogLevel=ERROR -o ConnectTimeout=10 "$OM_USER@$OM_HOST" "$@"

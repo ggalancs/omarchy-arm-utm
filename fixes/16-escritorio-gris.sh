@@ -1,5 +1,5 @@
 #!/bin/bash
-# 16 · El escritorio gris
+# 16 - The grey desktop
 #
 # Symptom: the sanitized image booted with a flat grey wallpaper and
 # notifications as unstyled grey boxes. No error in journalctl.
@@ -21,23 +21,23 @@
 set -uo pipefail
 NEW=omarchy; OLD=gabriel
 
-echo "==> a) symlinks que apuntan al home antiguo"
+echo "==> a) symlinks pointing at the old home"
 mapfile -t BAD < <(find /home/$NEW /etc /usr/local /opt -xdev -type l -lname "*/home/$OLD/*" 2>/dev/null)
 echo "  encontrados: ${#BAD[@]}"
 for l in "${BAD[@]:-}"; do
   [ -n "$l" ] || continue
   t=$(readlink "$l"); ln -sfn "${t//\/home\/$OLD\//\/home\/$NEW\/}" "$l"
 done
-echo "  quedan: $(find /home/$NEW /etc /usr/local /opt -xdev -type l -lname "*/home/$OLD/*" 2>/dev/null | wc -l)"
+echo "  remaining: $(find /home/$NEW /etc /usr/local /opt -xdev -type l -lname "*/home/$OLD/*" 2>/dev/null | wc -l)"
 echo "  fondo: $(readlink -f /home/$NEW/.local/state/omarchy/current/background)"
 
-echo "==> b) paquetes que Omarchy 4 jubila"
+echo "==> b) packages Omarchy 4 retires"
 pacman -Rns --noconfirm mako swayosd walker elephant 2>&1 | tail -3
 rm -rf /home/$NEW/.config/mako /home/$NEW/.config/walker /home/$NEW/.config/swayosd
 rm -f  /usr/local/bin/walker
 O=$(pacman -Qtdq 2>/dev/null | tr '\n' ' '); [ -n "${O// /}" ] && pacman -Rns --noconfirm $O >/dev/null 2>&1
 
-echo "==> verificacion"
+echo "==> verification"
 echo "  enlaces rotos: $(find /home/$NEW /usr/local/bin -xdev -type l ! -exec test -e {} \; -print 2>/dev/null | wc -l)"
 echo "  jubilados presentes: $(for p in mako swayosd walker elephant; do pacman -Q $p >/dev/null 2>&1 && echo -n "$p "; done; echo -n ninguno)"
 sync

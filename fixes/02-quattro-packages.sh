@@ -6,7 +6,7 @@
 set -uo pipefail
 log() { echo ""; echo "==> $*"; }
 
-log "paquetes que faltan de la lista de quattro"
+log "packages missing from quattro's list"
 # quickshell-git does not exist in Arch Linux ARM; quickshell 0.3.1 replaces it
 PKGS=(quickshell bluez-tools bluez-utils ddcutil dua-cli foot inotify-tools
       libvips lua51 mpv-mpris qrencode qt6-imageformats udiskie wtype yt-dlp
@@ -16,10 +16,10 @@ sudo pacman -S --noconfirm --needed "${PKGS[@]}" 2>&1 | tail -12 || {
   for p in "${PKGS[@]}"; do sudo pacman -S --noconfirm --needed "$p" >/dev/null 2>&1 || echo "   falla: $p"; done
 }
 
-log "comprobacion"
+log "verification"
 for b in quickshell udiskie wtype ddcutil; do printf "  %-14s %s\n" "$b" "$(command -v $b || echo NO)"; done
 
-log "ajustes de VM en los ficheros .lua correctos"
+log "VM tweaks in the right .lua files"
 # quattro uses Lua configuration: the .conf files written during the build
 # (monitors.conf, autostart.conf) are read by nobody. The settings go in
 # monitors.lua.
@@ -44,7 +44,7 @@ hyprctl reload 2>&1 | head -3
 setsid omarchy-launch-shell >/tmp/shell.log 2>&1 &
 sleep 8
 echo "  procesos:"; pgrep -a quickshell | head -3; pgrep -a elephant | head -2
-echo "  log del shell:"; tail -15 /tmp/shell.log 2>/dev/null
+echo "  shell log:"; tail -15 /tmp/shell.log 2>/dev/null
 
 log "estado final"
 pgrep -a Hyprland | head -1

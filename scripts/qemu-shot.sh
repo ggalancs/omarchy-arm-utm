@@ -6,7 +6,7 @@ set -e
 # cloned anywhere without editing anything.
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
-: "${DISK_IMG:?falta DISK_IMG}"
+: "${DISK_IMG:?DISK_IMG is missing}"
 : "${OUT:=shots/qemu-shot.png}"
 : "${WAIT:=150}"
 FW=$(brew --prefix qemu)/share/qemu/edk2-aarch64-code.fd
@@ -32,7 +32,7 @@ QPID=$!
 trap 'kill -TERM $QPID 2>/dev/null; rm -f "$VARS"' EXIT
 
 for i in $(seq 1 30); do [ -S "$MON" ] && break; sleep 1; done
-echo "arrancando, esperando ${WAIT}s al escritorio..."
+echo "booting, waiting ${WAIT}s for the desktop..."
 sleep "$WAIT"
 
 # Despierta la sesion: tras ~2 min hypridle lanza el salvapantallas y la

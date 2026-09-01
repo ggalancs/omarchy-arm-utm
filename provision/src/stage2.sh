@@ -48,7 +48,7 @@ pac() {
   return 1
 }
 
-log "actualizando el sistema (el tarball es de agosto, los repos van al dia)"
+log "updating the system (the tarball is from August, the repos are current)"
 pacman -Syu --noconfirm --needed --disable-download-timeout \
   || pacman -Syu --noconfirm --needed --disable-download-timeout
 
@@ -96,7 +96,7 @@ fi
 cat /etc/fstab
 
 # ---------------------------------------------------------------- user
-log "usuario $VM_USER"
+log "user $VM_USER"
 userdel -r alarm 2>/dev/null || true
 if ! id -u "$VM_USER" >/dev/null 2>&1; then
   useradd -m -G wheel,video,audio,input,storage,network,lp -s /bin/bash -c "$VM_FULLNAME" "$VM_USER"
@@ -124,7 +124,7 @@ bootctl --esp-path=/boot --no-variables install
 # kernel. "pacman -S --needed" will not put it back when the installed version
 # already matches the repository, so the package is reinstalled by force.
 if [ ! -f /boot/Image ] && [ ! -f /boot/vmlinuz-linux-aarch64 ]; then
-  echo "  /boot vacio: reinstalando linux-aarch64 para repoblarlo"
+  echo "  /boot empty: reinstalling linux-aarch64 to repopulate it"
   pacman -S --noconfirm --disable-download-timeout linux-aarch64 || warn "no se pudo reinstalar el kernel"
   mkinitcpio -P || warn "mkinitcpio fallo tras reinstalar"
 fi
@@ -133,7 +133,7 @@ KERNEL_IMG=""
 for c in /boot/Image /boot/vmlinuz-linux-aarch64 /boot/Image.gz; do
   [ -f "$c" ] && { KERNEL_IMG="/$(basename "$c")"; break; }
 done
-[ -n "$KERNEL_IMG" ] || { warn "no encuentro la imagen del kernel en /boot"; ls -la /boot; exit 1; }
+[ -n "$KERNEL_IMG" ] || { warn "cannot find the kernel image in /boot"; ls -la /boot; exit 1; }
 
 INITRD=""
 for c in /boot/initramfs-linux-aarch64.img /boot/initramfs-linux.img; do
@@ -164,7 +164,7 @@ echo "  kernel=$KERNEL_IMG initrd=$INITRD"
 echo "  ESP:"; find /boot/EFI /boot/loader -maxdepth 3 | sort
 
 # ---------------------------------------------------------------- network
-log "red: NetworkManager (se desactiva systemd-networkd del tarball)"
+log "network: NetworkManager (the tarball's systemd-networkd is disabled)"
 systemctl disable systemd-networkd.service systemd-networkd.socket 2>/dev/null || true
 systemctl disable systemd-resolved.service 2>/dev/null || true
 rm -f /etc/systemd/network/*.network 2>/dev/null || true
@@ -172,7 +172,7 @@ systemctl enable NetworkManager.service
 systemctl enable systemd-timesyncd.service 2>/dev/null || true
 
 # ---------------------------------------------------------------- desktop
-log "instalando el stack de escritorio (Hyprland + herramientas de Omarchy)"
+log "installing the desktop stack (Hyprland + Omarchy's tools)"
 install_list() {
   local file="$1" label="$2" fatal="$3"
   mapfile -t PKGS < <(grep -vE '^\s*#|^\s*$' "$file")
@@ -194,7 +194,7 @@ install_list() {
   fi
   return 0
 }
-install_list /root/prov/packages-core.txt  "nucleo" fatal
+install_list /root/prov/packages-core.txt  "core" fatal
 set +e
 install_list /root/prov/packages-extra.txt "extras" soft
 set -e
@@ -236,7 +236,7 @@ rm -rf /etc/systemd/system/spice-vdagentd.service.d
 printf 'SPICE_VDAGENTD_EXTRA_ARGS=-X\n' > /etc/conf.d/spice-vdagentd
 systemctl enable spice-vdagentd.service 2>/dev/null || true
 systemctl enable spice-vdagentd.socket 2>/dev/null || true
-echo "  spice-vdagentd con -X (necesario bajo Hyprland)"
+echo "  spice-vdagentd with -X (required under Hyprland)"
 
 # NO udev rule is installed for /dev/virtio-ports/com.redhat.spice.0.
 # There used to be one, and it was wrong twice over: omarchy-arm-vdagent never
@@ -301,13 +301,13 @@ if ! grep -q '^share ' /etc/fstab; then
 share  /mnt/share  9p  trans=virtio,version=9p2000.L,rw,nofail,x-systemd.automount,_netdev,msize=512000  0  0
 FSTAB
 fi
-echo "  /mnt/share preparado (VirtFS por fstab, WebDAV con omarchy-arm-share)"
+echo "  /mnt/share prepared (VirtFS through fstab, WebDAV with omarchy-arm-share)"
 systemctl enable bluetooth.service 2>/dev/null || true
 systemctl enable docker.service 2>/dev/null || true
 usermod -aG docker "$VM_USER" 2>/dev/null || true
 
 # ---------------------------------------------------------------- dotfiles
-log "etapa 3: dotfiles de Omarchy como $VM_USER"
+log "stage 3: Omarchy dotfiles as $VM_USER"
 chmod +x /root/prov/stage3.sh
 install -d -o "$VM_USER" -g "$VM_USER" "/home/$VM_USER"
 # stage3 runs as a normal user and /root is 0750: any test of its own against
@@ -321,7 +321,7 @@ done
 cp /root/prov/stage3.sh /root/prov/config.env "/home/$VM_USER/"
 chown -R "$VM_USER:$VM_USER" "$PROVDIR"
 chown "$VM_USER:$VM_USER" "/home/$VM_USER/stage3.sh" "/home/$VM_USER/config.env"
-echo "  disponible para stage3: $(ls "$PROVDIR" | tr '\n' ' ')"
+echo "  available to stage3: $(ls "$PROVDIR" | tr '\n' ' ')"
 # stage3's outcome has to reach the host: it used to degrade to a warning and
 # stage2 emitted its success token anyway, so a stage3 that failed outright
 # produced a disk without a single Omarchy dotfile, declared OK.
@@ -333,13 +333,13 @@ echo "  disponible para stage3: $(ls "$PROVDIR" | tr '\n' ' ')"
 # en contexto probado y set -e no interviene.
 STAGE3_RC=0
 su - "$VM_USER" -c "bash ~/stage3.sh" || STAGE3_RC=$?
-[ $STAGE3_RC -eq 0 ] || warn "stage3 termino con errores (rc=$STAGE3_RC)"
+[ $STAGE3_RC -eq 0 ] || warn "stage3 finished with errors (rc=$STAGE3_RC)"
 echo "TOK_STAGE3_$STAGE3_RC"
 rm -f "/home/$VM_USER/stage3.sh" "/home/$VM_USER/config.env"
 rm -rf "$PROVDIR"
 
 # ---------------------------------------------------------------- login SDDM
-log "SDDM: sesion Omarchy con autologin"
+log "SDDM: Omarchy session with autologin"
 OM="/home/$VM_USER/.local/share/omarchy"
 mkdir -p /usr/local/share/wayland-sessions /etc/sddm.conf.d /usr/share/sddm
 if [ -f "$OM/default/wayland-sessions/omarchy.desktop" ]; then
@@ -398,8 +398,8 @@ echo "  kernel:    $(pacman -Q linux-aarch64 2>/dev/null || echo '?')"
 echo "  hyprland:  $(pacman -Q hyprland 2>/dev/null || echo 'NO INSTALADO')"
 echo "  sddm:      $(pacman -Q sddm 2>/dev/null || echo 'NO INSTALADO')"
 echo "  mesa:      $(pacman -Q mesa 2>/dev/null || echo '?')"
-echo "  usuario:   $(id "$VM_USER")"
-echo "  dotfiles:  $(ls -d /home/$VM_USER/.config/hypr 2>/dev/null || echo 'FALTAN')"
+echo "  user:      $(id "$VM_USER")"
+echo "  dotfiles:  $(ls -d /home/$VM_USER/.config/hypr 2>/dev/null || echo 'MISSING')"
 sync
 touch /root/STAGE2_OK
 echo ""

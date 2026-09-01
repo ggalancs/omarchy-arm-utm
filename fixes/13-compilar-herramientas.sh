@@ -35,7 +35,7 @@ build() {                      # build <origen> <paquete>
       cp -a "$dir/repo/pkgbuilds/$pkg/." "$dir/" 2>/dev/null || { KO+=("$pkg:sparse"); return 1; }
       rm -rf "$dir/repo" ;;
   esac
-  [ -f "$dir/PKGBUILD" ] || { KO+=("$pkg:sin PKGBUILD"); note "FALLO: no hay PKGBUILD"; return 1; }
+  [ -f "$dir/PKGBUILD" ] || { KO+=("$pkg:no PKGBUILD"); note "FAIL: no PKGBUILD"; return 1; }
 
   # Many PKGBUILDs list only x86_64 because nobody has built them for ARM. If
   # the code is portable (Rust/Go/C++), declaring the architecture is enough.
@@ -44,7 +44,7 @@ build() {                      # build <origen> <paquete>
   # aarch64.
   if ! grep -qE "^arch=\(.*\b(aarch64|any)\b" "$dir/PKGBUILD"; then
     sed -i "s/^arch=(\(.*\))/arch=(\1 'aarch64')/" "$dir/PKGBUILD"
-    note "arch= parcheado para incluir aarch64"
+    note "arch= patched to include aarch64"
   fi
   note "$(grep -m1 '^pkgver=' "$dir/PKGBUILD")  $(grep -m1 '^arch=' "$dir/PKGBUILD")"
 
@@ -86,7 +86,7 @@ log "RESUMEN"
 echo "  compilados (${#OK[@]}): ${OK[*]:-ninguno}"
 echo "  fallidos   (${#KO[@]}): ${KO[*]:-ninguno}"
 echo ""
-echo "  binarios disponibles ahora:"
+echo "  binaries available now:"
 for b in omacalc omacut omawrite aether cliamp herdr tensaku ttfx tzupdate mise try; do
   printf "    %-12s %s\n" "$b" "$(command -v $b 2>/dev/null || echo '-')"
 done

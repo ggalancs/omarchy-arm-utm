@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Re-incrusta provision/src/* en los heredocs __PAYLOAD_*__ de build-omarchy-arm.sh."""
+"""Re-embeds provision/src/* into build-omarchy-arm.sh's __PAYLOAD_*__ heredocs."""
 import sys, os
 RAIZ="/Users/gabriel/Development/2026/omarchy_ai"
 MAPA={
@@ -25,15 +25,15 @@ lineas=open(p).read().split("\n")
 cambios=0
 for marca,rel in MAPA.items():
     ini=next((i for i,l in enumerate(lineas) if l.rstrip().endswith("<<'%s'"%marca)), None)
-    if ini is None: print(f"  !! sin apertura: {marca}"); continue
+    if ini is None: print(f"  !! no opening marker: {marca}"); continue
     fin=next(j for j in range(ini+1,len(lineas)) if lineas[j]==marca)
     nuevo=open(os.path.join(RAIZ,rel)).read().rstrip("\n").split("\n")
     if lineas[ini+1:fin]==nuevo: continue
     lineas[ini+1:fin]=nuevo
     cambios+=1
-    print(f"  re-incrustado {os.path.basename(rel)} ({len(nuevo)} lineas)")
+    print(f"  re-embedded {os.path.basename(rel)} ({len(nuevo)} lineas)")
 open(p,"w").write("\n".join(lineas))
-print(f"  {cambios} payload(s) actualizados" if cambios else "  todo ya estaba sincronizado")
+print(f"  {cambios} payload(s) updated" if cambios else "  everything was already in sync")
 
 # A payload with no entry in MAPA is a file nobody re-syncs: you edit the
 # source, nothing happens, and the builder keeps deploying the old one.
@@ -41,5 +41,5 @@ import re
 todas=set(re.findall(r"<<'(__PAYLOAD_[A-Z0-9_.-]+__)'", "\n".join(lineas)))
 huerfanas=sorted(todas - set(MAPA))
 if huerfanas:
-    print("  sin fuente declarada (su fuente de verdad es el propio payload):")
+    print("  no declared source (the payload itself is the source of truth):")
     for h in huerfanas: print(f"    {h}")

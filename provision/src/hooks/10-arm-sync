@@ -18,7 +18,7 @@ if [ -w "$TREE/.git" ]; then GIT=(git -C "$TREE"); else GIT=(sudo git -C "$TREE"
 echo -e "\e[32m\nActualizar el árbol de Omarchy (checkout git)\e[0m"
 before=$("${GIT[@]}" rev-parse --short HEAD 2>/dev/null)
 if ! "${GIT[@]}" pull --ff-only 2>&1 | sed 's/^/  /'; then
-  echo "  no se pudo hacer fast-forward; el árbol queda como estaba"
+  echo "  could not fast-forward; the tree is left as it was"
   exit 0
 fi
 after=$("${GIT[@]}" rev-parse --short HEAD 2>/dev/null)

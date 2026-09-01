@@ -7,7 +7,7 @@ export WAYLAND_DISPLAY=$(ls /run/user/1000 | grep -m1 '^wayland-[0-9]')
 export OMARCHY_PATH=/usr/share/omarchy
 export PATH=/usr/local/bin:$PATH
 
-log "monitors.lua con la API correcta (hl.*), escala 1 para la VM"
+log "monitors.lua with the right API (hl.*), scale 1 for the VM"
 cat > ~/.config/hypr/monitors.lua <<'LUA'
 -- See https://wiki.hypr.land/Configuring/Basics/Monitors/
 -- List current monitors and supported resolutions with: hyprctl monitors all
@@ -29,12 +29,12 @@ hyprctl reload 2>&1 | head -3
 sleep 2
 echo "  configerrors: [$(hyprctl configerrors 2>&1 | head -3)]"
 
-log "estado del escritorio"
+log "desktop state"
 hyprctl monitors 2>&1 | head -6
 echo "--- procesos ---"
 for p in Hyprland quickshell mako elephant udiskie swaybg; do printf "  %-12s %s\n" "$p" "$(pgrep -a $p | head -1 || echo '-')"; done
 
-log "captura de pantalla desde dentro"
+log "screenshot from inside"
 mkdir -p ~/shots
 grim ~/shots/desktop.png 2>&1 && ls -lh ~/shots/desktop.png || echo "  grim fallo"
 

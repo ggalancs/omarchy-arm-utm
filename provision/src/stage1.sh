@@ -13,7 +13,7 @@ trap 'rc=$?; [ "$rc" -ne 0 ] && echo "TOK_BUILD_$rc"' EXIT
 log "red"
 ip link set eth0 up 2>/dev/null || true
 udhcpc -i eth0 -q -n -t 15 >/dev/null 2>&1 || true
-ip -4 addr show eth0 | grep -o 'inet [0-9.]*' || echo "  (sin IPv4)"
+ip -4 addr show eth0 | grep -o 'inet [0-9.]*' || echo "  (no IPv4)"
 
 log "repositorios y herramientas de Alpine"
 V=$(cut -d. -f1,2 < /etc/alpine-release)
@@ -25,14 +25,14 @@ apk update >/dev/null
 apk add --no-cache parted dosfstools btrfs-progs libarchive-tools e2fsprogs >/dev/null
 echo "  ok: $(parted --version | head -1)"
 
-log "cargando modulos de sistema de ficheros del kernel del live"
+log "loading filesystem modules from the live kernel"
 for m in btrfs vfat fat nls_cp437 nls_iso8859-1 nls_utf8 crc32c-generic xxhash_generic; do
   modprobe "$m" 2>/dev/null || true
 done
 if grep -qw btrfs /proc/filesystems; then
   ROOTFS=btrfs
 else
-  warn "btrfs no disponible en el kernel del live -> se usara ext4 para la raiz"
+  warn "btrfs unavailable in the live kernel -> ext4 will be used for the root"
   ROOTFS=ext4
 fi
 grep -qw vfat /proc/filesystems || warn "vfat no listado en /proc/filesystems"
@@ -87,7 +87,7 @@ mkdir -p /mnt/boot
 mount -t vfat "${DISK}1" /mnt/boot
 df -h /mnt /mnt/boot
 
-log "montajes del chroot"
+log "chroot mounts"
 for d in proc sys dev run tmp; do mkdir -p "/mnt/$d"; done
 mount -t proc  none /mnt/proc
 mount -t sysfs none /mnt/sys
@@ -97,7 +97,7 @@ mount -t tmpfs none /mnt/run
 mount -t tmpfs -o size=4G none /mnt/tmp
 mkdir -p /mnt/dev/pts && mount -t devpts none /mnt/dev/pts 2>/dev/null || true
 
-log "DNS dentro del chroot"
+log "DNS inside the chroot"
 rm -f /mnt/etc/resolv.conf
 printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /mnt/etc/resolv.conf
 
@@ -113,7 +113,7 @@ cp "$PROV/stage2.sh" "$PROV/stage3.sh" "$PROV/config.env" \
 # No silent `&&`: if it is missing, say so. The quiet guard on this line
 # shipped a whole image without the command and nobody noticed until boot.
 if [ -f "$PROV/user.sh" ]; then cp "$PROV/user.sh" /mnt/root/prov/omarchy-arm-user
-else echo "  !! falta user.sh en el ISO: la imagen saldra sin omarchy-arm-user"; fi
+else echo "  !! user.sh missing from the ISO: the image will ship without omarchy-arm-user"; fi
 cat > /mnt/root/prov/fsinfo.env <<EOF
 ROOTFS=$ROOTFS
 ROOT_MOUNT_OPTS=$MOPT_ROOT
