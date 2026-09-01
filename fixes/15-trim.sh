@@ -1,5 +1,5 @@
 #!/bin/bash
-# Quita peso muerto: dependencias que solo hacian falta para COMPILAR.
+# Sheds dead weight: dependencies that were only needed to BUILD.
 set -uo pipefail
 NEW=omarchy
 log(){ echo; echo "==> $*"; }
@@ -11,7 +11,7 @@ log "paquetes mas grandes"
 expac -H M '%m\t%n' 2>/dev/null | sort -rh | head -12 | sed 's/^/  /'
 
 log "quitando dependencias de compilacion"
-# Pinta necesita dotnet-runtime, NO el SDK. OBS ya esta compilado.
+# Pinta needs dotnet-runtime, NOT the SDK. OBS is already compiled.
 for p in dotnet-sdk-bin dotnet-targeting-pack-bin aspnet-targeting-pack-bin; do
   pacman -Q "$p" >/dev/null 2>&1 && { pacman -Rns --noconfirm "$p" >/dev/null 2>&1 && echo "  quitado $p" || echo "  no se pudo quitar $p"; }
 done

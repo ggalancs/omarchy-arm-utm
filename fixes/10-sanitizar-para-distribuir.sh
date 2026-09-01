@@ -1,14 +1,15 @@
 #!/bin/bash
-# Prepara la imagen para distribuirla a terceros: quita todo lo identificativo
-# y deja un usuario generico. Se ejecuta como ROOT dentro del chroot.
+# Prepares the image for handing to others: strips everything identifying and
+# leaves a generic user. Runs as ROOT inside the chroot.
 set -uo pipefail
 OLD=gabriel
 NEW=omarchy
 log() { echo ""; echo "==> $*"; }
 
 log "1/10 desanclando /usr/share/omarchy del home del usuario"
-# Era un symlink a /home/gabriel/.local/share/omarchy, lo que ata el sistema a
-# ese usuario. Se convierte en directorio real (como haria el paquete pacman) y
+# It was a symlink to /home/<user>/.local/share/omarchy, which ties the system
+# to that account. It becomes a real directory (as the pacman package would)
+# and
 # el home pasa a apuntar ahi.
 if [ -L /usr/share/omarchy ]; then
   TARGET=$(readlink -f /usr/share/omarchy)
@@ -28,7 +29,7 @@ if id -u "$OLD" >/dev/null 2>&1; then
   echo "root:$NEW"  | chpasswd
 fi
 id "$NEW"
-# el home del usuario apunta al arbol del sistema
+# the user's home points at the system tree
 install -d -o "$NEW" -g "$NEW" "/home/$NEW/.local/share"
 rm -rf "/home/$NEW/.local/share/omarchy"
 ln -sfn /usr/share/omarchy "/home/$NEW/.local/share/omarchy"

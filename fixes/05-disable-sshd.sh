@@ -1,6 +1,6 @@
 #!/bin/bash
-# Fleco 2: revertir el acceso SSH que habilite solo para aprovisionar.
-# Se ejecuta como ROOT dentro del chroot.
+# Loose end 2: revert the SSH access enabled only for provisioning.
+# Runs as ROOT inside the chroot.
 set -uo pipefail
 USR=gabriel
 log() { echo ""; echo "==> $*"; }

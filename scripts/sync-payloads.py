@@ -35,8 +35,8 @@ for marca,rel in MAPA.items():
 open(p,"w").write("\n".join(lineas))
 print(f"  {cambios} payload(s) actualizados" if cambios else "  todo ya estaba sincronizado")
 
-# Un payload sin entrada en MAPA es un fichero que nadie vuelve a sincronizar:
-# se edita la fuente, no pasa nada, y el constructor sigue desplegando lo viejo.
+# A payload with no entry in MAPA is a file nobody re-syncs: you edit the
+# source, nothing happens, and the builder keeps deploying the old one.
 import re
 todas=set(re.findall(r"<<'(__PAYLOAD_[A-Z0-9_.-]+__)'", "\n".join(lineas)))
 huerfanas=sorted(todas - set(MAPA))

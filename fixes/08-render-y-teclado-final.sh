@@ -6,8 +6,8 @@ export OMARCHY_PATH=/usr/share/omarchy
 echo "=== refuerzo: env de uwsm (cualquier app lanzada por la sesion) ==="
 mkdir -p ~/.config/uwsm/env.d
 cat > ~/.config/uwsm/env.d/20-vm-graphics <<'ENVEOF'
-# Bajo virtio-gpu/virgl las ventanas de clientes GPU se mapean pero no se
-# pintan. Con llvmpipe entregan buffers wl_shm y se ven correctamente.
+# Under virtio-gpu/virgl, GPU clients map their windows but never paint them.
+# With llvmpipe they hand over wl_shm buffers and display correctly.
 export LIBGL_ALWAYS_SOFTWARE=1
 ENVEOF
 systemctl --user set-environment LIBGL_ALWAYS_SOFTWARE=1

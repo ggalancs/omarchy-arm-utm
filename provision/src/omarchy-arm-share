@@ -19,11 +19,11 @@ URL=http://localhost:9843/
 
 hay_9p()     { grep -qw 9p /proc/filesystems 2>/dev/null && [ -e /sys/bus/virtio/drivers/9pnet_virtio ]; }
 hay_webdav() { [ -e "$PUERTO_WEBDAV" ]; }
-# OJO: `mountpoint -q` NO vale aqui. La entrada de fstab lleva
-# x-systemd.automount, asi que /mnt/share es SIEMPRE un punto de montaje -el
-# del autofs- aunque no haya nada detras. Con mountpoint, este script decia
-# "ya esta montado" y no montaba nunca: en modo SPICE WebDAV no funcionaba
-# jamas y el usuario veia "No such device" al listar.
+# CAREFUL: `mountpoint -q` will NOT do here. The fstab entry carries
+# x-systemd.automount, so /mnt/share is ALWAYS a mount point -- the autofs one
+# -- even with nothing behind it. With mountpoint, this script answered
+# "already mounted" and never mounted anything: in SPICE WebDAV mode it could
+# not work at all, and the user saw "No such device" when listing it.
 montado() {
   local t
   t=$(findmnt -n -o FSTYPE "$PUNTO" 2>/dev/null | tail -1)
@@ -45,16 +45,16 @@ montar() {
   montado && { echo "already mounted on $PUNTO"; return 0; }
   sudo mkdir -p "$PUNTO"
 
-  # 1) VirtFS: lo más simple, si el dispositivo está
+  # 1) VirtFS: the simplest one, if the device is there
   if sudo mount -t 9p -o trans=virtio,version=9p2000.L,rw,msize=512000 "$TAG" "$PUNTO" 2>/dev/null; then
     echo "mounted over VirtFS (9p) on $PUNTO"; return 0
   fi
 
   # 2) SPICE WebDAV
   if hay_webdav; then
-    # El autofs de fstab ocupa el punto y solo sabe montar 9p. Mientras siga
-    # ahi, davfs no puede montar encima. Se suelta; si luego eliges VirtFS,
-    # vuelve solo en el siguiente arranque.
+    # The fstab autofs owns the mount point and only knows how to mount 9p.
+    # While it sits there, davfs cannot mount on top. Release it; if you later
+    # pick VirtFS, it comes back on the next boot.
     sudo systemctl stop mnt-share.automount 2>/dev/null || true
     sudo mkdir -p "$PUNTO"
     sudo systemctl start spice-webdavd 2>/dev/null || true
@@ -67,7 +67,7 @@ montar() {
       echo "  systemctl status spice-webdavd" >&2
       return 1
     fi
-    # davfs2 pregunta usuario y contraseña: aquí no hacen falta
+    # davfs2 asks for a username and password: neither is needed here
     if printf '\n\n' | sudo mount -t davfs -o rw,uid=$(id -u),gid=$(id -g) "$URL" "$PUNTO" 2>/dev/null; then
       echo "mounted over SPICE WebDAV on $PUNTO"; return 0
     fi

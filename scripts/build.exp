@@ -1,5 +1,5 @@
 #!/usr/bin/expect -f
-# Conduce la construcción por consola serie del live de Alpine.
+# Drives the build over the Alpine live system's serial console.
 set timeout 900
 log_user 1
 match_max 400000
@@ -14,16 +14,16 @@ proc wait_for {pat code msg {t 900}} {
     }
 }
 
-# write_payloads sustituye @OMARM_ROOT@ al desplegar este fichero. Si el
-# marcador sigue ahi es que se esta ejecutando desde un clon del repositorio:
-# entonces la raiz viene de OMARM_ROOT o del directorio actual.
+# write_payloads substitutes @OMARM_ROOT@ when it deploys this file. If the
+# marker is still there, it is running from a clone of the repository: the root
+# then comes from OMARM_ROOT or the current directory.
 set ROOT "@OMARM_ROOT@"
 if {[string match "@*@" $ROOT]} {
   set ROOT [expr {[info exists env(OMARM_ROOT)] ? $env(OMARM_ROOT) : [pwd]}]
 }
 spawn -noecho $ROOT/scripts/qemu-build.sh
 
-# --- login del live de Alpine (root sin contraseña)
+# --- Alpine live login (root, no password)
 wait_for "localhost login:" 10 "el live de Alpine no llegó al login" 300
 send "root\r"
 wait_for "localhost:~#" 11 "no hay shell de root en Alpine" 120
@@ -40,7 +40,7 @@ wait_for "TOK_TGZ_0" 14 "falta el rootfs de Arch Linux ARM en el ISO" 60
 
 # --- construcción completa (particionado + chroot + paquetes + dotfiles)
 set timeout -1
-# stage1.sh emite el token TOK_BUILD_<rc> por si mismo (un pipe a tee
+# stage1.sh emits the TOK_BUILD_<rc> token itself (piping into tee
 # enmascararia el codigo de retorno).
 send "export DISK=/dev/vda; sh /media/prov/stage1.sh 2>&1 | tee /tmp/build.log\r"
 
@@ -60,7 +60,7 @@ expect {
     eof { die 16 "EOF durante la construcción" }
 }
 
-# --- verificación del disco resultante
+# --- verification of the resulting disk
 set timeout 600
 send "mount -o subvol=@ /dev/vda2 /mnt 2>/dev/null || mount /dev/vda2 /mnt; mount /dev/vda1 /mnt/boot 2>/dev/null; echo '==== VERIFICACION ===='; echo '-- ESP --'; find /mnt/boot -maxdepth 3 | head -40; echo '-- kernel --'; ls -la /mnt/boot/Image* /mnt/boot/initramfs* 2>/dev/null; echo '-- usuario --'; ls -la /mnt/home/; echo '-- dotfiles --'; for h in /mnt/home/*/; do echo \"  \$h:\"; ls \"\$h/.config\" 2>/dev/null | tr '\\n' ' '; echo; done; echo; echo '-- hyprland --'; ls -la /mnt/usr/bin/Hyprland 2>/dev/null; echo TOK_VERIFY_\$?\r"
 catch { wait_for "TOK_VERIFY_" 17 "verificación" 600 }

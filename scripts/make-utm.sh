@@ -1,15 +1,15 @@
 #!/bin/bash
-# Crea el bundle .utm a mano y lo registra en UTM.
+# Builds the .utm bundle by hand and registers it with UTM.
 #
-# UTM 4.7 sólo escanea ~/Library/Containers/com.utmapp.UTM/Data/Documents/ una
-# vez, al arrancar la app (listRefresh() se llama desde ContentView.onAppear),
-# así que hay que cerrar UTM, escribir el bundle y volver a abrirlo.
-# El config.plist requiere las DIEZ claves de primer nivel: se decodifican con
-# decode(), no decodeIfPresent(), y omitir cualquiera hace que UTM lo rechace.
+# UTM 4.7 only scans ~/Library/Containers/com.utmapp.UTM/Data/Documents/ once,
+# when the app starts (listRefresh() is called from ContentView.onAppear), so
+# UTM has to be quit, the bundle written, and the app opened again.
+# config.plist requires all TEN top-level keys: they are decoded with decode(),
+# not decodeIfPresent(), and omitting any one makes UTM reject it.
 set -euo pipefail
 
-# La raiz se deduce de la ubicacion del propio script: asi el repo se puede
-# clonar en cualquier sitio sin editar nada.
+# The root is derived from the script's own location, so the repo can be
+# cloned anywhere without editing anything.
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 DOCS="$HOME/Library/Containers/com.utmapp.UTM/Data/Documents"
 NAME="${1:-Omarchy ARM}"
@@ -24,14 +24,14 @@ VARS_TPL=/Applications/UTM.app/Contents/Resources/qemu/edk2-arm-vars.fd
 [ -f "$VARS_TPL" ] || { echo "!! falta la plantilla de NVRAM UEFI $VARS_TPL"; exit 1; }
 
 VM_UUID=$(uuidgen)
-# Quien reciba el bundle lee estas notas en UTM antes de arrancar: tienen que
-# decir las credenciales reales, no las del que lo construyo.
+# Whoever receives the bundle reads these notes in UTM before starting it:
+# they have to state the real credentials, not the builder's.
 NOTES_USER="${NOTES_USER:-omarchy}"
 NOTES_PASS="${NOTES_PASS:-$NOTES_USER}"
-# Estos dos van dentro de XML. Un '&' o un '<' en la contrasena rompia el
-# config.plist, y como el `plutil -lint` esta al final, el fallo llegaba DESPUES
-# de copiar el disco entero: nueve gigas gastados para morir con un mensaje que
-# no mencionaba la contrasena por ningun lado.
+# These two go inside XML. A '&' or a '<' in the password broke config.plist,
+# and since `plutil -lint` runs at the end, the failure arrived AFTER the whole
+# disk had been copied: nine gigabytes spent to die with a message that never
+# mentioned the password at all.
 xmlq() { printf "%s" "${1-}" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
 NOTES_USER=$(xmlq "$NOTES_USER")
 NOTES_PASS=$(xmlq "$NOTES_PASS")
@@ -39,9 +39,9 @@ NOTES_PASS=$(xmlq "$NOTES_PASS")
 DISK_UUID=$(uuidgen)
 MAC=$(printf '02:%02X:%02X:%02X:%02X:%02X' $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)))
 
-# UTM solo escanea Documents al arrancar la app, asi que para que reconozca el
-# bundle hay que reiniciarla. Pero cerrarla a la fuerza se lleva por delante las
-# VMs que el usuario tenga corriendo, asi que primero se comprueba.
+# UTM only scans Documents when the app starts, so it has to be restarted for
+# the bundle to be recognised. But quitting it by force takes down whatever VMs
+# the user has running, so that is checked first.
 if [ "$DEST_DIR" = "$DOCS" ] && pgrep -x UTM >/dev/null; then
   UTMCTL=/Applications/UTM.app/Contents/MacOS/utmctl
   CORRIENDO=$("$UTMCTL" list 2>/dev/null | awk '$2=="started"{print $3" "$4}' | grep -v "^$" || true)
@@ -74,7 +74,8 @@ rm -rf "$BUNDLE"
 mkdir -p "$BUNDLE/Data"
 echo "    copiando disco ($(du -h "$SRC_QCOW" | cut -f1))"
 cp -c "$SRC_QCOW" "$BUNDLE/Data/$DISK_UUID.qcow2" 2>/dev/null || cp "$SRC_QCOW" "$BUNDLE/Data/$DISK_UUID.qcow2"
-# La mitad VARS del UEFI aarch64 usa la plantilla edk2-ARM-vars.fd (no aarch64);
+# The VARS half of the aarch64 UEFI uses the edk2-ARM-vars.fd template (not
+# aarch64);
 # UTM aporta edk2-aarch64-code.fd en tiempo de ejecución vía -L.
 install -m 0644 "$VARS_TPL" "$BUNDLE/Data/efi_vars.fd"
 

@@ -1,23 +1,23 @@
 #!/bin/bash
 # 16 · El escritorio gris
 #
-# Sintoma: la imagen ya sanitizada arrancaba con el fondo en gris liso y las
-# notificaciones como cajas grises sin estilo. Ningun error en journalctl.
+# Symptom: the sanitized image booted with a flat grey wallpaper and
+# notifications as unstyled grey boxes. No error in journalctl.
 #
-# Dos causas independientes, ninguna visible con las comprobaciones que hacia:
+# Two independent causes, neither visible to the checks in place at the time:
 #
-#  a) `grep -rl gabriel` daba 0 coincidencias porque grep lee CONTENIDO, y el
-#     destino de un symlink no lo es. Quedaban 439 enlaces apuntando al home
-#     antiguo, incluidos los 431 comandos omarchy-* de /usr/local/bin y el
+#  a) `grep -rl <user>` returned 0 matches because grep reads CONTENT, and a
+#     symlink's target is not content. 439 links were still pointing at the old
+#     home, including the 431 omarchy-* commands in /usr/local/bin and the
 #     fondo activo (~/.local/state/omarchy/current/background).
 #
-#  b) Tenia instalados mako, swayosd, walker y elephant. Omarchy 4 los jubila
-#     (bin/omarchy-upgrade-to-quattro los desinstala) porque quickshell hace
-#     ese trabajo. mako se activa por D-Bus y le roba el nombre
-#     org.freedesktop.Notifications al shell.
+#  b) mako, swayosd, walker and elephant were installed. Omarchy 4 retires them
+#     (bin/omarchy-upgrade-to-quattro uninstalls them) because quickshell does
+#     that job. mako activates over D-Bus and steals the
+#     org.freedesktop.Notifications name from the shell.
 #
-# Corregido en origen: provision/src/sanitize.sh reescribe los symlinks y
-# verifica que el fondo resuelve; stage3.sh ya no instala esos cuatro paquetes.
+# Fixed at source: provision/src/sanitize.sh rewrites the symlinks and verifies
+# the wallpaper resolves; stage3.sh no longer installs those four packages.
 set -uo pipefail
 NEW=omarchy; OLD=gabriel
 

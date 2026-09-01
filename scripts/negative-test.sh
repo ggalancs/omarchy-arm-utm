@@ -1,36 +1,37 @@
 #!/bin/bash
 #
-#  prueba-negativa.sh — comprueba que las comprobaciones saben decir que NO
+#  negative-test.sh - proves the checks know how to say NO
 #  ────────────────────────────────────────────────────────────────────────────
-#  Se ejecuta DENTRO de la imagen, sobre un disco en -snapshot, asi que todo lo
-#  que rompe aqui se descarta al apagar.
+#  Runs INSIDE the image, on a disk in -snapshot mode, so everything it breaks
+#  is discarded on shutdown.
 #
-#  Existe porque una comprobacion que no puede fallar es peor que no tenerla:
-#  da confianza que nadie ha ganado. En este proyecto ya paso dos veces. El
-#  `grep VEREDICTO_OK` casaba con el eco de la propia orden en la consola serie,
-#  asi que TODAS las construcciones "pasaban". Y el aviso de reinicio por kernel
-#  se colaba porque la comprobacion del journal miraba prioridad 3 y esos
-#  errores salen por debajo.
+#  It exists because a check that cannot fail is worse than no check at all:
+#  it buys confidence nobody earned. It has already happened twice here. The
+#  `grep VERDICT_OK` matched the echo of the command itself on the serial
+#  console, so EVERY build "passed". And the kernel reboot prompt slipped
+#  through because the journal check looked at priority 3 and those errors log
+#  below it.
 #
-#  Metodo: se pasa la lista sobre la imagen intacta (debe salir LIMPIO), se
-#  rompen N cosas concretas, y se vuelve a pasar. Tienen que aparecer
-#  EXACTAMENTE las N que se han roto, ni una mas ni una menos. Una de menos es
-#  una comprobacion ciega; una de mas es un falso positivo.
+#  Method: run the list against the intact image (it must come out CLEAN),
+#  break N specific things, and run it again. EXACTLY those N must show up,
+#  no more and no fewer. One short is a blind check; one extra is a false
+#  positive.
 #  ────────────────────────────────────────────────────────────────────────────
-LISTA=/media/chequeo-base.sh
-[ -r "$LISTA" ] || { echo "no encuentro $LISTA"; echo "FIN_CHEQUEO"; exit 2; }
+LISTA=/media/guest-check-base.sh
+[ -r "$LISTA" ] || { echo "no encuentro $LISTA"; echo "END_CHECK"; exit 2; }
 
 pasar() { bash "$LISTA" builder 2>&1; }
 
-# El recuento se saca del VEREDICTO, no de contar lineas por su prefijo. La
+# The count comes from the VERDICT, not from counting lines by their prefix.
 # lista imprime "  FALLO  ", no "  mal  ", y mi primer intento grepeaba el
-# prefijo equivocado: dio SIETE comprobaciones "ciegas" que en realidad
-# funcionaban. Si me lo llego a creer, salgo a arreglar codigo sano. El
-# VEREDICTO_CON_N lo cuenta la propia lista y no depende de como lo pinte.
+# The first attempt grepped the wrong prefix: it reported SEVEN "blind" checks
+# that were in fact working. Believing it would have meant going out to fix
+# healthy code. VERDICT_WITH_N is counted by the list itself and does not
+# depend on how it prints.
 cuenta() {
   case "$1" in
-    *VEREDICTO_LIMPIO*) echo 0 ;;
-    *VEREDICTO_CON_*)   echo "$1" | grep -o "VEREDICTO_CON_[0-9]*" | tail -1 | sed "s/.*_//" ;;
+    *VERDICT_CLEAN*) echo 0 ;;
+    *VERDICT_WITH_*)   echo "$1" | grep -o "VERDICT_WITH_[0-9]*" | tail -1 | sed "s/.*_//" ;;
     *)                  echo -1 ;;   # ni una cosa ni la otra: la lista no llego a terminar
   esac
 }
@@ -38,8 +39,8 @@ cuenta() {
 echo "== 1. imagen intacta: tiene que salir LIMPIA =="
 ANTES=$(pasar)
 echo "   fallos: $(cuenta "$ANTES")"
-if echo "$ANTES" | grep -q VEREDICTO_LIMPIO; then
-  echo "   VEREDICTO_LIMPIO  (correcto)"
+if echo "$ANTES" | grep -q VERDICT_CLEAN; then
+  echo "   VERDICT_CLEAN  (correcto)"
   BASE_OK=1
 else
   echo "   NO sale limpia; la prueba negativa no significa nada partiendo de aqui:"
@@ -49,13 +50,13 @@ fi
 
 echo
 echo "== 2. rompo cosas concretas =="
-# Cada sabotaje va emparejado con el texto de la comprobacion que DEBE
-# ponerse en rojo. Si alguna no reacciona, esa comprobacion es ciega.
+# Each sabotage is paired with the text of the check that MUST go red. If one
+# does not react, that check is blind.
 declare -a ESPERADOS=()
 
-# OJO: los textos de abajo tienen que casar con los `mal "..."` REALES de
-# chequeo-invitado.sh. En el primer intento me los invente de memoria y la
-# prueba habria dicho "ciega" por un fallo mio, no de la comprobacion.
+# CAREFUL: the texts below have to match the REAL `bad "..."` strings in
+# guest-check.sh. The first attempt made them up from memory, and the test
+# would have said "blind" over a mistake of mine, not the check's.
 
 useradd -m builder 2>/dev/null \
   && { echo "   + usuario builder"; ESPERADOS+=("sigue existiendo el usuario de construccion"); }
@@ -69,20 +70,20 @@ systemctl enable sshd >/dev/null 2>&1 \
 ln -sf /no/existe/en/ningun/sitio /usr/bin/enlace-roto-de-prueba \
   && { echo "   + enlace colgando sin dueno"; ESPERADOS+=("enlace colgando sin dueno"); }
 
-# El chequeo mira este fichero concreto, no cualquier residuo.
+# The check looks at this specific file, not at leftovers in general.
 touch /root/failed-packages.txt \
   && { echo "   + /root/failed-packages.txt"; ESPERADOS+=("queda /root/failed-packages.txt"); }
 
-# `git config --global` del usuario que ejecuta la lista, que aqui es root.
+# `git config --global` of whoever runs the list, which here is root.
 git config --global user.name "Prueba Negativa" 2>/dev/null \
   && { echo "   + identidad de git"; ESPERADOS+=("git user.name:"); }
 
 systemctl stop spice-vdagentd 2>/dev/null \
   && { echo "   + demonio del portapapeles parado"; ESPERADOS+=("demonio inactivo"); }
 
-# La comprobacion que caza toda la clase "algo no compilo". Se falsifica el
-# registro que deja stage3, que es exactamente lo que habria en una imagen a
-# la que le falte una herramienta.
+# The check that catches the whole "something failed to build" class. The
+# record stage3 leaves is forged, which is exactly what an image missing a tool
+# would carry.
 echo "paquete-inventado" >> /usr/local/share/omarchy-arm/no-compilaron.txt
 echo "   + entrada en el registro de compilaciones fallidas"
 ESPERADOS+=("no compilaron")
@@ -104,15 +105,15 @@ for e in "${ESPERADOS[@]}"; do
   echo "$DESPUES" | grep "FALLO" | grep -qFi "$e" \
     || { echo "   CIEGA: nadie reacciono a '$e'"; CIEGAS=$((CIEGAS+1)); }
 done
-if echo "$DESPUES" | grep -q VEREDICTO_LIMPIO; then
+if echo "$DESPUES" | grep -q VERDICT_CLEAN; then
   echo "   GRAVE: sigue diciendo LIMPIO con la imagen rota"
   CIEGAS=$((CIEGAS+1))
 fi
 
 if [ "$BASE_OK" = 1 ] && [ "$CIEGAS" = 0 ] && [ "$FALLOS" -ge "${#ESPERADOS[@]}" ]; then
-  echo "   PRUEBA_NEGATIVA_OK: la lista sabe decir que no"
+  echo "   NEGATIVE_TEST_OK: la lista sabe decir que no"
 else
-  echo "   PRUEBA_NEGATIVA_FALLO: $CIEGAS comprobacion(es) ciega(s)"
+  echo "   NEGATIVE_TEST_FAILED: $CIEGAS comprobacion(es) ciega(s)"
 fi
 echo
-echo "FIN_CHEQUEO"
+echo "END_CHECK"

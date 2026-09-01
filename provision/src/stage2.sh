@@ -1,6 +1,6 @@
 #!/bin/bash
-# Etapa 2 — dentro del chroot de Arch Linux ARM, como root.
-# Sistema base, kernel, arranque UEFI, paquetes del stack Omarchy y login.
+# Stage 2 - inside the Arch Linux ARM chroot, as root.
+# Base system, kernel, UEFI boot, the Omarchy package stack and login.
 set -euo pipefail
 . /root/prov/config.env
 . /root/prov/fsinfo.env
@@ -16,27 +16,27 @@ log "inicializando el llavero de Arch Linux ARM"
 pacman-key --init
 pacman-key --populate archlinuxarm
 
-# Una construccion de una hora no puede morir porque el mirror se atasque diez
-# segundos. Paso real: "failed retrieving file noto-fonts-...: Operation too
-# slow. Less than 1 bytes/sec transferred the last 10 seconds" -> la instalacion
-# en bloque cayo, el reintento uno a uno dejo pipewire-jack fuera y la etapa
-# aborto por su trap ERR, con 40 minutos ya invertidos.
+# An hour-long build cannot die because a mirror stalls for ten seconds. This
+# actually happened: "failed retrieving file noto-fonts-...: Operation too
+# slow. Less than 1 bytes/sec transferred the last 10 seconds" -> the bulk
+# install fell over, the one-by-one retry left pipewire-jack out, and the stage
+# aborted on its ERR trap with 40 minutes already spent.
 #
-# --disable-download-timeout quita ese limite de velocidad minima, que es lo que
-# aborto. Y se anade un segundo Server: el mirrorlist de ALARM trae solo el
-# geo-balanceador, asi que si el nodo que te toca va mal no hay a donde caer.
-# Un mirror extra no es un riesgo: pacman verifica la firma de cada paquete
-# contra el llavero de archlinuxarm.
+# --disable-download-timeout removes that minimum-speed limit, which is what
+# aborted. A second Server is added too: the ALARM mirrorlist ships only the
+# geo-balancer, so if the node you land on is unwell there is nowhere to fall
+# back to. An extra mirror is not a risk: pacman verifies every package
+# signature against the archlinuxarm keyring.
 if ! grep -q 'de.mirror.archlinuxarm.org' /etc/pacman.d/mirrorlist 2>/dev/null; then
   echo 'Server = http://de.mirror.archlinuxarm.org/$arch/$repo' >> /etc/pacman.d/mirrorlist
 fi
-# DisableDownloadTimeout en pacman.conf, no como flag suelto: asi lo heredan
-# TODAS las invocaciones, incluida la que hace makepkg -s por dentro para
-# resolver dependencias de compilacion.
+# DisableDownloadTimeout goes in pacman.conf rather than as a loose flag, so
+# EVERY invocation inherits it -- including the one makepkg -s makes internally
+# to resolve build dependencies.
 grep -q '^DisableDownloadTimeout' /etc/pacman.conf \
   || sed -i 's/^\[options\]/[options]\nDisableDownloadTimeout\nParallelDownloads = 5/' /etc/pacman.conf
 
-# Envoltorio con reintentos: el mirror falla por rachas, no de forma estable.
+# A retrying wrapper: mirrors fail in bursts, not steadily.
 pac() {
   local intento
   for intento in 1 2 3; do
@@ -53,21 +53,21 @@ pacman -Syu --noconfirm --needed --disable-download-timeout \
   || pacman -Syu --noconfirm --needed --disable-download-timeout
 
 log "sistema base"
-# linux-firmware se omite a proposito: ~800 MB inutiles en una VM
+# linux-firmware is left out on purpose: ~800 MB of no use in a VM
 pac base base-devel linux-aarch64 \
   sudo git vim networkmanager openssh which man-db man-pages less \
   btrfs-progs dosfstools e2fsprogs efibootmgr \
   rsync wget curl unzip zip
 
-# ---------------------------------------------------------------- localizacion
+# ---------------------------------------------------------------- locale
 log "zona horaria, locales, teclado, hostname"
 ln -sf "/usr/share/zoneinfo/$VM_TIMEZONE" /etc/localtime
 sed -i "s/^#\(${VM_LOCALE} \)/\1/; s/^#\(${VM_LOCALE_EXTRA} \)/\1/" /etc/locale.gen
 grep -q "^${VM_LOCALE} " /etc/locale.gen || echo "${VM_LOCALE} UTF-8" >> /etc/locale.gen
 locale-gen
 echo "LANG=$VM_LOCALE" > /etc/locale.conf
-# Hyprland lee XKBLAYOUT de aqui (default/hypr/input.lua); KEYMAP solo
-# cubre la consola de texto.
+# Hyprland reads XKBLAYOUT from here (default/hypr/input.lua); KEYMAP only
+# covers the text console.
 printf 'KEYMAP=%s\nXKBLAYOUT=%s\n' "$VM_KEYMAP" "$VM_XKB" > /etc/vconsole.conf
 echo "$VM_HOSTNAME" > /etc/hostname
 cat > /etc/hosts <<EOF
@@ -95,7 +95,7 @@ KERNEL_ROOTFLAGS=""
 fi
 cat /etc/fstab
 
-# ---------------------------------------------------------------- usuario
+# ---------------------------------------------------------------- user
 log "usuario $VM_USER"
 userdel -r alarm 2>/dev/null || true
 if ! id -u "$VM_USER" >/dev/null 2>&1; then
@@ -104,7 +104,7 @@ fi
 echo "$VM_USER:$VM_PASSWORD" | chpasswd
 echo "root:$VM_PASSWORD"     | chpasswd
 install -m 0440 /dev/stdin /etc/sudoers.d/10-wheel <<<'%wheel ALL=(ALL:ALL) ALL'
-# sin contrasena solo mientras dura la instalacion; se retira al final
+# passwordless only while the install runs; removed at the end
 install -m 0440 /dev/stdin /etc/sudoers.d/99-install <<<"$VM_USER ALL=(ALL:ALL) NOPASSWD: ALL"
 
 # ---------------------------------------------------------------- initramfs
@@ -114,15 +114,15 @@ grep -q '^MODULES=' /etc/mkinitcpio.conf || echo 'MODULES=(virtio virtio_pci vir
 mkinitcpio -P
 echo "  /boot:"; ls -la /boot
 
-# ---------------------------------------------------------------- arranque UEFI
+# ---------------------------------------------------------------- UEFI boot
 log "systemd-boot en la ESP"
-# --no-variables: no escribimos NVRAM; UTM arranca por la ruta de reserva
-# \EFI\BOOT\BOOTAA64.EFI, que bootctl instala igualmente.
+# --no-variables: we do not write NVRAM; UTM boots from the fallback path
+# \EFI\BOOT\BOOTAA64.EFI, which bootctl installs anyway.
 bootctl --esp-path=/boot --no-variables install
 
-# La ESP se monta vacia DESPUES de extraer el rootfs, asi que /boot no tiene
-# kernel. "pacman -S --needed" no lo repone si la version instalada ya coincide
-# con la del repositorio, asi que se fuerza la reinstalacion del paquete.
+# The ESP is mounted empty AFTER the rootfs is unpacked, so /boot has no
+# kernel. "pacman -S --needed" will not put it back when the installed version
+# already matches the repository, so the package is reinstalled by force.
 if [ ! -f /boot/Image ] && [ ! -f /boot/vmlinuz-linux-aarch64 ]; then
   echo "  /boot vacio: reinstalando linux-aarch64 para repoblarlo"
   pacman -S --noconfirm --disable-download-timeout linux-aarch64 || warn "no se pudo reinstalar el kernel"
@@ -163,7 +163,7 @@ EOF
 echo "  kernel=$KERNEL_IMG initrd=$INITRD"
 echo "  ESP:"; find /boot/EFI /boot/loader -maxdepth 3 | sort
 
-# ---------------------------------------------------------------- red
+# ---------------------------------------------------------------- network
 log "red: NetworkManager (se desactiva systemd-networkd del tarball)"
 systemctl disable systemd-networkd.service systemd-networkd.socket 2>/dev/null || true
 systemctl disable systemd-resolved.service 2>/dev/null || true
@@ -171,7 +171,7 @@ rm -f /etc/systemd/network/*.network 2>/dev/null || true
 systemctl enable NetworkManager.service
 systemctl enable systemd-timesyncd.service 2>/dev/null || true
 
-# ---------------------------------------------------------------- escritorio
+# ---------------------------------------------------------------- desktop
 log "instalando el stack de escritorio (Hyprland + herramientas de Omarchy)"
 install_list() {
   local file="$1" label="$2" fatal="$3"
@@ -182,7 +182,8 @@ install_list() {
   local FAILED=()
   for p in "${PKGS[@]}"; do
     pacman -S --noconfirm --needed --disable-download-timeout "$p" >/dev/null 2>&1 && continue
-    # Segunda pasada al que falle: casi siempre es el mirror, no el paquete.
+    # A second pass over whatever failed: it is almost always the mirror, not
+    # the package.
     sleep 3
     pacman -S --noconfirm --needed --disable-download-timeout "$p" >/dev/null 2>&1 || FAILED+=("$p")
   done
@@ -200,70 +201,72 @@ set -e
 
 log "servicios de sistema"
 systemctl enable sddm.service 2>/dev/null || warn "sddm no disponible"
-# Integracion con UTM: utmctl ip-address/exec/file necesitan el guest agent
+# UTM integration: utmctl ip-address/exec/file need the guest agent
 systemctl enable qemu-guest-agent.service 2>/dev/null || true
-# El rootfs de Arch Linux ARM viene con sshd arrancado, y aqui se instala
-# openssh y se pone la misma contrasena trivial al usuario y a root. Una VM
-# personal (sin la fase sanitize, que es donde estaba el unico disable) se
-# quedaba escuchando con omarchy/omarchy. Se apaga por defecto; quien lo quiera:
+# The Arch Linux ARM rootfs ships with sshd started, and this stage installs
+# openssh and gives the user and root the same trivial password. A personal VM
+# (without the sanitize phase, which held the only disable) was left listening
+# with omarchy/omarchy. It is off by default; if you want it:
 #   sudo systemctl enable --now sshd
 systemctl disable sshd.service 2>/dev/null || true
 systemctl disable sshd.socket  2>/dev/null || true
-# El portapapeles de SPICE tiene TRES piezas, no dos:
-#   cliente SPICE (UTM) <-puerto virtio-> spice-vdagentd <-socket unix-> agente
-# El demonio es quien habla con el anfitrion; el agente de sesion solo habla
-# con el demonio. Por eso hay que dejar vivo spice-vdagentd aunque su agente
-# oficial (X11) no sirva en Hyprland: lo que se sustituye es el agente, no el
-# demonio.
+# The SPICE clipboard has THREE pieces, not two:
+#   SPICE client (UTM) <-virtio port-> spice-vdagentd <-unix socket-> agent
+# The daemon is the one that talks to the host; the session agent only talks to
+# the daemon. That is why spice-vdagentd has to stay alive even though its own
+# stock agent (X11) is useless under Hyprland: what gets replaced is the
+# agent, not the daemon.
 #
-# Y hace falta -X: la comprobacion de "sesion activa de seat0"
-# (vdagentd.c:746, systemd-login.c:272) falla con Hyprland lanzado por SDDM, y
-# entonces el demonio descarta el portapapeles en silencio.
-# -X: sin integracion con logind. Sin esto el demonio no encuentra "la sesion
-# activa de seat0" bajo Hyprland y descarta el portapapeles sin avisar.
+# -X is required: the "active seat0 session" check (vdagentd.c:746,
+# systemd-login.c:272) fails with Hyprland launched by SDDM, and the daemon
+# then discards clipboard traffic silently, without logging anything.
 #
-# Se pone por la variable de entorno, no sobrescribiendo ExecStart: el unit de
-# Arch ya lee /etc/conf.d/spice-vdagentd y anade $SPICE_VDAGENTD_EXTRA_ARGS,
-# que es el punto de extension previsto. Asi los cambios que haga Arch en su
-# unit siguen valiendo.
+# It is passed through the environment variable rather than by overriding
+# ExecStart: Arch's own unit already reads /etc/conf.d/spice-vdagentd and
+# appends $SPICE_VDAGENTD_EXTRA_ARGS, which is the extension point it provides.
+# That way any change Arch makes to the unit keeps working.
 #
-# Y OJO con lo que NO se pone: aqui hubo un `-f`, que NO es "foreground" -eso
-# es `-x`- sino `--fake-uinput`: trata /dev/uinput como falso y se salta los
-# ioctl que configuran el dispositivo. Con el, el demonio no llegaba a crear el
-# puntero absoluto virtual y luego fallaba con "write /dev/uinput: Invalid
-# argument" en cada arranque. El raton dejaba de comportarse como antes.
+# And CAREFUL about what is NOT set here: there used to be a `-f`, which is
+# NOT "foreground" -- that is `-x` -- but `--fake-uinput`: it treats
+# /dev/uinput as fake and skips the ioctls that configure the device. With it,
+# the daemon never created the virtual absolute pointer and then failed with
+# "write /dev/uinput: Invalid argument" on every boot. The mouse stopped
+# behaving the way it used to.
 rm -rf /etc/systemd/system/spice-vdagentd.service.d
 printf 'SPICE_VDAGENTD_EXTRA_ARGS=-X\n' > /etc/conf.d/spice-vdagentd
 systemctl enable spice-vdagentd.service 2>/dev/null || true
 systemctl enable spice-vdagentd.socket 2>/dev/null || true
 echo "  spice-vdagentd con -X (necesario bajo Hyprland)"
 
-# NO se instala regla udev para /dev/virtio-ports/com.redhat.spice.0.
-# La habia, y estaba mal por partida doble: omarchy-arm-vdagent no abre ese
-# puerto nunca —habla por el socket unix /run/spice-vdagentd/spice-vdagent-sock,
-# como explica el propio stage3—, y el puerto lo abre en exclusiva el demonio.
-# Darle ACL al usuario del asiento con TAG+="uaccess" solo servia para que algo
-# se lo pudiera quitar al demonio y dejarlo sin canal ("Device or resource
-# busy"), que es justo el primer callejon sin salida de este problema.
-# El MODE="0660" ademas no hacia nada: sin GROUP= el grupo se queda en root.
+# NO udev rule is installed for /dev/virtio-ports/com.redhat.spice.0.
+# There used to be one, and it was wrong twice over: omarchy-arm-vdagent never
+# opens that port -- it speaks over the unix socket
+# /run/spice-vdagentd/spice-vdagent-sock, as stage3 itself explains -- and the
+# port is opened exclusively by the daemon. Handing the seat user an ACL with
+# TAG+="uaccess" only made it possible for something to take it away from the
+# daemon and leave it without a channel ("Device or resource busy"), which is
+# exactly the first dead end this problem led to.
+# MODE="0660" did nothing either: without GROUP= the group stays root.
 
-# La carpeta compartida de UTM tiene DOS modos y el usuario elige cual:
-#   VirtFS → dispositivo 9p con mount_tag "share"
-#   SPICE WebDAV → puerto virtio org.spice-space.webdav.0, servido por
+# UTM's shared folder has TWO modes and the user picks one:
+#   VirtFS -> a 9p device with mount_tag "share"
+#   SPICE WebDAV -> the org.spice-space.webdav.0 virtio port, served by
 #     spice-webdavd (paquete phodav) en http://localhost:9843/
-# Se preparan los dos: cada uno se activa solo si su dispositivo existe.
+# Both are prepared: each only activates if its device exists.
 systemctl enable spice-webdavd.service 2>/dev/null || true
 echo "  spice-webdavd habilitado (modo SPICE WebDAV de UTM)"
 
-# Carpeta compartida de UTM. El bundle declara DirectoryShareMode=VirtFS, pero
-# eso solo expone el dispositivo: el invitado tiene que montarlo. El tag es
+# UTM's shared folder. The bundle declares DirectoryShareMode=VirtFS, but that
+# only exposes the device: the guest has to mount it. The tag is
 # "share" (UTM, Configuration/UTMQemuConfiguration+Arguments.swift:1234).
-# nofail para que un arranque sin carpeta configurada no caiga a emergencia,
-# y x-systemd.automount para no pagar el montaje si no se usa.
+# nofail so a boot with no folder configured does not drop to emergency, and
+# x-systemd.automount so we do not pay for the mount when it is unused.
 mkdir -p /mnt/share
-# Un cartel en /mnt, NO dentro de /mnt/share. Se probo ponerlo debajo del punto
-# de automontaje y NO se ve: con el autofs activo y sin nada detras,
-# `ls /mnt/share` da "No such file or directory" y no llega al directorio real.
+# A notice in /mnt, NOT inside /mnt/share. Putting it under the automount
+# point was tried and it is NOT visible: with autofs active and nothing behind
+# it,
+# `ls /mnt/share` returns "No such file or directory" and never reaches the
+# real directory underneath.
 cat > /mnt/README-no-shared-folder.txt <<'NOTICE'
 If you can see this file, NO shared folder is mounted here.
 
@@ -286,15 +289,15 @@ in a mode other than the automatic mount in /etc/fstab expects (VirtFS).
 
        omarchy-arm-share --status
 NOTICE
-# La entrada de fstab solo vale para VirtFS, y el usuario puede haber elegido
-# SPICE WebDAV. En vez de fijar un modo, se instala omarchy-arm-share, que
-# detecta cual esta activo. La entrada de fstab se deja igualmente con nofail:
-# si el dispositivo 9p existe, se monta solo en el arranque.
+# The fstab entry only covers VirtFS, and the user may have picked SPICE
+# WebDAV. Rather than fixing a mode, omarchy-arm-share is installed and works
+# out which one is active. The fstab entry stays anyway, with nofail: if the 9p
+# device exists, it mounts on its own at boot.
 if ! grep -q '^share ' /etc/fstab; then
   cat >> /etc/fstab <<'FSTAB'
 
-# Carpeta compartida de UTM en modo VirtFS. Si elegiste SPICE WebDAV, esta
-# linea no hace nada (nofail) y la monta omarchy-arm-share.
+# UTM shared folder in VirtFS mode. If you picked SPICE WebDAV, this line does
+# nothing (nofail) and omarchy-arm-share mounts it instead.
 share  /mnt/share  9p  trans=virtio,version=9p2000.L,rw,nofail,x-systemd.automount,_netdev,msize=512000  0  0
 FSTAB
 fi
@@ -307,8 +310,9 @@ usermod -aG docker "$VM_USER" 2>/dev/null || true
 log "etapa 3: dotfiles de Omarchy como $VM_USER"
 chmod +x /root/prov/stage3.sh
 install -d -o "$VM_USER" -g "$VM_USER" "/home/$VM_USER"
-# stage3 corre como usuario normal y /root es 0750: cualquier prueba suya sobre
-# /root/prov da falso sin dar error. Se le deja una copia legible en su home.
+# stage3 runs as a normal user and /root is 0750: any test of its own against
+# /root/prov comes back false without erroring. It gets a readable copy in its
+# own home.
 PROVDIR="/home/$VM_USER/.omarchy-arm-prov"
 mkdir -p "$PROVDIR"
 for f in omarchy-arm-extras 10-arm-sync omarchy-arm-clipboard omarchy-arm-vdagent omarchy-arm-share; do
@@ -318,13 +322,14 @@ cp /root/prov/stage3.sh /root/prov/config.env "/home/$VM_USER/"
 chown -R "$VM_USER:$VM_USER" "$PROVDIR"
 chown "$VM_USER:$VM_USER" "/home/$VM_USER/stage3.sh" "/home/$VM_USER/config.env"
 echo "  disponible para stage3: $(ls "$PROVDIR" | tr '\n' ' ')"
-# El resultado de stage3 tiene que llegar al anfitrion: antes se degradaba a un
-# warn y stage2 emitia su token de exito igualmente, asi que un stage3 que
-# fallara entero producia un disco sin un solo dotfile de Omarchy declarado OK.
-# OJO: con `set -e` + trap ERR, escribir `su ...; RC=$?` NO funciona: si su
-# devuelve != 0 el trap dispara y la etapa muere ANTES de la asignacion, asi
-# que el token TOK_STAGE3_<rc> solo se emitia en el caso 0 y el anfitrion nunca
-# llegaba a ver el fallo especifico de stage3. Con `|| RC=$?` el comando esta
+# stage3's outcome has to reach the host: it used to degrade to a warning and
+# stage2 emitted its success token anyway, so a stage3 that failed outright
+# produced a disk without a single Omarchy dotfile, declared OK.
+# CAREFUL: with `set -e` + an ERR trap, writing `su ...; RC=$?` does NOT work:
+# if su returns non-zero the trap fires and the stage dies BEFORE the
+# assignment, so the TOK_STAGE3_<rc> token was only emitted in the zero case
+# and the host never got to see stage3's specific failure. With `|| RC=$?` the
+# command is
 # en contexto probado y set -e no interviene.
 STAGE3_RC=0
 su - "$VM_USER" -c "bash ~/stage3.sh" || STAGE3_RC=$?
@@ -353,9 +358,9 @@ cat > /etc/sddm.conf.d/autologin.conf <<EOF
 User=$VM_USER
 Session=$SESSION
 EOF
-# Cambiar el autologin sin editar ficheros a mano. Sin esto, quien cree una
-# segunda cuenta se queda entrando siempre con la primera: el tema de SDDM de
-# Omarchy pinta el ultimo usuario, no una lista donde elegir.
+# Switch the autologin without editing files by hand. Without this, anyone who
+# creates a second account keeps logging in as the first: the Omarchy SDDM
+# theme paints the last user, not a list to pick from.
 if [ -f /root/prov/omarchy-arm-user ]; then
   install -Dm755 /root/prov/omarchy-arm-user /usr/local/bin/omarchy-arm-user
   echo "  omarchy-arm-user instalado"
@@ -366,21 +371,21 @@ ls /usr/local/share/wayland-sessions /usr/share/wayland-sessions 2>/dev/null
 
 # ---------------------------------------------------------------- ajustes VM
 log "ajustes propios de maquina virtual"
-# El cursor por hardware y los modificadores DRM dan problemas sobre virtio-gpu
+# Hardware cursors and DRM modifiers misbehave on virtio-gpu
 mkdir -p /etc/environment.d
 cat > /etc/environment.d/90-vm-graphics.conf <<'EOF'
 # virtio-gpu (virgl) bajo UTM/QEMU
 WLR_NO_HARDWARE_CURSORS=1
 AQ_NO_MODIFIERS=1
 WLR_RENDERER_ALLOW_SOFTWARE=1
-# Sin esto, las ventanas de clientes GPU (alacritty, chromium) se mapean pero
-# NO se pintan: virgl no entrega buffers que Hyprland pueda componer. Solo
-# renderizan los clientes que usan wl_shm (foot). Con llvmpipe funcionan todos.
-# Comprobado que NO lo arreglan: AQ_NO_MODIFIERS, render:cm_enabled=false,
+# Without this, GPU clients (alacritty, chromium) map their windows but never
+# paint: virgl does not hand over buffers Hyprland can compose. Only clients
+# using wl_shm (foot) render at all. With llvmpipe they all work.
+# Confirmed NOT to fix it: AQ_NO_MODIFIERS, render:cm_enabled=false,
 # render:explicit_sync (eliminado en Hyprland 0.56).
 LIBGL_ALWAYS_SOFTWARE=1
 EOF
-# consola serie util para depurar desde el host
+# serial console, handy for debugging from the host
 systemctl enable serial-getty@ttyAMA0.service 2>/dev/null || true
 
 log "limpieza"

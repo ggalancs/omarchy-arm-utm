@@ -1,6 +1,6 @@
 #!/usr/bin/expect -f
-# Uso: scripts/repair.exp <script-dentro-del-ISO.sh>
-# Arranca Alpine con el disco YA instalado y ejecuta ese script en el chroot.
+# Usage: scripts/repair.exp <script-inside-the-ISO.sh>
+# Boots Alpine with the disk ALREADY installed and runs that script in the chroot.
 set timeout 900
 log_user 1
 match_max 400000
@@ -12,9 +12,9 @@ proc wait_for {pat code msg {t 900}} {
     expect { -ex $pat {} timeout { puts "\n!! TIMEOUT: $msg"; exit $code }
              eof { puts "\n!! EOF: $msg"; exit [expr {$code+40}] } }
 }
-# write_payloads sustituye @OMARM_ROOT@ al desplegar este fichero. Si el
-# marcador sigue ahi es que se esta ejecutando desde un clon del repositorio:
-# entonces la raiz viene de OMARM_ROOT o del directorio actual.
+# write_payloads substitutes @OMARM_ROOT@ when it deploys this file. If the
+# marker is still there, it is running from a clone of the repository: the root
+# then comes from OMARM_ROOT or the current directory.
 set ROOT "@OMARM_ROOT@"
 if {[string match "@*@" $ROOT]} {
   set ROOT [expr {[info exists env(OMARM_ROOT)] ? $env(OMARM_ROOT) : [pwd]}]

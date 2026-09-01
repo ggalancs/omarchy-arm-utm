@@ -1,12 +1,13 @@
 #!/bin/bash
-# La VM se construyo con la lista de paquetes de la rama master (3.8.5, que usa
-# waybar). La rama quattro (4.x) que corre en la VM usa su propio shell basado
-# en quickshell y pide paquetes adicionales. Aqui se instala ese delta.
+# The VM was built with the package list from the master branch (3.8.5, which
+# uses waybar). The quattro branch (4.x) running in the VM uses its own
+# quickshell-based shell and needs additional packages. This installs that
+# delta.
 set -uo pipefail
 log() { echo ""; echo "==> $*"; }
 
 log "paquetes que faltan de la lista de quattro"
-# quickshell-git no existe en Arch Linux ARM; quickshell 0.3.1 lo sustituye
+# quickshell-git does not exist in Arch Linux ARM; quickshell 0.3.1 replaces it
 PKGS=(quickshell bluez-tools bluez-utils ddcutil dua-cli foot inotify-tools
       libvips lua51 mpv-mpris qrencode qt6-imageformats udiskie wtype yt-dlp
       zbar cava)
@@ -19,8 +20,9 @@ log "comprobacion"
 for b in quickshell udiskie wtype ddcutil; do printf "  %-14s %s\n" "$b" "$(command -v $b || echo NO)"; done
 
 log "ajustes de VM en los ficheros .lua correctos"
-# quattro usa configuracion Lua: los .conf que escribi en la build (monitors.conf,
-# autostart.conf) no los lee nadie. Los ajustes van en monitors.lua.
+# quattro uses Lua configuration: the .conf files written during the build
+# (monitors.conf, autostart.conf) are read by nobody. The settings go in
+# monitors.lua.
 cat > ~/.config/hypr/monitors.lua <<'LUA'
 -- Ajustado para VM (UTM/QEMU virtio-gpu).
 -- Omarchy asume pantallas retina 2x; en la VM eso deja todo gigante.

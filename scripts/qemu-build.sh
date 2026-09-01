@@ -1,9 +1,9 @@
 #!/bin/bash
-# VM de construcción: aarch64 NATIVO con HVF (sin emulación) sobre Apple Silicon.
-# Live de Alpine por consola serie + ISO de aprovisionamiento con el rootfs de ALARM.
+# Build VM: NATIVE aarch64 with HVF (no emulation) on Apple Silicon.
+# Alpine live over the serial console + a provisioning ISO with the ALARM rootfs.
 set -e
-# La raiz se deduce de la ubicacion del propio script: asi el repo se puede
-# clonar en cualquier sitio sin editar nada.
+# The root is derived from the script's own location, so the repo can be
+# cloned anywhere without editing anything.
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 : "${VM_SMP:=8}"

@@ -81,7 +81,7 @@ class Agente:
             log("←", tipo, a1, a2, size)
 
             if tipo == CLIPBOARD_GRAB:
-                # el anfitrión ofrece algo: lo pedimos
+                # the host is offering something: ask for it
                 self.enviar(CLIPBOARD_REQUEST, SEL_CLIPBOARD, TIPO_UTF8)
 
             elif tipo == CLIPBOARD_REQUEST:
@@ -157,11 +157,11 @@ def main():
     s.connect(SOCK)
     ag = Agente(s)
 
-    # El agente oficial anuncia su resolución nada más conectar; vdagentd lo
-    # usa para saber que hay una sesión gráfica viva detrás.
+    # The stock agent announces its resolution as soon as it connects;
+    # vdagentd uses that to know a live graphical session is behind it.
     # struct vdagentd_guest_xorg_resolution = 5 ints: width, height, x, y,
-    # display_id (vdagentd-proto.h:51). Si el tamaño no cuadra exactamente,
-    # vdagentd desconecta al agente sin más (vdagentd.c:1088).
+    # display_id (vdagentd-proto.h:51). If the size does not match exactly,
+    # vdagentd drops the agent without a word (vdagentd.c:1088).
     ancho, alto = resolucion()
     ag.enviar(GUEST_XORG_RESOLUTION, ancho, alto,
               struct.pack("<iiiii", ancho, alto, 0, 0, 0))

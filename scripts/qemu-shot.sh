@@ -1,9 +1,9 @@
 #!/bin/bash
-# Arranca un disco ya instalado con GPU virtio y captura la pantalla por el
-# monitor de QEMU. Evita tener que registrar el bundle en UTM solo para mirar.
+# Boots an already installed disk with a virtio GPU and grabs the screen
+# through QEMU's monitor. Saves registering the bundle in UTM just to look.
 set -e
-# La raiz se deduce de la ubicacion del propio script: asi el repo se puede
-# clonar en cualquier sitio sin editar nada.
+# The root is derived from the script's own location, so the repo can be
+# cloned anywhere without editing anything.
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 : "${DISK_IMG:?falta DISK_IMG}"

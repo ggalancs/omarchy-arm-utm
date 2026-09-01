@@ -1,25 +1,25 @@
 #!/bin/bash
 #
-#  omarchy-arm-clipboard — portapapeles compartido con el Mac, vía la carpeta
+#  omarchy-arm-clipboard - clipboard shared with the Mac, through the shared
 #  compartida de UTM.
 #
-#  POR QUE HACE FALTA
-#  UTM ofrece "Compartir portapapeles", pero eso solo funciona si el invitado
-#  corre spice-vdagent, y el portapapeles de spice-vdagent es X11 puro: su
-#  clipboard.c delega todo en vdagent_x11_* y no hay una sola referencia a
-#  wlr-data-control en su codigo. Bajo Hyprland (Wayland nativo) no puede
-#  funcionar, por mucho que el servicio arranque.
+#  WHY IT IS NEEDED
+#  UTM offers "Share clipboard", but that only works if the guest runs
+#  spice-vdagent, and spice-vdagent's clipboard is pure X11: its clipboard.c
+#  delegates everything to vdagent_x11_* and there is not a single reference to
+#  wlr-data-control in its code. Under Hyprland (native Wayland) it cannot
+#  work, however happily the service starts.
 #
-#  COMO FUNCIONA
-#  Vigila /mnt/share/.clipboard en las dos direcciones: si el fichero cambia,
-#  lo copia al portapapeles del invitado; si el portapapeles del invitado
-#  cambia, lo escribe al fichero. En el Mac, un script equivalente hace lo
-#  mismo con pbcopy/pbpaste. Solo texto.
+#  HOW IT WORKS
+#  Watches /mnt/share/.clipboard in both directions: if the file changes, it
+#  copies it to the guest clipboard; if the guest clipboard changes, it writes
+#  it to the file. On the Mac an equivalent script does the same with
+#  pbcopy/pbpaste. Text only.
 #
 #  USO
-#    omarchy-arm-clipboard             vigila (lo lanza el servicio de usuario)
-#    omarchy-arm-clipboard --install   instala el servicio y lo arranca
-#    omarchy-arm-clipboard --host      imprime el script para el Mac
+#    omarchy-arm-clipboard             watch (started by the user service)
+#    omarchy-arm-clipboard --install   install the service and start it
+#    omarchy-arm-clipboard --host      print the script for the Mac
 #
 set -uo pipefail
 
@@ -55,8 +55,8 @@ UNIT
 script_anfitrion() {
   cat <<'MACEOF'
 #!/bin/bash
-# Ejecutar EN EL MAC. Sincroniza el portapapeles con la VM a traves de la
-# carpeta que tengas compartida en los ajustes de la VM en UTM.
+# Run this ON THE MAC. Syncs the clipboard with the VM through whichever
+# folder you have shared in the VM's UTM settings.
 #   ./clipboard-mac.sh ~/ruta/de/la/carpeta/compartida
 set -uo pipefail
 DIR="${1:?uso: $0 <carpeta compartida con la VM>}"

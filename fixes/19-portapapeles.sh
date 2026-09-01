@@ -1,28 +1,28 @@
 #!/bin/bash
 #
-# 19 · Portapapeles compartido con el anfitrión
+# 19 - Clipboard shared with the host
 #
-# Ejecutar DENTRO de la VM:
+# Run INSIDE the VM:
 #   curl -fsSL https://raw.githubusercontent.com/ggalancs/omarchy-arm-utm/main/fixes/19-portapapeles.sh | bash
 #
-# EL PROBLEMA
-#   El portapapeles de SPICE va en tres saltos:
-#     cliente SPICE (UTM) <-virtio-> spice-vdagentd <-socket unix-> agente
-#   El demonio habla con el anfitrión; el agente de sesión solo habla con el
-#   demonio. El agente OFICIAL entrega el portapapeles a X11 (vdagent.c:421) y
-#   bajo Hyprland muere con "cannot open display", así que el demonio se queda
-#   sin nadie a quien entregar.
+# THE PROBLEM
+#   The SPICE clipboard travels in three hops:
+#     SPICE client (UTM) <-virtio-> spice-vdagentd <-unix socket-> agent
+#   The daemon talks to the host; the session agent only talks to the daemon.
+#   The STOCK agent delivers the clipboard to X11 (vdagent.c:421) and under
+#   Hyprland dies with "cannot open display", so the daemon is left with nobody
+#   to deliver to.
 #
-# LA SOLUCIÓN
-#   Sustituir el AGENTE, no el demonio: omarchy-arm-vdagent habla el mismo
-#   protocolo con vdagentd y usa wl-copy/wl-paste. Y arrancar el demonio con
-#   -X, porque su comprobación de "sesión activa de seat0" falla con Hyprland
-#   lanzado por SDDM y descarta el portapapeles en silencio.
+# THE FIX
+#   Replace the AGENT, not the daemon: omarchy-arm-vdagent speaks the same
+#   protocol to vdagentd and uses wl-copy/wl-paste. And start the daemon with
+#   -X, because its "active seat0 session" check fails with Hyprland launched
+#   by SDDM and it discards the clipboard in silence.
 #
-# REQUISITO
-#   En UTM: Ajustes de la VM → Compartir → "Compartir portapapeles" activado,
-#   y la VM abierta como ventana (no solo arrancada con utmctl: sin cliente
-#   SPICE conectado el canal existe pero no transporta).
+# REQUIREMENT
+#   In UTM: VM Settings -> Sharing -> "Share clipboard" enabled, and the VM
+#   open as a window (not merely started with utmctl: with no SPICE client
+#   connected the channel exists but carries nothing).
 #
 set -uo pipefail
 RAW=https://raw.githubusercontent.com/ggalancs/omarchy-arm-utm/main/provision/src/omarchy-arm-vdagent
@@ -35,7 +35,7 @@ for c in python3 wl-copy wl-paste; do
 done
 if [ ! -e /dev/virtio-ports/com.redhat.spice.0 ]; then
   echo "  ✗ no existe /dev/virtio-ports/com.redhat.spice.0"
-  echo "    Activa 'Compartir portapapeles' en UTM y apaga/enciende la VM."
+  echo "    Enable 'Share clipboard' in UTM, then power the VM off and on."
   fallo=1
 else
   echo "  ✓ canal SPICE presente"
@@ -52,28 +52,28 @@ else
   tmp=$(mktemp)
   curl -fsSL "$RAW" -o "$tmp" || { echo "  ✗ no pude descargarlo"; rm -f "$tmp"; exit 1; }
   python3 -c "import ast,sys;ast.parse(open(sys.argv[1]).read())" "$tmp" \
-    || { echo "  ✗ lo descargado no es Python válido"; rm -f "$tmp"; exit 1; }
+    || { echo "  x what was downloaded is not valid Python"; rm -f "$tmp"; exit 1; }
   sudo install -Dm755 "$tmp" /usr/local/bin/omarchy-arm-vdagent; rm -f "$tmp"
 fi
 echo "  /usr/local/bin/omarchy-arm-vdagent"
 
 echo
-echo "==> demonio con -X"
-# Sin -X, vdagentd no encuentra "la sesión activa de seat0" bajo Hyprland y
-# descarta el portapapeles sin dar ningún error.
+echo "==> daemon with -X"
+# Without -X, vdagentd cannot find "the active seat0 session" under Hyprland
+# and discards the clipboard without raising any error.
 #
-# Va por la variable de entorno que el propio unit de Arch ya lee, no
-# sobrescribiendo ExecStart: así los cambios que haga Arch siguen valiendo.
+# It goes through the environment variable Arch's own unit already reads, not
+# overriding ExecStart, so whatever changes Arch makes keep working.
 #
-# Y se RETIRA el override anterior, que ponía `-f`. Esa bandera no es
-# "foreground" —eso es `-x`— sino `--fake-uinput`: trata /dev/uinput como falso
-# y se salta los ioctl que configuran el dispositivo. Con ella, el demonio no
-# llegaba a crear el puntero absoluto virtual y fallaba con
-# "write /dev/uinput: Invalid argument" en cada arranque, cambiando el
-# comportamiento del ratón. Si aplicaste una versión anterior de este script,
-# esto lo deshace.
+# And the previous override, which set `-f`, is REMOVED. That flag is not
+# "foreground" -- that is `-x` -- but `--fake-uinput`: it treats /dev/uinput
+# as fake and skips the ioctls that configure the device. With it, the daemon
+# never created the virtual absolute pointer and failed with
+# "write /dev/uinput: Invalid argument" on every boot, changing
+# the mouse's behaviour. If you applied an earlier version of this script,
+# this undoes it.
 if [ -e /etc/systemd/system/spice-vdagentd.service.d/override.conf ]; then
-  echo "  quitando el override anterior (llevaba -f, que rompía el puntero)"
+  echo "  removing the previous override (it carried -f, which broke the pointer)"
   sudo rm -rf /etc/systemd/system/spice-vdagentd.service.d
 fi
 printf 'SPICE_VDAGENTD_EXTRA_ARGS=-X\n' | sudo tee /etc/conf.d/spice-vdagentd >/dev/null
@@ -81,54 +81,56 @@ sudo systemctl daemon-reload
 
 echo
 echo "==> un solo agente"
-# vdagentd desconecta a los dos si ve dos agentes en la misma sesión.
+# vdagentd disconnects both if it sees two agents in the same session.
 sudo systemctl --global mask spice-vdagent.service 2>/dev/null || true
 pkill -x spice-vdagent 2>/dev/null || true
 pkill -f omarchy-arm-vdagent 2>/dev/null || true
 
-# El agente oficial NO viene solo de systemd. Las imágenes de la primera entrega
-# lo lanzan desde el autostart de Hyprland:
+# The stock agent does NOT come from systemd alone. The first release's images
+# launch it from Hyprland's autostart:
 #     hl.exec_cmd("uwsm-app -- spice-vdagent")
-# uwsm-app arranca el BINARIO en un scope transitorio, así que la máscara de
-# spice-vdagent.service no lo tapa y el pkill de arriba solo lo mata en la sesión
-# de ahora. Sin tocar esto, el portapapeles funciona hasta que reinicias: al
-# volver hay dos agentes y vdagentd corta a los dos, sin un solo error visible.
+# uwsm-app starts the BINARY in a transient scope, so masking
+# spice-vdagent.service does not cover it and the pkill above only kills it in
+# the session
+# current one. Without touching this, the clipboard works until you reboot: on
+# the way back there are two agents and vdagentd cuts off both, without a
+# single visible error.
 AUTO="$HOME/.config/hypr/autostart.lua"
 if [ -f "$AUTO" ] && grep -q 'spice-vdagent' "$AUTO"; then
   cp -a "$AUTO" "$AUTO.bak.$(date +%Y%m%d%H%M%S)"
   sed -i 's|^\([[:space:]]*\)\(hl\.exec_cmd(.*spice-vdagent.*\)$|\1-- \2  -- lo lleva omarchy-arm-vdagent|' "$AUTO"
   if grep -q '^[[:space:]]*hl\.exec_cmd(.*spice-vdagent' "$AUTO"; then
-    echo "  ✗ no pude desactivarlo en $AUTO; coméntalo a mano:"
+    echo "  x could not disable it in $AUTO; comment it out by hand:"
     grep -n 'spice-vdagent' "$AUTO"
     exit 1
   fi
   hyprctl reload >/dev/null 2>&1 || true
   echo "  autostart.lua: agente oficial desactivado (copia en $AUTO.bak.*)"
 else
-  echo "  autostart.lua: no lanza el agente oficial"
+  echo "  autostart.lua: does not launch the stock agent"
 fi
 
 sleep 1
-# En Arch las dos unidades son "static" (sin seccion [Install]): `enable` no
-# hace nada y `is-enabled` nunca dira "enabled". Quien las levanta en cada
-# arranque es la activacion por socket. Asi que aqui solo hay que asegurarse de
-# que no esten enmascaradas y de que el socket este vivo.
+# On Arch both units are "static" (no [Install] section): `enable` does
+# nothing and `is-enabled` will never say "enabled". What brings them up on
+# each boot is socket activation. So all that is needed here is to make sure
+# they are not masked and that the socket is alive.
 sudo systemctl unmask spice-vdagentd.socket spice-vdagentd.service 2>/dev/null || true
 sudo systemctl start spice-vdagentd.socket 2>/dev/null || true
 sudo systemctl restart spice-vdagentd
 sleep 3
 echo "  spice-vdagentd: $(systemctl is-active spice-vdagentd)"
 pgrep -af spice-vdagentd | grep -q -- ' -X' \
-  && echo "  el demonio corre con -X" || echo "  ✗ el demonio no ha cogido -X"
-# El puntero absoluto virtual: si esto se queja, el ratón no se captura solo.
+  && echo "  the daemon is running with -X" || echo "  x the daemon did not pick up -X"
+# The virtual absolute pointer: if this complains, the mouse is not captured.
 journalctl -u spice-vdagentd -b --no-pager 2>/dev/null | grep -q "uinput" \
-  && echo "  ✗ sigue habiendo errores de uinput (el ratón no se capturará)" \
-  || echo "  sin errores de uinput (el ratón se captura solo)"
-[ -S "$SOCK" ] && echo "  socket listo" || { echo "  ✗ no hay socket en $SOCK"; exit 1; }
+  && echo "  x uinput errors are still there (the mouse will not be captured)" \
+  || echo "  no uinput errors (the mouse is captured on its own)"
+[ -S "$SOCK" ] && echo "  socket ready" || { echo "  x there is no socket at $SOCK"; exit 1; }
 case "$(systemctl is-enabled spice-vdagentd.socket 2>/dev/null)" in
-  masked) echo "  ✗ spice-vdagentd.socket está enmascarado; el portapapeles no volverá tras reiniciar:"
+  masked) echo "  x spice-vdagentd.socket is masked; the clipboard will not come back after a reboot:"
           echo "      sudo systemctl unmask spice-vdagentd.socket" ;;
-  *)      echo "  socket no enmascarado (unidad static: la activa systemd en cada arranque)" ;;
+  *)      echo "  socket not masked (static unit: systemd activates it on every boot)" ;;
 esac
 
 echo
@@ -157,10 +159,10 @@ sleep 3
 
 echo
 if systemctl --user is-active --quiet omarchy-arm-vdagent; then
-  echo "  ✓ el portapapeles ya debería funcionar en ambos sentidos."
-  echo "    Copia algo en el Mac y pega aquí, o al revés. Solo texto."
+  echo "  the clipboard should now work in both directions."
+  echo "    Copy something on the Mac and paste here, or the other way round. Text only."
 else
-  echo "  ✗ el agente no arrancó:"
+  echo "  x the agent did not start:"
   echo "      systemctl --user status omarchy-arm-vdagent"
   echo "      VDAGENT_DEBUG=1 /usr/local/bin/omarchy-arm-vdagent"
 fi

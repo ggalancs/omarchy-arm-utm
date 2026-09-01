@@ -1,38 +1,38 @@
 #!/bin/bash
 #
-#  prueba-negativa-2.sh — los sabotajes que la primera pasada no cubria
+#  negative-test-2.sh - the sabotages the first pass did not cover
 #  ────────────────────────────────────────────────────────────────────────────
-#  Segunda tanda. La primera dejo fuera cinco comprobaciones porque no sabia
-#  falsificarlas limpiamente. La mas importante es la de `uinput`: existe
-#  precisamente por el fallo del raton que se colo durante dos versiones, y una
-#  comprobacion que nunca se ha visto en rojo no ha demostrado nada.
+#  Second round. The first left five checks out because there was no clean way
+#  to forge them. The most important is the `uinput` one: it exists precisely
+#  because of the mouse defect that shipped for two releases, and a check never
+#  seen going red has proved nothing.
 #
-#  Corre sobre -snapshot: todo lo que rompe se descarta al apagar.
+#  Runs on -snapshot: everything it breaks is discarded on shutdown.
 #  ────────────────────────────────────────────────────────────────────────────
-LISTA=/media/chequeo-base.sh
-[ -r "$LISTA" ] || { echo "no encuentro $LISTA"; echo "FIN_CHEQUEO"; exit 2; }
+LISTA=/media/guest-check-base.sh
+[ -r "$LISTA" ] || { echo "no encuentro $LISTA"; echo "END_CHECK"; exit 2; }
 pasar() { bash "$LISTA" builder 2>&1; }
 cuenta() {
   case "$1" in
-    *VEREDICTO_LIMPIO*) echo 0 ;;
-    *VEREDICTO_CON_*)   echo "$1" | grep -o "VEREDICTO_CON_[0-9]*" | tail -1 | sed "s/.*_//" ;;
+    *VERDICT_CLEAN*) echo 0 ;;
+    *VERDICT_WITH_*)   echo "$1" | grep -o "VERDICT_WITH_[0-9]*" | tail -1 | sed "s/.*_//" ;;
     *) echo -1 ;;
   esac
 }
 
 echo "== 1. imagen intacta =="
 ANTES=$(pasar); echo "   fallos: $(cuenta "$ANTES")"
-echo "$ANTES" | grep -q VEREDICTO_LIMPIO && BASE_OK=1 || BASE_OK=0
-[ "$BASE_OK" = 1 ] && echo "   VEREDICTO_LIMPIO (correcto)" || echo "   NO sale limpia"
+echo "$ANTES" | grep -q VERDICT_CLEAN && BASE_OK=1 || BASE_OK=0
+[ "$BASE_OK" = 1 ] && echo "   VERDICT_CLEAN (correcto)" || echo "   NO sale limpia"
 
 echo
 echo "== 2. sabotajes de segunda tanda =="
 declare -a ESPERADOS=()
 
-# uinput. Se envuelve el binario para que escupa la linea exacta que producia
-# el `-f`. systemd captura su stdout en el journal de la unidad, que es donde
-# mira la comprobacion. El demonio real sigue arrancando detras, asi que -X y
-# "activo" siguen en verde: se aisla UNA sola comprobacion.
+# uinput. The binary is wrapped so it emits the exact line `-f` used to
+# produce. systemd captures its stdout into the unit's journal, which is where
+# the check looks. The real daemon still starts behind it, so -X and "active"
+# stay green: exactly ONE check is isolated.
 if [ -x /usr/bin/spice-vdagentd ]; then
   mv /usr/bin/spice-vdagentd /usr/bin/spice-vdagentd.real
   printf '#!/bin/sh\necho "write /dev/uinput: Invalid argument"\nexec /usr/bin/spice-vdagentd.real "$@"\n' \
@@ -44,25 +44,25 @@ if [ -x /usr/bin/spice-vdagentd ]; then
   ESPERADOS+=("errores de uinput")
 fi
 
-# Huerfano: marcar un paquete instalado como dependencia cuando nadie lo pide
-# lo convierte en huerfano a ojos de `pacman -Qtdq`. No instala nada.
+# Orphan: marking an installed package as a dependency when nothing requires
+# it makes it an orphan in `pacman -Qtdq`'s eyes. Nothing is installed.
 for c in htop wget rsync; do
   pacman -Qq "$c" >/dev/null 2>&1 && { pacman -D --asdeps "$c" >/dev/null 2>&1 \
     && { echo "   + $c marcado como huerfano"; ESPERADOS+=("huerfanos"); }; break; }
 done
 
-# Ruta del constructor dentro de un binario de /usr/local/bin.
+# The build path inside a binary in /usr/local/bin.
 printf '#!/bin/sh\n# /home/builder/algo\n' > /usr/local/bin/falso-con-ruta
 chmod +x /usr/local/bin/falso-con-ruta
 echo "   + binario citando /home/builder"
 ESPERADOS+=("binarios con la ruta del constructor")
 
-# Nombre de fichero que cita al constructor.
+# A filename that mentions the build account.
 touch /etc/config-builder.conf
 echo "   + fichero cuyo nombre cita al constructor"
 ESPERADOS+=("ficheros lo citan")
 
-# GECOS con identidad.
+# GECOS carrying an identity.
 usermod -c "Gabriel Real" omarchy 2>/dev/null \
   && { echo "   + GECOS con nombre propio"; ESPERADOS+=("GECOS:"); }
 
@@ -82,11 +82,11 @@ for e in "${ESPERADOS[@]}"; do
   echo "$DESPUES" | grep "FALLO" | grep -qFi "$e" \
     || { echo "   CIEGA: nadie reacciono a '$e'"; CIEGAS=$((CIEGAS+1)); }
 done
-echo "$DESPUES" | grep -q VEREDICTO_LIMPIO && { echo "   GRAVE: dice LIMPIO con la imagen rota"; CIEGAS=$((CIEGAS+1)); }
+echo "$DESPUES" | grep -q VERDICT_CLEAN && { echo "   GRAVE: dice LIMPIO con la imagen rota"; CIEGAS=$((CIEGAS+1)); }
 if [ "$BASE_OK" = 1 ] && [ "$CIEGAS" = 0 ]; then
-  echo "   PRUEBA_NEGATIVA_OK: las cinco restantes tambien saben decir que no"
+  echo "   NEGATIVE_TEST_OK: las cinco restantes tambien saben decir que no"
 else
-  echo "   PRUEBA_NEGATIVA_FALLO: $CIEGAS ciega(s)"
+  echo "   NEGATIVE_TEST_FAILED: $CIEGAS ciega(s)"
 fi
 echo
-echo "FIN_CHEQUEO"
+echo "END_CHECK"

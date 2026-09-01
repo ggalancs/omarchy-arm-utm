@@ -1,5 +1,5 @@
 #!/bin/bash
-# Fleco 3: resolucion utilizable + integracion con el host (portapapeles).
+# Loose end 3: a usable resolution + host integration (clipboard).
 set -uo pipefail
 log() { echo ""; echo "==> $*"; }
 export XDG_RUNTIME_DIR=/run/user/1000
@@ -35,7 +35,7 @@ log "portapapeles compartido con macOS (spice-vdagent)"
 sudo systemctl start spice-vdagentd.socket 2>&1 | tail -2 || true
 sudo systemctl enable spice-vdagentd.socket 2>&1 | tail -1 || true
 # En Wayland spice-vdagent aporta portapapeles (la resolucion la lleva virtio-gpu).
-# Se lanza con la sesion desde el autostart del usuario.
+# Started with the session from the user's autostart.
 cat > ~/.config/hypr/autostart.lua <<'LUA'
 -- Procesos extra al iniciar la sesion.
 hl.on("hyprland.start", function()

@@ -1,10 +1,10 @@
 #!/bin/bash
-# omarchy-update fallaba porque el build no sello las migraciones existentes.
-# Un instalador normal de Omarchy las marca todas como aplicadas al terminar
-# (el sistema ya nace con el estado final); aqui solo habia 8 de 83 selladas,
-# asi que omarchy-update intento reproducir 75 migraciones historicas y murio
-# en la que sustituye `dust` por `tensaku`, paquete propio de Omarchy que no
-# existe en Arch Linux ARM. De paso dejo el sistema sin `dust`.
+# omarchy-update failed because the build never sealed the existing
+# migrations. A normal Omarchy installer marks them all as applied when it
+# finishes (the system is born at the final state); here only 8 of 83 were
+# sealed, so omarchy-update tried to replay 75 historical migrations and died
+# on the one replacing `dust` with `tensaku`, an Omarchy package that does not
+# exist in Arch Linux ARM. On the way it left the system without `dust`.
 set -uo pipefail
 log() { echo ""; echo "==> $*"; }
 STATE="$HOME/.local/state/omarchy/migrations"
@@ -27,13 +27,13 @@ pacman -Q dust 2>&1
 log "3/5 blindando omarchy-pkg-add frente a paquetes que no existen en ARM"
 sudo tee /usr/local/bin/omarchy-pkg-add >/dev/null <<'WRAP'
 #!/bin/bash
-# Envoltorio para Arch Linux ARM.
+# A wrapper for Arch Linux ARM.
 #
-# Los paquetes propios de Omarchy (tensaku, omarchy-nvim, ttfx...) y varias apps
-# propietarias solo existen para x86_64. El omarchy-pkg-add original aborta con
-# error si alguno falta, lo que hace fallar omarchy-update entero y deja las
-# migraciones a medias. Este envoltorio omite los que no estan en ningun repo,
-# avisa de cuales, e instala el resto con el script original.
+# Omarchy's own packages (tensaku, omarchy-nvim, ttfx...) and several
+# proprietary apps only exist for x86_64. The original omarchy-pkg-add aborts
+# with an error if any is missing, which fails the whole of omarchy-update and
+# leaves the migrations half applied. This wrapper skips the ones in no
+# repository, reports which, and installs the rest with the original script.
 REAL=/usr/share/omarchy/bin/omarchy-pkg-add
 avail=(); skip=()
 for p in "$@"; do

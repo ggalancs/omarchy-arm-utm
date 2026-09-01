@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
-# La raiz se deduce de la ubicacion del propio script: asi el repo se puede
-# clonar en cualquier sitio sin editar nada.
+# The root is derived from the script's own location, so the repo can be
+# cloned anywhere without editing anything.
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 
@@ -10,7 +10,7 @@ rm -rf provision/iso && mkdir -p provision/iso
 cp provision/src/stage1.sh provision/src/stage2.sh provision/src/stage3.sh \
    provision/src/config.env provision/src/packages-core.txt provision/src/packages-extra.txt \
    provision/iso/
-# nombre corto para no depender de extensiones ISO9660
+# short name, so we do not depend on ISO9660 extensions
 ln dl/ArchLinuxARM-aarch64-latest.tar.gz provision/iso/alarm-rootfs.tgz 2>/dev/null \
   || cp dl/ArchLinuxARM-aarch64-latest.tar.gz provision/iso/alarm-rootfs.tgz
 rm -f provision/provision.iso

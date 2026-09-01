@@ -1,10 +1,10 @@
 #!/bin/bash
-# Teclado en una VM sobre macOS:
-#  1. Hyprland leia XKBLAYOUT de /etc/vconsole.conf, que solo tenia KEYMAP.
-#  2. macOS se queda con Cmd (Super) antes de que UTM lo vea: Cmd+Space abre
-#     Spotlight, asi que los atajos SUPER de Omarchy son inalcanzables.
-#     altwin:swap_lalt_lwin intercambia Alt y Super, de modo que la tecla
-#     Option (Alt) del Mac actua como SUPER dentro de la VM.
+# Keyboard in a VM on macOS:
+#  1. Hyprland read XKBLAYOUT from /etc/vconsole.conf, which only had KEYMAP.
+#  2. macOS takes Cmd (Super) before UTM ever sees it: Cmd+Space opens
+#     Spotlight, so Omarchy's SUPER shortcuts are unreachable.
+#     altwin:swap_lalt_lwin swaps Alt and Super, so the Mac's Option (Alt) key
+#     acts as SUPER inside the VM.
 set -uo pipefail
 log() { echo ""; echo "==> $*"; }
 export XDG_RUNTIME_DIR=/run/user/1000

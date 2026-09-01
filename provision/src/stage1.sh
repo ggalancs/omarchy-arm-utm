@@ -1,13 +1,13 @@
 #!/bin/sh
-# Etapa 1 — se ejecuta en el live de Alpine (busybox ash).
-# Particiona el disco, despliega el rootfs de Arch Linux ARM y entra en chroot.
+# Stage 1 - runs on the Alpine live system (busybox ash).
+# Partitions the disk, unpacks the Arch Linux ARM rootfs and chroots into it.
 set -eu
 PROV=/media/prov
 log()  { echo ""; echo "==> [stage1] $*"; }
 warn() { echo "!!  [stage1] $*"; }
 
-# Marcador de salida fiable: un pipe a tee enmascara el codigo de retorno,
-# asi que el propio script emite el token.
+# A reliable exit marker: piping into tee masks the return code, so the
+# script emits the token itself.
 trap 'rc=$?; [ "$rc" -ne 0 ] && echo "TOK_BUILD_$rc"' EXIT
 
 log "red"
@@ -75,8 +75,8 @@ fi
 df -h /mnt
 
 log "desplegando rootfs de Arch Linux ARM (bsdtar -xpf, preserva xattr/ACL)"
-# La ESP se monta DESPUES: vfat no admite los symlinks que trae /boot en el
-# tarball. El kernel lo repuebla pacman en stage2 sobre la ESP ya montada.
+# The ESP is mounted LATER: vfat cannot hold the symlinks /boot carries in the
+# tarball. pacman repopulates the kernel in stage2 onto the mounted ESP.
 bsdtar -xpf "$PROV/alarm-rootfs.tgz" -C /mnt
 echo "  contenido: $(ls /mnt | tr '\n' ' ')"
 [ -d /mnt/etc ] && [ -d /mnt/usr ] || { warn "rootfs incompleto"; exit 1; }
@@ -110,8 +110,8 @@ cp "$PROV/stage2.sh" "$PROV/stage3.sh" "$PROV/config.env" \
 [ -f "$PROV/clipbrd.sh" ] && cp "$PROV/clipbrd.sh" /mnt/root/prov/omarchy-arm-clipboard
 [ -f "$PROV/vdagent.py" ] && cp "$PROV/vdagent.py" /mnt/root/prov/omarchy-arm-vdagent
 [ -f "$PROV/share.sh" ] && cp "$PROV/share.sh" /mnt/root/prov/omarchy-arm-share
-# Sin `&&` mudo: si falta, se dice. El guard silencioso de esta linea dejo
-# una imagen entera sin el comando y nadie se entero hasta arrancarla.
+# No silent `&&`: if it is missing, say so. The quiet guard on this line
+# shipped a whole image without the command and nobody noticed until boot.
 if [ -f "$PROV/user.sh" ]; then cp "$PROV/user.sh" /mnt/root/prov/omarchy-arm-user
 else echo "  !! falta user.sh en el ISO: la imagen saldra sin omarchy-arm-user"; fi
 cat > /mnt/root/prov/fsinfo.env <<EOF

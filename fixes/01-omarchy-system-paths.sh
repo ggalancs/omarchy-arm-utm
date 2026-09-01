@@ -1,11 +1,11 @@
 #!/bin/bash
-# Replica en las rutas fijas del sistema lo que hace el paquete pacman
-# `omarchy` (que solo existe para x86_64). La rama quattro espera el arbol en
-# /usr/share/omarchy y los binarios en el PATH del sistema; sin eso
-# OMARCHY_PATH queda vacio, el bashrc falla y Hyprland cae en modo emergencia
-# por no encontrar /usr/share/omarchy/default/hypr/bootstrap.lua
+# Reproduces, at the system's fixed paths, what the `omarchy` pacman package
+# does (it only exists for x86_64). The quattro branch expects the tree in
+# /usr/share/omarchy and the binaries on the system PATH; without that
+# OMARCHY_PATH is empty, the bashrc fails and Hyprland drops into emergency
+# mode, unable to find /usr/share/omarchy/default/hypr/bootstrap.lua
 #
-# Se ejecuta como ROOT dentro del chroot (sin sudo).
+# Runs as ROOT inside the chroot (no sudo).
 set -uo pipefail
 USR=gabriel
 OM=/home/$USR/.local/share/omarchy
@@ -19,9 +19,9 @@ ls -ld /usr/share/omarchy
 ls /usr/share/omarchy/default/hypr/ | head
 
 log "2/8 binarios de Omarchy en el PATH del sistema"
-# El paquete los publica como /usr/bin/omarchy-*; usamos /usr/local/bin para no
-# invadir territorio de pacman. Va antes que /usr/bin y esta en el secure_path
-# de sudo, asi que tambien lo ven SDDM y systemd.
+# The package publishes them as /usr/bin/omarchy-*; /usr/local/bin is used here
+# so as not to invade pacman's territory. It comes before /usr/bin and is in
+# sudo's secure_path, so SDDM and systemd see it too.
 mkdir -p /usr/local/bin
 n=0
 for f in "$OM"/bin/*; do
@@ -70,11 +70,11 @@ log "7/8 servicios y acceso"
 systemctl enable systemd-oomd.service 2>/dev/null || true
 systemctl enable sshd.service 2>/dev/null || true
 systemctl mask NetworkManager-wait-online.service 2>/dev/null || true
-# clave SSH del host para poder verificar sin tocar la consola serie
+# host SSH key, to verify without touching the serial console
 install -d -m700 -o $USR -g $USR /home/$USR/.ssh
-# HISTORICO: aqui se instalaba una clave publica de desarrollo para poder
-# entrar por SSH durante la construccion. No se distribuye ninguna clave: la
-# imagen final sale con sshd deshabilitado y sin authorized_keys.
+# HISTORICAL: a development public key used to be installed here so SSH access
+# was possible during the build. No key is distributed: the final image ships
+# with sshd disabled and no authorized_keys.
 [ -f /root/prov/omkey.pub ] && cp /root/prov/omkey.pub /home/$USR/.ssh/authorized_keys
 chown $USR:$USR /home/$USR/.ssh/authorized_keys
 chmod 600 /home/$USR/.ssh/authorized_keys

@@ -1,6 +1,6 @@
 #!/usr/bin/expect -f
-# Verifica la VM arrancada en UTM por su puerto serie (pty).
-# Uso: verify-utm.exp /dev/ttysNNN     (utmctl attach imprime el pty)
+# Verifies the VM running in UTM over its serial port (pty).
+# Usage: verify-utm.exp /dev/ttysNNN    (utmctl attach prints the pty)
 set timeout 120
 log_user 1
 match_max 200000
