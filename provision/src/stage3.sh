@@ -387,8 +387,8 @@ echo "  built: ${TOOLS_OK[*]:-none}"
 # mistaken for "nothing failed".
 sudo install -d -m755 /usr/local/share/omarchy-arm
 printf '%s\n' "${TOOLS_KO[@]:-}" | sed '/^$/d' \
-  | sudo tee /usr/local/share/omarchy-arm/no-compilaron.txt >/dev/null
-echo "  registro de fallos: /usr/local/share/omarchy-arm/no-compilaron.txt ($((${#TOOLS_KO[@]})) entradas)"
+  | sudo tee /usr/local/share/omarchy-arm/build-failures.txt >/dev/null
+echo "  failure record: /usr/local/share/omarchy-arm/build-failures.txt ($((${#TOOLS_KO[@]})) entries)"
 rm -rf "$HOME/.cache/omabuild"
 fi
 # Omarchy deliberately swaps two Yaru icons for the Adwaita ones; if Yaru has

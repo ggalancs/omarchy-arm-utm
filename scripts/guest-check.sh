@@ -75,7 +75,10 @@ echo "== hygiene =="
 # writing it and nothing is known: that is a failure, not a pass. The first
 # version of this check read ~/.omarchy-arm-prov/fallos, which does not survive
 # the user rename, and therefore could never fail.
-REG=/usr/local/share/omarchy-arm/no-compilaron.txt
+# Images up to RC13 shipped this record under a Spanish name. Accept either,
+# so this check keeps working against an image that is already published.
+REG=/usr/local/share/omarchy-arm/build-failures.txt
+[ -f "$REG" ] || REG=/usr/local/share/omarchy-arm/no-compilaron.txt
 if [ ! -f "$REG" ]; then
   bad "no build record ($REG): cannot tell whether anything failed"
 elif [ -s "$REG" ]; then

@@ -251,6 +251,33 @@ via `altwin:swap_lalt_lwin`:
 
 ⌥+Space opens the Omarchy menu, ⌥+Return a terminal, ⌥+K the full keybinding list.
 
+## Graphics: `omarchy-arm-gpu`
+
+The image ships with software rendering forced on (`LIBGL_ALWAYS_SOFTWARE=1`),
+because it is the setting that works on every host. If your UTM has GPU
+acceleration available, turning it off is a large win:
+
+```bash
+omarchy-arm-gpu --on       # use the GPU
+omarchy-arm-gpu --off      # back to software rendering
+```
+
+Log out and back in, then check with `glxinfo -B`: if it no longer says
+`llvmpipe`, the GPU is doing the work. If the desktop misbehaves, `--off`
+restores the shipped setting.
+
+## Changing the autologin user
+
+If you rename the account or add another one, point autologin at it:
+
+```bash
+omarchy-arm-user --ask       # pick from the accounts on the machine
+omarchy-arm-user someuser    # set it directly
+```
+
+It edits `[Autologin] User=` in `/etc/sddm.conf.d/autologin.conf` and leaves
+`Session=` alone.
+
 ## Proprietary apps
 
 1Password, Obsidian, Typora, LocalSend and Google Chrome are **not** in the
@@ -275,8 +302,8 @@ which ships inside Google Chrome arm64 (`omarchy-arm-extras chrome spotify-web`)
 package names, and run it.
 
 ```bash
-./my-apps.sh --ejemplo > my-apps.txt   # a starter list
-./my-apps.sh --comprobar my-apps.txt   # check only, install nothing
+./my-apps.sh --example > my-apps.txt   # a starter list
+./my-apps.sh --check my-apps.txt        # check only, install nothing
 ./my-apps.sh my-apps.txt               # check, then install
 ```
 

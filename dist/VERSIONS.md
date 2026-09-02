@@ -94,7 +94,7 @@ Everything here came from people who used the image and reported what broke.
   recorded in the build user's home, which does not survive the rename to
   `omarchy` — so nothing checked them, and images shipped without `herdr` once and
   without `ttf-ia-writer` another time. The list now lives at
-  `/usr/local/share/omarchy-arm/no-compilaron.txt`, is always written, and the
+  `/usr/local/share/omarchy-arm/build-failures.txt`, is always written, and the
   image check fails if it is missing or non-empty. Downloads are also retried
   once: both real failures were GitHub timing out, not code that would not build.
 - Documented, from a user's report: the shell is `bash` as in Omarchy (so

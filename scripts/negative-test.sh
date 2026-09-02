@@ -84,7 +84,7 @@ systemctl stop spice-vdagentd 2>/dev/null \
 # The check that catches the whole "something failed to build" class. The
 # record stage3 leaves is forged, which is exactly what an image missing a tool
 # would carry.
-echo "paquete-inventado" >> /usr/local/share/omarchy-arm/no-compilaron.txt
+R=/usr/local/share/omarchy-arm/build-failures.txt; [ -f "$R" ] || R=/usr/local/share/omarchy-arm/no-compilaron.txt; echo "made-up-package" >> "$R"
 echo "   + entry in the failed-build record"
 EXPECTED+=("failed to build")
 
