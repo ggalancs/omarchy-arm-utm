@@ -143,7 +143,9 @@ ES_STR = re.compile(r'(?<![-\w])(el|la|los|las|un|una|de|del|al|se|le|lo|es|su|s
                     r'que|para|con|sin|por|como|pero|ya|hay|esta|este|esto|'
                     r'todo|toda|solo|mas|muy|desde|hasta|cuando|porque|donde|'
                     r'fichero|ficheros|carpeta|usuario|paquete|paquetes|clave|'
-                    r'linea|lineas|arranque|arbol|llavero|ruta|rutas|red)'
+                    # 'red' is out for the same reason as 'no': "checks gone
+                    # red" is English, and this tool's own output says it.
+                    r'linea|lineas|arranque|arbol|llavero|ruta|rutas)'
                     r'(?![-\w])', re.IGNORECASE)
 # Words that are Spanish on their own -- no second opinion needed.
 ES_SURE = re.compile(r'(?<![-\w])(no se pudo|no encuentro|no encontre|montando|'
@@ -167,8 +169,14 @@ def spanish_strings(path):
             continue
         for lit in QUOTED.findall(line):
             body = SUBST.sub(' ', lit)
+            # Two matches is the right bar for a sentence and the wrong one
+            # for a label. `log "orphan packages"` has exactly one word on
+            # the list and sailed through a run that reported zero, and so did
+            # `echo "all correct"`. Short strings get judged on one word.
+            words = len(body.split())
+            need = 1 if words <= 4 else 2
             if (ES_CHARS.search(body) or ES_SURE.search(body)
-                    or len(ES_STR.findall(body)) >= 2):
+                    or len(ES_STR.findall(body)) >= need):
                 hits.append((n, lit[:78]))
     return hits
 

@@ -230,7 +230,7 @@ La tecla Option (⌥) actúa como SUPER. Lee LEEME.md.</string>
 </plist>
 PLIST
 
-echo "==> validando el plist"
+echo "==> validating the plist"
 plutil -lint "$BUNDLE/config.plist"
 du -sh "$BUNDLE"
 ls -la "$BUNDLE" "$BUNDLE/Data"

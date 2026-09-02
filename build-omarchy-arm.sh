@@ -373,7 +373,7 @@ warn() { echo "!!  [stage1] $*"; }
 # script emits the token itself.
 trap 'rc=$?; [ "$rc" -ne 0 ] && echo "TOK_BUILD_$rc"' EXIT
 
-log "red"
+log "network"
 ip link set eth0 up 2>/dev/null || true
 udhcpc -i eth0 -q -n -t 15 >/dev/null 2>&1 || true
 ip -4 addr show eth0 | grep -o 'inet [0-9.]*' || echo "  (no IPv4)"
@@ -623,7 +623,7 @@ mkinitcpio -P
 echo "  /boot:"; ls -la /boot
 
 # ---------------------------------------------------------------- UEFI boot
-log "systemd-boot en la ESP"
+log "systemd-boot on the ESP"
 # --no-variables: we do not write NVRAM; UTM boots from the fallback path
 # \EFI\BOOT\BOOTAA64.EFI, which bootctl installs anyway.
 bootctl --esp-path=/boot --no-variables install
@@ -684,7 +684,7 @@ log "installing the desktop stack (Hyprland + Omarchy's tools)"
 install_list() {
   local file="$1" label="$2" fatal="$3"
   mapfile -t PKGS < <(grep -vE '^\s*#|^\s*$' "$file")
-  echo "  $label: ${#PKGS[@]} paquetes"
+  echo "  $label: ${#PKGS[@]} packages"
   if pac "${PKGS[@]}"; then return 0; fi
   warn "$label: instalacion en bloque fallida tras 3 intentos; probando uno a uno"
   local FAILED=()
@@ -707,7 +707,7 @@ set +e
 install_list /root/prov/packages-extra.txt "extras" soft
 set -e
 
-log "servicios de sistema"
+log "system services"
 systemctl enable sddm.service 2>/dev/null || warn "sddm no disponible"
 # UTM integration: utmctl ip-address/exec/file need the guest agent
 systemctl enable qemu-guest-agent.service 2>/dev/null || true
@@ -1812,7 +1812,7 @@ log "7d/10 slimming: what a VM cannot possibly need"
 # installed, but the per-vendor splits come in as dependencies.
 FW=$(pacman -Qq 2>/dev/null | grep -E '^linux-firmware-(intel|nvidia|amdgpu|atheros|broadcom|realtek|mediatek|marvell|qcom|qlogic|liquidio|bnx2x|mellanox|nfp|other)$' | tr '\n' ' ')
 if [ -n "${FW// /}" ]; then
-  echo "  firmware de hardware ausente: $FW"
+  echo "  firmware for absent hardware: $FW"
   # -Rdd: the splits are claimed by the linux-firmware metapackage, which is
   # not needed either. If anything objects, leave it as it is and break
   # nothing.
@@ -1826,7 +1826,7 @@ for d in /usr/share/doc /usr/share/man /usr/share/info /usr/share/gtk-doc; do
   [ -d "$d" ] && { echo "  $d: $(du -shx "$d" 2>/dev/null | cut -f1)"; rm -rf "$d"; }
 done
 mkdir -p /usr/share/man /usr/share/doc
-echo "  ocupacion tras el recorte: $(df -h / | awk 'NR==2{print $3}')"
+echo "  usage after the trim: $(df -h / | awk 'NR==2{print $3}')"
 
 log "7/10 system logs and caches"
 rm -rf /var/log/journal/* /var/log/omarchy* /var/log/pacman.log
@@ -1883,7 +1883,7 @@ fi
 # The checkout must not get dirtied by permission changes, or the pull fails
 git -C /usr/share/omarchy config core.fileMode false 2>/dev/null || true
 git -C /usr/share/omarchy checkout -- . 2>/dev/null || true
-echo "  checkout limpio: $(git -C /usr/share/omarchy status --porcelain 2>/dev/null | wc -l) ficheros"
+echo "  clean checkout: $(git -C /usr/share/omarchy status --porcelain 2>/dev/null | wc -l) files"
 
 log "8b/10 instalador de apps opcionales"
 # repair.sh copies extras.sh as omarchy-arm-extras, but if that copy did not
@@ -1932,12 +1932,25 @@ fi
 printf 'KEYMAP=us\n' > /etc/vconsole.conf
 echo "  /etc/vconsole.conf: KEYMAP=us"
 
+# The builder's timezone must not travel either. stage2 writes VM_TIMEZONE into
+# /etc/localtime, VM_TIMEZONE defaults to whatever the build host has, and
+# nothing reset it: every image published so far went out on Europe/Madrid.
+# Reported by mphaxise in #14, and it is the same defect as the layout above --
+# the maintainer's own configuration baked into an image for strangers, showing
+# up as nothing more alarming than a clock that is wrong.
+#
+# UTC is the neutral default; the user sets theirs with
+# 'sudo timedatectl set-timezone <zone>'.
+log "8d/10 neutral timezone for distribution"
+ln -sf /usr/share/zoneinfo/UTC /etc/localtime
+echo "  /etc/localtime -> $(readlink /etc/localtime)"
+
 log "9/10 checking nothing is still tied to $OLD"
 echo "  references in /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null | head -5 || echo "    none"
 echo "  home:"; ls -ld "/home/$NEW"; ls /home/
-echo "  owner of stray files:"; find /home/$NEW -maxdepth 2 ! -user "$NEW" 2>/dev/null | head -3 || echo "    todo correcto"
+echo "  owner of stray files:"; find /home/$NEW -maxdepth 2 ! -user "$NEW" 2>/dev/null | head -3 || echo "    all correct"
 
-log "paquetes huerfanos"
+log "orphan packages"
 # Build dependencies left behind by makepkg -s, and firmware for hardware a VM
 # does not have. If they stay, the user's VERY FIRST update prompts them about
 # it, which is an odd welcome for a freshly installed image. `-Qtdq` lists only
@@ -2128,6 +2141,16 @@ case "$KBL" in
   *)        bad "the image ships the builder's layout: $KBL" ;;
 esac
 
+# Same question for the clock. A wrong timezone is quieter than a wrong layout
+# -- nothing fails, the times are just wrong -- so it survived every check
+# until someone outside reported it.
+TZL=$(readlink /etc/localtime 2>/dev/null)
+case "$TZL" in
+  */zoneinfo/UTC) ok_ "neutral timezone (UTC)" ;;
+  "")             bad "/etc/localtime is not a symlink: cannot tell what ships" ;;
+  *)              bad "the image ships the builder's timezone: ${TZL##*/zoneinfo/}" ;;
+esac
+
 # Binaries built inside the VM: the build path stays in their debug info.
 # grep -rl does not see them because it looks at text, not symbols.
 if [ "$OLD" != "$NEW" ]; then
@@ -2270,7 +2293,7 @@ aur_build() {
   for k in $keys; do
     [ ${#k} -ge 16 ] || continue
     gpg --list-keys "$k" >/dev/null 2>&1 && continue
-    info "importando clave GPG ${k: -8}"
+    info "importing GPG key ${k: -8}"
     gpg --keyserver keyserver.ubuntu.com --recv-keys "$k" >/dev/null 2>&1 \
       || gpg --keyserver keys.openpgp.org --recv-keys "$k" >/dev/null 2>&1 \
       || warn "could not import ${k: -8}: signature verification will fail"
@@ -2534,7 +2557,7 @@ if [ ${#KO_LIST[@]} -gt 0 ]; then
   fail "failed: ${KO_LIST[*]}"
   # The working directory is not deleted: the build.log files are in there,
   # and they are the only way to work out why it failed.
-  info "logs en $WORK/<paquete>/build.log"
+  info "logs in $WORK/<package>/build.log"
 else
   rm -rf "$WORK"
 fi
@@ -3593,7 +3616,7 @@ La tecla Option (⌥) actúa como SUPER. Lee LEEME.md.</string>
 </plist>
 PLIST
 
-echo "==> validando el plist"
+echo "==> validating the plist"
 plutil -lint "$BUNDLE/config.plist"
 du -sh "$BUNDLE"
 ls -la "$BUNDLE" "$BUNDLE/Data"
@@ -4071,6 +4094,17 @@ land you on the SDDM greeter, and SDDM only auto-logs-in when the service
 starts, so restarting it needs a password you may not be able to type from
 there. Fix the file from the terminal you already have.
 (Reported by RBeach in omacom/omarchy#7956.)
+
+## Timezone
+
+The image ships **UTC**. Set yours with:
+
+```bash
+sudo timedatectl set-timezone Europe/Berlin   # timedatectl list-timezones
+```
+
+Images before this one carried the builder's own timezone (Europe/Madrid),
+so the clock was wrong out of the box. Reported by mphaxise.
 
 ## What to expect
 

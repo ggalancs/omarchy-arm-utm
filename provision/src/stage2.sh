@@ -115,7 +115,7 @@ mkinitcpio -P
 echo "  /boot:"; ls -la /boot
 
 # ---------------------------------------------------------------- UEFI boot
-log "systemd-boot en la ESP"
+log "systemd-boot on the ESP"
 # --no-variables: we do not write NVRAM; UTM boots from the fallback path
 # \EFI\BOOT\BOOTAA64.EFI, which bootctl installs anyway.
 bootctl --esp-path=/boot --no-variables install
@@ -176,7 +176,7 @@ log "installing the desktop stack (Hyprland + Omarchy's tools)"
 install_list() {
   local file="$1" label="$2" fatal="$3"
   mapfile -t PKGS < <(grep -vE '^\s*#|^\s*$' "$file")
-  echo "  $label: ${#PKGS[@]} paquetes"
+  echo "  $label: ${#PKGS[@]} packages"
   if pac "${PKGS[@]}"; then return 0; fi
   warn "$label: instalacion en bloque fallida tras 3 intentos; probando uno a uno"
   local FAILED=()
@@ -199,7 +199,7 @@ set +e
 install_list /root/prov/packages-extra.txt "extras" soft
 set -e
 
-log "servicios de sistema"
+log "system services"
 systemctl enable sddm.service 2>/dev/null || warn "sddm no disponible"
 # UTM integration: utmctl ip-address/exec/file need the guest agent
 systemctl enable qemu-guest-agent.service 2>/dev/null || true

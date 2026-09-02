@@ -13,7 +13,7 @@ log() { echo ""; echo "==> $*"; }
 
 [ -d "$OM" ] || { echo "!! no existe $OM"; exit 1; }
 
-log "1/8 arbol en /usr/share/omarchy"
+log "1/8 tree at /usr/share/omarchy"
 ln -sfn "$OM" /usr/share/omarchy
 ls -ld /usr/share/omarchy
 ls /usr/share/omarchy/default/hypr/ | head

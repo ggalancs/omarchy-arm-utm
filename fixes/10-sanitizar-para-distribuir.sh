@@ -99,7 +99,7 @@ chown "$NEW:$NEW" "/home/$NEW/Desktop/LEEME.txt"
 log "9/10 checking nothing is still tied to $OLD"
 echo "  referencias en /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null | head -5 || echo "    none"
 echo "  home:"; ls -ld "/home/$NEW"; ls /home/
-echo "  owner of stray files:"; find /home/$NEW -maxdepth 2 ! -user "$NEW" 2>/dev/null | head -3 || echo "    todo correcto"
+echo "  owner of stray files:"; find /home/$NEW -maxdepth 2 ! -user "$NEW" 2>/dev/null | head -3 || echo "    all correct"
 
 log "10/10 freeing unused space (so it compresses better)"
 sync

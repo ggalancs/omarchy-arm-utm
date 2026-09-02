@@ -28,7 +28,7 @@ log "3/3 verification: run the hook now"
 
 log "estado"
 echo "  tree commit: $(git -C /usr/share/omarchy log -1 --format='%h %ci' 2>/dev/null)"
-echo "  snapshots:        $(sudo snapper -c root list 2>/dev/null | wc -l) lineas"
+echo "  snapshots:        $(sudo snapper -c root list 2>/dev/null | wc -l) lines"
 echo "  binarios:         $(ls /usr/local/bin | wc -l)"
 echo "  enlaces rotos:    $(find /usr/local/bin -xtype l | wc -l)"
 echo ""

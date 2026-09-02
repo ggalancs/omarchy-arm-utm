@@ -103,6 +103,17 @@ starts, so restarting it needs a password you may not be able to type from
 there. Fix the file from the terminal you already have.
 (Reported by RBeach in omacom/omarchy#7956.)
 
+## Timezone
+
+The image ships **UTC**. Set yours with:
+
+```bash
+sudo timedatectl set-timezone Europe/Berlin   # timedatectl list-timezones
+```
+
+Images before this one carried the builder's own timezone (Europe/Madrid),
+so the clock was wrong out of the box. Reported by mphaxise.
+
 ## What to expect
 
 Works: the full Hyprland desktop with Omarchy's bar, themes, menu, terminal,

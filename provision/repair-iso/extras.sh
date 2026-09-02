@@ -72,7 +72,7 @@ is_installed() {
 need_sudo() {
   sudo -n true 2>/dev/null && return 0
   info "sudo is needed in order to install packages."
-  sudo -v || { fail "sin privilegios"; return 1; }
+  sudo -v || { fail "unprivileged"; return 1; }
 }
 
 # Builds an AUR package, working around the usual ARM traps:
@@ -102,7 +102,7 @@ aur_build() {
   for k in $keys; do
     [ ${#k} -ge 16 ] || continue
     gpg --list-keys "$k" >/dev/null 2>&1 && continue
-    info "importando clave GPG ${k: -8}"
+    info "importing GPG key ${k: -8}"
     gpg --keyserver keyserver.ubuntu.com --recv-keys "$k" >/dev/null 2>&1 \
       || gpg --keyserver keys.openpgp.org --recv-keys "$k" >/dev/null 2>&1 \
       || warn "could not import ${k: -8}: signature verification will fail"

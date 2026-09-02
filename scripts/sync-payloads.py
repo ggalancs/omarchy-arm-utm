@@ -32,7 +32,7 @@ for marca,rel in MAPA.items():
     if lineas[ini+1:fin]==nuevo: continue
     lineas[ini+1:fin]=nuevo
     cambios+=1
-    print(f"  re-embedded {os.path.basename(rel)} ({len(nuevo)} lineas)")
+    print(f"  re-embedded {os.path.basename(rel)} ({len(nuevo)} lines)")
 open(p,"w").write("\n".join(lineas))
 print(f"  {cambios} payload(s) updated" if cambios else "  everything was already in sync")
 

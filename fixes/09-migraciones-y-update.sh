@@ -50,7 +50,7 @@ fi
 exec "$REAL" "${avail[@]}"
 WRAP
 sudo chmod +x /usr/local/bin/omarchy-pkg-add
-echo "  probando el envoltorio:"
+echo "  testing the wrapper:"
 omarchy-pkg-add tensaku jq 2>&1 | tail -3
 
 log "4/5 cleaning orphans left by the AUR builds"
@@ -59,7 +59,7 @@ orph=$(pacman -Qdtq 2>/dev/null)
 
 log "5/5 re-ejecutando omarchy-update"
 OMARCHY_UPDATE_NONINTERACTIVE=1 omarchy-update 2>&1 | tail -25
-echo "  codigo de salida: $?"
+echo "  exit code: $?"
 
 log "estado"
 echo "  pendientes: $(omarchy-migrate --pending 2>/dev/null | wc -l)"

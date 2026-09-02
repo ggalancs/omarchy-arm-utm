@@ -104,7 +104,7 @@ aur_build() {
   for k in $keys; do
     [ ${#k} -ge 16 ] || continue
     gpg --list-keys "$k" >/dev/null 2>&1 && continue
-    info "importando clave GPG ${k: -8}"
+    info "importing GPG key ${k: -8}"
     gpg --keyserver keyserver.ubuntu.com --recv-keys "$k" >/dev/null 2>&1 \
       || gpg --keyserver keys.openpgp.org --recv-keys "$k" >/dev/null 2>&1 \
       || warn "could not import ${k: -8}: signature verification will fail"
@@ -368,7 +368,7 @@ if [ ${#KO_LIST[@]} -gt 0 ]; then
   fail "failed: ${KO_LIST[*]}"
   # The working directory is not deleted: the build.log files are in there,
   # and they are the only way to work out why it failed.
-  info "logs en $WORK/<paquete>/build.log"
+  info "logs in $WORK/<package>/build.log"
 else
   rm -rf "$WORK"
 fi

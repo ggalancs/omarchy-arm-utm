@@ -161,7 +161,7 @@ log "7d/10 slimming: what a VM cannot possibly need"
 # installed, but the per-vendor splits come in as dependencies.
 FW=$(pacman -Qq 2>/dev/null | grep -E '^linux-firmware-(intel|nvidia|amdgpu|atheros|broadcom|realtek|mediatek|marvell|qcom|qlogic|liquidio|bnx2x|mellanox|nfp|other)$' | tr '\n' ' ')
 if [ -n "${FW// /}" ]; then
-  echo "  firmware de hardware ausente: $FW"
+  echo "  firmware for absent hardware: $FW"
   # -Rdd: the splits are claimed by the linux-firmware metapackage, which is
   # not needed either. If anything objects, leave it as it is and break
   # nothing.
@@ -175,7 +175,7 @@ for d in /usr/share/doc /usr/share/man /usr/share/info /usr/share/gtk-doc; do
   [ -d "$d" ] && { echo "  $d: $(du -shx "$d" 2>/dev/null | cut -f1)"; rm -rf "$d"; }
 done
 mkdir -p /usr/share/man /usr/share/doc
-echo "  ocupacion tras el recorte: $(df -h / | awk 'NR==2{print $3}')"
+echo "  usage after the trim: $(df -h / | awk 'NR==2{print $3}')"
 
 log "7/10 system logs and caches"
 rm -rf /var/log/journal/* /var/log/omarchy* /var/log/pacman.log
@@ -232,7 +232,7 @@ fi
 # The checkout must not get dirtied by permission changes, or the pull fails
 git -C /usr/share/omarchy config core.fileMode false 2>/dev/null || true
 git -C /usr/share/omarchy checkout -- . 2>/dev/null || true
-echo "  checkout limpio: $(git -C /usr/share/omarchy status --porcelain 2>/dev/null | wc -l) ficheros"
+echo "  clean checkout: $(git -C /usr/share/omarchy status --porcelain 2>/dev/null | wc -l) files"
 
 log "8b/10 instalador de apps opcionales"
 # repair.sh copies extras.sh as omarchy-arm-extras, but if that copy did not
@@ -281,12 +281,25 @@ fi
 printf 'KEYMAP=us\n' > /etc/vconsole.conf
 echo "  /etc/vconsole.conf: KEYMAP=us"
 
+# The builder's timezone must not travel either. stage2 writes VM_TIMEZONE into
+# /etc/localtime, VM_TIMEZONE defaults to whatever the build host has, and
+# nothing reset it: every image published so far went out on Europe/Madrid.
+# Reported by mphaxise in #14, and it is the same defect as the layout above --
+# the maintainer's own configuration baked into an image for strangers, showing
+# up as nothing more alarming than a clock that is wrong.
+#
+# UTC is the neutral default; the user sets theirs with
+# 'sudo timedatectl set-timezone <zone>'.
+log "8d/10 neutral timezone for distribution"
+ln -sf /usr/share/zoneinfo/UTC /etc/localtime
+echo "  /etc/localtime -> $(readlink /etc/localtime)"
+
 log "9/10 checking nothing is still tied to $OLD"
 echo "  references in /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null | head -5 || echo "    none"
 echo "  home:"; ls -ld "/home/$NEW"; ls /home/
-echo "  owner of stray files:"; find /home/$NEW -maxdepth 2 ! -user "$NEW" 2>/dev/null | head -3 || echo "    todo correcto"
+echo "  owner of stray files:"; find /home/$NEW -maxdepth 2 ! -user "$NEW" 2>/dev/null | head -3 || echo "    all correct"
 
-log "paquetes huerfanos"
+log "orphan packages"
 # Build dependencies left behind by makepkg -s, and firmware for hardware a VM
 # does not have. If they stay, the user's VERY FIRST update prompts them about
 # it, which is an odd welcome for a freshly installed image. `-Qtdq` lists only
@@ -475,6 +488,16 @@ case "$KBL" in
   *'"us"'*) ok_ "neutral keyboard layout (us)" ;;
   "")       bad "input.lua has no kb_layout: cannot tell what ships" ;;
   *)        bad "the image ships the builder's layout: $KBL" ;;
+esac
+
+# Same question for the clock. A wrong timezone is quieter than a wrong layout
+# -- nothing fails, the times are just wrong -- so it survived every check
+# until someone outside reported it.
+TZL=$(readlink /etc/localtime 2>/dev/null)
+case "$TZL" in
+  */zoneinfo/UTC) ok_ "neutral timezone (UTC)" ;;
+  "")             bad "/etc/localtime is not a symlink: cannot tell what ships" ;;
+  *)              bad "the image ships the builder's timezone: ${TZL##*/zoneinfo/}" ;;
 esac
 
 # Binaries built inside the VM: the build path stays in their debug info.

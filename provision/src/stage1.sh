@@ -10,7 +10,7 @@ warn() { echo "!!  [stage1] $*"; }
 # script emits the token itself.
 trap 'rc=$?; [ "$rc" -ne 0 ] && echo "TOK_BUILD_$rc"' EXIT
 
-log "red"
+log "network"
 ip link set eth0 up 2>/dev/null || true
 udhcpc -i eth0 -q -n -t 15 >/dev/null 2>&1 || true
 ip -4 addr show eth0 | grep -o 'inet [0-9.]*' || echo "  (no IPv4)"

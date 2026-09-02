@@ -280,6 +280,8 @@ omarchy-arm-user someuser    # set it directly
 It edits `[Autologin] User=` in `/etc/sddm.conf.d/autologin.conf` and leaves
 `Session=` alone.
 
+The image ships **UTC**. Set yours with `sudo timedatectl set-timezone <zone>` (`timedatectl list-timezones` lists them). Earlier images carried the builder's own timezone, which is why the clock was wrong out of the box.
+
 ## Proprietary apps
 
 1Password, Obsidian, Typora, LocalSend and Google Chrome are **not** in the

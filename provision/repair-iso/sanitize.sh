@@ -138,7 +138,7 @@ fi
 # The checkout must not be dirtied by permission changes, or the pull will fail
 git -C /usr/share/omarchy config core.fileMode false 2>/dev/null || true
 git -C /usr/share/omarchy checkout -- . 2>/dev/null || true
-echo "  checkout limpio: $(git -C /usr/share/omarchy status --porcelain 2>/dev/null | wc -l) ficheros"
+echo "  clean checkout: $(git -C /usr/share/omarchy status --porcelain 2>/dev/null | wc -l) files"
 
 log "8b/10 optional-app installer"
 # repair.sh copies extras.sh as omarchy-arm-extras, but if that copy did not

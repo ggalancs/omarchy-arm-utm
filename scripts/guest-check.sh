@@ -103,10 +103,28 @@ F=$(systemctl --failed --no-legend | wc -l); U=$(systemctl --user --failed --no-
 [ "$U" -eq 0 ] && ok_ "no failed user units" || { bad "$U failed user units"; systemctl --user --failed --no-legend | sed 's/^/         /'; }
 # A dangling link is acceptable only if a distribution package left it that way.
 for l in $(find /usr/bin /usr/local/bin -xtype l 2>/dev/null); do
-  duenyo=$(pacman -Qoq "$l" 2>/dev/null)
-  [ -n "$duenyo" ] && ok_ "dangling link $l (packaged by $duenyo, not ours)" \
+  owner=$(pacman -Qoq "$l" 2>/dev/null)
+  [ -n "$owner" ] && ok_ "dangling link $l (packaged by $owner, not ours)" \
                    || bad "dangling link with no owner: $l"
 done
+# What the image ships as the machine's own settings. Both are the builder's
+# configuration baked into an image for strangers, and neither was checked here
+# before: the keyboard cost two users hours (#1, #2) and the timezone shipped as
+# Europe/Madrid in every release until mphaxise reported it (#14). This file
+# inspects the packaged artifact, so this is where the question belongs --
+# sanitize can only promise that it did the work.
+KBL=$(grep -o 'kb_layout[^,]*' /home/omarchy/.config/hypr/input.lua 2>/dev/null | head -1)
+case "$KBL" in
+  *'"us"'*) ok_ "neutral keyboard layout (us)" ;;
+  "")       bad "input.lua has no kb_layout: cannot tell what ships" ;;
+  *)        bad "the image ships the builder's layout: $KBL" ;;
+esac
+TZL=$(readlink /etc/localtime 2>/dev/null)
+case "$TZL" in
+  */zoneinfo/UTC) ok_ "neutral timezone (UTC)" ;;
+  "")             bad "/etc/localtime is not a symlink: cannot tell what ships" ;;
+  *)              bad "the image ships the builder's timezone: ${TZL##*/zoneinfo/}" ;;
+esac
 E=$(journalctl -b -p 3 --no-pager -o cat 2>/dev/null | grep -v "gkr-pam" | sort -u | wc -l)
 [ "$E" -eq 0 ] && ok_ "no errors in the boot journal" \
                || { bad "$E errors in the journal"; journalctl -b -p 3 --no-pager -o cat | grep -v gkr-pam | sort -u | head -8 | sed 's/^/         /'; }

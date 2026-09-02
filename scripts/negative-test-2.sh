@@ -11,8 +11,8 @@
 #  ────────────────────────────────────────────────────────────────────────────
 LIST=/media/guest-check-base.sh
 [ -r "$LIST" ] || { echo "cannot find $LIST"; echo "END_CHECK"; exit 2; }
-pasar() { bash "$LIST" builder 2>&1; }
-cuenta() {
+run_list() { bash "$LIST" builder 2>&1; }
+count_failures() {
   case "$1" in
     *VERDICT_CLEAN*) echo 0 ;;
     *VERDICT_WITH_*)   echo "$1" | grep -o "VERDICT_WITH_[0-9]*" | tail -1 | sed "s/.*_//" ;;
@@ -21,7 +21,7 @@ cuenta() {
 }
 
 echo "== 1. intact image =="
-BEFORE=$(pasar); echo "   failures: $(cuenta "$BEFORE")"
+BEFORE=$(run_list); echo "   failures: $(count_failures "$BEFORE")"
 echo "$BEFORE" | grep -q VERDICT_CLEAN && BASE_OK=1 || BASE_OK=0
 [ "$BASE_OK" = 1 ] && echo "   VERDICT_CLEAN (correct)" || echo "   NOT clean"
 
@@ -71,8 +71,8 @@ echo "   sabotages: ${#EXPECTED[@]}"
 
 echo
 echo "== 3. the list has to see them =="
-AFTER=$(pasar)
-echo "   checks gone red: $(cuenta "$AFTER")"
+AFTER=$(run_list)
+echo "   checks gone red: $(count_failures "$AFTER")"
 echo "$AFTER" | grep "FAIL" | sed "s/^/     /"
 
 echo
