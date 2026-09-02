@@ -3110,8 +3110,18 @@ wait_for "TOK_TGZ_0" 14 "the Arch Linux ARM rootfs is missing from the ISO" 60
 #
 # This is an inactivity timeout, not a total one: expect resets it on every
 # byte received, so a long-but-progressing build is safe and only true silence
-# trips it. Twenty minutes is far more than any single step prints nothing for.
-set timeout 1200
+# trips it.
+#
+# 45 minutes, not 20. The first attempt used 20 and it fired on a healthy build
+# during "building the Omarchy tools": compiling 17 packages has genuinely
+# quiet stretches, and stage3 itself documents OBS alone at ~45 min. A bound
+# below the longest legitimate silence is not a safety net, it is a second way
+# to lose a build.
+#
+# And when it does fire, it asks the guest what it was doing before giving up.
+# Otherwise the report is a guess -- "a mirror has probably stalled" -- which is
+# exactly what it was, and a guess is not evidence.
+set timeout 2700
 # stage1.sh emits the TOK_BUILD_<rc> token itself (piping into tee would mask
 # the return code).
 send "export DISK=/dev/vda; sh /media/prov/stage1.sh 2>&1 | tee /tmp/build.log\r"
@@ -3119,8 +3129,16 @@ send "export DISK=/dev/vda; sh /media/prov/stage1.sh 2>&1 | tee /tmp/build.log\r
 expect {
     timeout {
         puts "\n\n!!!!!! THE BUILD STALLED !!!!!!"
-        puts "No output for 20 minutes. A mirror has almost certainly stalled:"
-        puts "pacman runs without a download timeout and waits forever.\n"
+        puts "No output for 45 minutes. Asking the guest what it was doing:\n"
+        # Ctrl-C the foreground job, then look. Whatever answers here is the
+        # difference between "a mirror stalled" and "a compile was quiet".
+        send "\003"
+        set timeout 60
+        expect { -re {[#$] $} {} timeout {} }
+        send "ps ax | grep -aE 'curl|wget|git|pacman|makepkg|cc1|rustc|zig' | grep -v grep | head -20; echo TOK_DIAG_\$?\r"
+        expect { -ex "TOK_DIAG_" {} timeout { puts "  (the guest does not answer: it is hung, not slow)" } }
+        send "tail -n 25 /tmp/build.log; echo TOK_TAIL2_\$?\r"
+        expect { -ex "TOK_TAIL2_" {} timeout {} }
         exit 22
     }
     -ex "TOK_BUILD_0" {
