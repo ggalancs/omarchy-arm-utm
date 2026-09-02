@@ -81,8 +81,35 @@ def guard(before, after):
         print("   ", d)
     return 1
 
+# ── lint: comments inside a backslash-continued command ──────────────────────
+# `bash -n` accepts this and the result is a different, silently truncated
+# command. It cost a 40-minute build: a comment added between two continued
+# lines of the QEMU invocation dropped networking, the RNG and -nographic, so
+# there was no serial console and the harness timed out with "Alpine never
+# reached the login".
+#
+#   lint-continuations.py <file...>
+def lint_continuations(paths):
+    bad = 0
+    for f in paths:
+        p = pathlib.Path(f)
+        if not p.is_file():
+            continue
+        cont = False
+        for i, l in enumerate(p.read_text(errors="ignore").splitlines(), 1):
+            if cont and l.lstrip().startswith("#"):
+                print(f"  {f}:{i}: comment inside a continued command")
+                print(f"    {l.strip()[:76]}")
+                bad += 1
+            cont = l.rstrip().endswith("\\")
+    if not bad:
+        print("  no comments inside continued commands")
+    return bad
+
 if __name__ == "__main__":
     if len(sys.argv) < 2: sys.exit(__doc__)
+    if sys.argv[1] == "lint-cont":
+        sys.exit(1 if lint_continuations(sys.argv[2:]) else 0)
     if sys.argv[1] == "guard":
         sys.exit(guard(sys.argv[2], sys.argv[3]))
     args = sys.argv[2:] or ["."]

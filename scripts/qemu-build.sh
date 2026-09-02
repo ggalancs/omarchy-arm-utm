@@ -14,6 +14,19 @@ FW=$(brew --prefix qemu)/share/qemu/edk2-aarch64-code.fd
 
 [ -f vm/efi-vars.fd ] || dd if=/dev/zero of=vm/efi-vars.fd bs=1m count=64 status=none
 
+# CAREFUL: no comments inside the exec below. Its lines are joined with
+# backslashes, and a comment line terminates the command: QEMU then started
+# without networking, without the RNG and without -nographic, so there was no
+# serial console at all and the harness timed out on "Alpine never reached the
+# login". `bash -n` does not catch it -- it is valid syntax, just a different
+# command.
+#
+# dns=10.0.2.3 below pins the guest resolver to slirp's own forwarder instead
+# of letting it inherit whatever the Mac lists first. On a dual-stack ISP macOS
+# puts IPv6 nameservers at the top of resolv.conf, slirp hands those to a guest
+# with no IPv6 route, and every lookup fails: `apk update` dies with "DNS:
+# transient error" while DHCP looks fine and the guest holds a valid 10.0.2.15.
+# Diagnosed by @wouter1981 in issue #9.
 exec qemu-system-aarch64 \
   -accel hvf -cpu host -smp "$VM_SMP" -m "$VM_MEM" \
   -M virt,highmem=on,gic-version=3 \
@@ -25,12 +38,6 @@ exec qemu-system-aarch64 \
   -device virtio-blk-pci,drive=live,bootindex=0 \
   -drive if=none,id=prov,file="$PROV_ISO",format=raw,media=cdrom,readonly=on \
   -device virtio-blk-pci,drive=prov \
-  # dns=10.0.2.3 pins the guest resolver to slirp's own built-in forwarder
-  # instead of letting it inherit whatever the Mac lists first. On a dual-stack
-  # ISP macOS puts IPv6 nameservers at the top of resolv.conf, slirp hands
-  # those to a guest that has no IPv6 route, and every lookup fails: `apk
-  # update` dies with "DNS: transient error" while DHCP looks perfectly fine
-  # and the guest holds a valid 10.0.2.15. Diagnosed by @wouter1981 in issue #9.
   -netdev user,id=n0,dns=10.0.2.3 -device virtio-net-pci,netdev=n0 \
   -device virtio-rng-pci \
   -nographic
