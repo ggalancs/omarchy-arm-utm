@@ -110,7 +110,7 @@ aur_build() {
 
   if ! grep -qE "^arch=\(.*\b(aarch64|any)\b" "$dir/PKGBUILD"; then
     sed -i "s/^arch=(\(.*\))/arch=(\1 'aarch64')/" "$dir/PKGBUILD"
-    info "arch= parcheado para incluir aarch64"
+    info "arch= patched to include aarch64"
   fi
 
   ( cd "$dir" && makepkg -si --noconfirm --needed --noprogressbar ) >"$dir/build.log" 2>&1 && return 0
@@ -126,7 +126,7 @@ do_1password() {
   info "AgileBits publishes arm64 ONLY as a tarball: there is no .deb or .rpm for this architecture."
   local url=https://downloads.1password.com/linux/tar/stable/aarch64/1password-latest.tar.gz
   mkdir -p "$WORK"; rm -rf "$WORK/1p"; mkdir -p "$WORK/1p"
-  curl -fL --progress-bar "$url" -o "$WORK/1p/1p.tar.gz" || { fail "descarga fallida"; return 1; }
+  curl -fL --progress-bar "$url" -o "$WORK/1p/1p.tar.gz" || { fail "download failed"; return 1; }
   # It is a password manager: verify the signature before installing it.
   local KEY=3FEF9748469ADBE15DA7CA80AC2D62742012EA22
   if curl -fsSL "$url.sig" -o "$WORK/1p/1p.tar.gz.sig" 2>/dev/null; then
@@ -164,7 +164,7 @@ do_obsidian() {
         | head -1 | sed 's/.*"\(https[^"]*\)"/\1/')
   [ -n "$url" ] || { fail "found no arm64 tarball in the latest releases"; return 1; }
   info "$(basename "$url")"
-  mkdir -p "$WORK"; curl -fL --progress-bar "$url" -o "$WORK/obsidian.tar.gz" || { fail "descarga fallida"; return 1; }
+  mkdir -p "$WORK"; curl -fL --progress-bar "$url" -o "$WORK/obsidian.tar.gz" || { fail "download failed"; return 1; }
   sudo rm -rf /opt/obsidian; sudo mkdir -p /opt/obsidian
   sudo tar -xzf "$WORK/obsidian.tar.gz" -C /opt/obsidian --strip-components=1 || { fail "could not extract"; return 1; }
   sudo ln -sfn /opt/obsidian/obsidian /usr/local/bin/obsidian
@@ -346,7 +346,7 @@ case "${1:-}" in
   *) SELECTED=("$@") ;;
 esac
 
-[ ${#SELECTED[@]} -gt 0 ] || { info "nada seleccionado"; exit 0; }
+[ ${#SELECTED[@]} -gt 0 ] || { info "nothing selected"; exit 0; }
 
 need_sudo || exit 1
 mkdir -p "$WORK"

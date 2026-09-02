@@ -5,7 +5,7 @@ set -uo pipefail
 USR=gabriel
 log() { echo ""; echo "==> $*"; }
 
-log "desactivando sshd"
+log "disabling sshd"
 systemctl disable sshd.service 2>&1 | tail -2 || true
 rm -f /etc/systemd/system/multi-user.target.wants/sshd.service
 echo "  enabled: $(systemctl is-enabled sshd 2>&1)"
@@ -13,7 +13,7 @@ echo "  enabled: $(systemctl is-enabled sshd 2>&1)"
 log "sudoers: no passwordless rules"
 rm -f /etc/sudoers.d/99-fix /etc/sudoers.d/99-install
 ls -l /etc/sudoers.d/
-visudo -c -q && echo "  sudoers valido"
+visudo -c -q && echo "  sudoers valid"
 
 log "the host public key is kept"
 # Reactivar el acceso: sudo systemctl enable --now sshd

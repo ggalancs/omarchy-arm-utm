@@ -77,7 +77,7 @@ class Agente:
                 tipo, a1, a2, size = struct.unpack("<IIII", self._leer(16))
                 datos = self._leer(size) if size else b""
             except (EOFError, OSError) as e:
-                log("socket cerrado:", e); return
+                log("socket closed:", e); return
             log("←", tipo, a1, a2, size)
 
             if tipo == CLIPBOARD_GRAB:

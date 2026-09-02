@@ -18,7 +18,7 @@ for f in /home/$NEW/.config/user-dirs.dirs; do
   [ -f "$f" ] && sed -i "s#/home/gabriel#/home/$NEW#g" "$f"
 done
 
-log "barrido final"
+log "final sweep"
 echo "  /etc:   $(grep -rl '\bgabriel\b' /etc 2>/dev/null | wc -l) coincidencias"
 echo "  /home:  $(grep -rl '\bgabriel\b' /home/$NEW/.config /home/$NEW/.bashrc /home/$NEW/.bash_profile 2>/dev/null | wc -l) coincidencias"
 echo "  (note: /usr/local/bin/ttfx carries the build path in its debug"
@@ -29,7 +29,7 @@ echo "  user:       $(getent passwd $NEW | cut -d: -f1,5,6)"
 echo "  autologin:  $(grep -h User= /etc/sddm.conf.d/*.conf 2>/dev/null | sort -u | tr '\n' ' ')"
 echo "  sshd:       $(systemctl is-enabled sshd 2>&1)"
 echo "  machine-id: $(wc -c < /etc/machine-id) bytes (vacio = se regenera)"
-echo "  claves ssh host: $(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l) (0 = se regeneran)"
+echo "  host ssh keys:   $(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l) (0 = regenerated)"
 echo "  hostname:   $(cat /etc/hostname)"
 sync
 fstrim -av 2>&1 | head -2 || true

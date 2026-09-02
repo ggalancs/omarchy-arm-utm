@@ -17,7 +17,7 @@ for f in "$MIGR"/*.sh; do
   b=$(basename "$f")
   [ -e "$STATE/$b" ] || { : > "$STATE/$b"; n=$((n+1)); }
 done
-echo "  selladas $n nuevas; total $(ls -1 "$STATE" | wc -l) de $(ls -1 "$MIGR"/*.sh | wc -l)"
+echo "  sealed $n new; total $(ls -1 "$STATE" | wc -l) de $(ls -1 "$MIGR"/*.sh | wc -l)"
 echo "  pending now: $(omarchy-migrate --pending 2>/dev/null | wc -l)"
 
 log "2/5 recovering dust (the failed migration removed it)"
@@ -55,7 +55,7 @@ omarchy-pkg-add tensaku jq 2>&1 | tail -3
 
 log "4/5 cleaning orphans left by the AUR builds"
 orph=$(pacman -Qdtq 2>/dev/null)
-[ -n "$orph" ] && sudo pacman -Rns --noconfirm $orph 2>&1 | tail -3 || echo "  (ninguno)"
+[ -n "$orph" ] && sudo pacman -Rns --noconfirm $orph 2>&1 | tail -3 || echo "  (none)"
 
 log "5/5 re-ejecutando omarchy-update"
 OMARCHY_UPDATE_NONINTERACTIVE=1 omarchy-update 2>&1 | tail -25

@@ -80,7 +80,7 @@ log "8/8 theme as the user, now with the right environment"
 su - $USR -c 'export OMARCHY_PATH=/usr/share/omarchy; export PATH=/usr/local/bin:$PATH; mkdir -p ~/.config/omarchy/themes; omarchy-theme-set "Tokyo Night" 2>&1 | tail -5' || echo "  (theme-set failed)"
 su - $USR -c 'ls -l ~/.config/omarchy/current/ 2>/dev/null; echo "OMARCHY_PATH=[$OMARCHY_PATH]"; command -v omarchy-menu start-hyprland' || true
 
-log "comprobacion"
+log "check"
 echo "  bootstrap.lua: $(ls /usr/share/omarchy/default/hypr/bootstrap.lua 2>&1)"
 echo "  bashrc:        $(su - $USR -c 'bash -ic true' 2>&1 | tail -1)"
 echo ""

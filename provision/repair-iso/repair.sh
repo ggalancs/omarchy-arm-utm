@@ -65,7 +65,7 @@ log "removing /root/prov from the installed system"
 ls /mnt/root/prov 2>/dev/null | tr '\n' ' '; echo
 rm -rf /mnt/root/prov
 
-log "desmontando"
+log "unmounting"
 sync
 umount -R /mnt/tmp /mnt/run /mnt/dev /mnt/sys /mnt/proc 2>/dev/null || true
 umount -R /mnt/boot 2>/dev/null || true

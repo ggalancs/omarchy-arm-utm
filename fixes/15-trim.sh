@@ -13,10 +13,10 @@ expac -H M '%m\t%n' 2>/dev/null | sort -rh | head -12 | sed 's/^/  /'
 log "removing build dependencies"
 # Pinta needs dotnet-runtime, NOT the SDK. OBS is already compiled.
 for p in dotnet-sdk-bin dotnet-targeting-pack-bin aspnet-targeting-pack-bin; do
-  pacman -Q "$p" >/dev/null 2>&1 && { pacman -Rns --noconfirm "$p" >/dev/null 2>&1 && echo "  quitado $p" || echo "  could not remove $p"; }
+  pacman -Q "$p" >/dev/null 2>&1 && { pacman -Rns --noconfirm "$p" >/dev/null 2>&1 && echo "  removed $p" || echo "  could not remove $p"; }
 done
 orph=$(pacman -Qdtq 2>/dev/null)
-[ -n "$orph" ] && { echo "  huerfanos: $(echo $orph | tr '\n' ' ')"; pacman -Rns --noconfirm $orph >/dev/null 2>&1; }
+[ -n "$orph" ] && { echo "  orphans: $(echo $orph | tr '\n' ' ')"; pacman -Rns --noconfirm $orph >/dev/null 2>&1; }
 
 log "checking that what matters is still there"
 for p in obs-studio pinta dotnet-runtime-bin hyprland quickshell; do

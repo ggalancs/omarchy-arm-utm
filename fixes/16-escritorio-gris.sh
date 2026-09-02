@@ -23,7 +23,7 @@ NEW=omarchy; OLD=gabriel
 
 echo "==> a) symlinks pointing at the old home"
 mapfile -t BAD < <(find /home/$NEW /etc /usr/local /opt -xdev -type l -lname "*/home/$OLD/*" 2>/dev/null)
-echo "  encontrados: ${#BAD[@]}"
+echo "  found: ${#BAD[@]}"
 for l in "${BAD[@]:-}"; do
   [ -n "$l" ] || continue
   t=$(readlink "$l"); ln -sfn "${t//\/home\/$OLD\//\/home\/$NEW\/}" "$l"
@@ -39,5 +39,5 @@ O=$(pacman -Qtdq 2>/dev/null | tr '\n' ' '); [ -n "${O// /}" ] && pacman -Rns --
 
 echo "==> verification"
 echo "  enlaces rotos: $(find /home/$NEW /usr/local/bin -xdev -type l ! -exec test -e {} \; -print 2>/dev/null | wc -l)"
-echo "  jubilados presentes: $(for p in mako swayosd walker elephant; do pacman -Q $p >/dev/null 2>&1 && echo -n "$p "; done; echo -n ninguno)"
+echo "  retired ones present: $(for p in mako swayosd walker elephant; do pacman -Q $p >/dev/null 2>&1 && echo -n "$p "; done; echo -n none)"
 sync

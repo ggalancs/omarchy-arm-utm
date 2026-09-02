@@ -10,7 +10,7 @@ proc wait_for {pat code msg {t 900}} {
     expect {
         -ex $pat {}
         timeout  { die $code "TIMEOUT: $msg" }
-        eof      { die [expr {$code+40}] "EOF inesperado: $msg" }
+        eof      { die [expr {$code+40}] "unexpected EOF: $msg" }
     }
 }
 

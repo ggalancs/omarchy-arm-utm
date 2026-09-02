@@ -42,7 +42,7 @@ hl.config({
 })
 LUA
 
-log "recargando Hyprland"
+log "reloading Hyprland"
 hyprctl reload 2>&1 | head -2
 sleep 2
 echo "  configerrors: [$(hyprctl configerrors 2>&1 | head -2)]"

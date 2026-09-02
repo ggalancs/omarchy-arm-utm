@@ -31,7 +31,7 @@ SOCK=/run/spice-vdagentd/spice-vdagent-sock
 echo "==> requisitos"
 fallo=0
 for c in python3 wl-copy wl-paste; do
-  command -v "$c" >/dev/null 2>&1 && echo "  ✓ $c" || { echo "  ✗ falta $c"; fallo=1; }
+  command -v "$c" >/dev/null 2>&1 && echo "  ✓ $c" || { echo "  ✗ missing $c"; fallo=1; }
 done
 if [ ! -e /dev/virtio-ports/com.redhat.spice.0 ]; then
   echo "  ✗ no existe /dev/virtio-ports/com.redhat.spice.0"
@@ -105,7 +105,7 @@ if [ -f "$AUTO" ] && grep -q 'spice-vdagent' "$AUTO"; then
     exit 1
   fi
   hyprctl reload >/dev/null 2>&1 || true
-  echo "  autostart.lua: agente oficial desactivado (copia en $AUTO.bak.*)"
+  echo "  autostart.lua: official agent disabled (copy in $AUTO.bak.*)"
 else
   echo "  autostart.lua: does not launch the stock agent"
 fi

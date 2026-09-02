@@ -44,7 +44,7 @@ EOF
 grep -rl "$OLD" /etc/sddm.conf.d/ 2>/dev/null | while read -r f; do sed -i "s/\b$OLD\b/$NEW/g" "$f"; done
 cat /etc/sddm.conf.d/20-autologin.conf
 
-log "4/10 credenciales y claves"
+log "4/10 credentials and keys"
 rm -rf "/home/$NEW/.ssh"
 rm -f /etc/ssh/ssh_host_*        # se regeneran solas en el primer arranque
 systemctl disable sshd.service 2>/dev/null || true
@@ -64,7 +64,7 @@ cat > /etc/hosts <<'EOF'
 127.0.1.1   omarchy.localdomain omarchy
 EOF
 
-log "6/10 identidad personal (git, historiales, cache)"
+log "6/10 personal identity (git, histories, cache)"
 rm -f "/home/$NEW/.gitconfig" "/home/$NEW/.config/git/config"
 rm -f "/home/$NEW/.bash_history" "/home/$NEW/.zsh_history" "/home/$NEW/.local/share/fish/fish_history"
 rm -rf "/home/$NEW/.cache" "/home/$NEW/.local/state/omarchy/first-run.log"

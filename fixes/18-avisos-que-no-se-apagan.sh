@@ -32,7 +32,7 @@ for f in /usr/share/omarchy/bin/*; do
   [ -f "$f" ] || continue
   sudo ln -sfn "$f" "/usr/bin/$(basename "$f")" && n=$((n+1))
 done
-echo "   $n comandos enlazados en /usr/bin"
+echo "   $n commands linked into /usr/bin"
 
 echo "==> A2. user units where systemd looks for them"
 # This was the missing step: without the .service files installed,
@@ -40,7 +40,7 @@ echo "==> A2. user units where systemd looks for them"
 if [ -d /usr/share/omarchy/default/systemd/user ]; then
   sudo install -d /usr/lib/systemd/user
   sudo cp -a /usr/share/omarchy/default/systemd/user/. /usr/lib/systemd/user/
-  echo "   $(ls /usr/lib/systemd/user/*.service 2>/dev/null | wc -l) unidades disponibles"
+  echo "   $(ls /usr/lib/systemd/user/*.service 2>/dev/null | wc -l) units available"
 else
   echo "   cannot find /usr/share/omarchy/default/systemd/user"
 fi
@@ -73,7 +73,7 @@ bash /usr/share/omarchy/install/user/first-run/enable-user-units.sh \
 omarchy-provision-first-run --force 2>&1 | tail -3
 
 echo "==> verification"
-printf "   unidades instaladas: %s\n" "$(ls /usr/lib/systemd/user/*.service 2>/dev/null | wc -l)"
+printf "   units installed:     %s\n" "$(ls /usr/lib/systemd/user/*.service 2>/dev/null | wc -l)"
 printf "   first-run marked:   %s\n" "$(omarchy-done check first-run-user && echo yes || echo NO)"
 printf "   running kernel:      %s\n" "$(uname -r)"
 printf "   owned by:             %s\n" "$(pacman -Qoq /usr/lib/modules/"$(uname -r)"/modules.builtin 2>/dev/null || echo "(nadie)")"

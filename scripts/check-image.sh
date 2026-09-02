@@ -86,11 +86,11 @@ sleep 2
 EXPEOF
 
 TR="${TRANSCRIPT:-/tmp/check-image-session.log}"; : > "$TR"
-echo "  arrancando $(basename "$BUNDLE") ... (~4 min)"
+echo "  starting $(basename "$BUNDLE") ... (~4 min)"
 # The transcript goes somewhere that SURVIVES the exit trap: when this hangs,
 # it is the only thing that says where. It has been lost twice already by
 # writing it inside the temporary directory that gets deleted on exit.
-echo "  transcripcion: $TR"
+echo "  transcript: $TR"
 EFI="$TMP/efi.fd" DISK="$DISK" ISO="$TMP/check.iso" OLDUSER="$OLD" TRANSCRIPT="$TR" \
 FW="$(brew --prefix qemu)/share/qemu/edk2-aarch64-code.fd" \
   expect "$TMP/t.exp" >/dev/null 2>&1

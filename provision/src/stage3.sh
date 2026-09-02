@@ -13,10 +13,10 @@ export PATH="$OMARCHY_PATH/bin:$PATH:$HOME/.local/bin"
 export OMARCHY_CHROOT_INSTALL=1
 
 # ---------------------------------------------------------- the Omarchy repo
-log "clonando basecamp/omarchy (rama ${OMARCHY_REF:-quattro} = Omarchy 4; master es 3.8.5)"
+log "cloning basecamp/omarchy (branch ${OMARCHY_REF:-quattro} = Omarchy 4; master is 3.8.5)"
 rm -rf "$OMARCHY_PATH"
 mkdir -p "$(dirname "$OMARCHY_PATH")"
-git clone --depth 1 --branch "${OMARCHY_REF:-quattro}" https://github.com/basecamp/omarchy.git "$OMARCHY_PATH" || { warn "clone fallido"; exit 1; }
+git clone --depth 1 --branch "${OMARCHY_REF:-quattro}" https://github.com/basecamp/omarchy.git "$OMARCHY_PATH" || { warn "clone failed"; exit 1; }
 # core.fileMode=false BEFORE the chmod: otherwise the permission changes leave
 # the checkout dirty and `git pull --ff-only` then refuses to update it.
 git -C "$OMARCHY_PATH" config core.fileMode false
@@ -25,7 +25,7 @@ echo "  version: $(cat "$OMARCHY_PATH/version" 2>/dev/null)"
 
 # ------------------------------------------------------------ dotfiles
 # Equivalent to install/config/config.sh
-log "copiando dotfiles a ~/.config"
+log "copying dotfiles to ~/.config"
 mkdir -p ~/.config
 cp -R "$OMARCHY_PATH"/config/* ~/.config/
 cp "$OMARCHY_PATH/default/bashrc" ~/.bashrc
@@ -51,7 +51,7 @@ AUR_OK=(); AUR_KO=()
 for p in yay xdg-terminal-exec; do
   if aur_install "$p"; then AUR_OK+=("$p"); else AUR_KO+=("$p"); fi
 done
-echo "  AUR ok:    ${AUR_OK[*]:-ninguno}"
+echo "  AUR ok:    ${AUR_OK[*]:-none}"
 echo "  AUR failed: ${AUR_KO[*]:-none}"
 
 # A stand-in if xdg-terminal-exec did not build: Omarchy uses
@@ -86,7 +86,7 @@ for f in com.mitchellh.ghostty.desktop ghostty.desktop \
   done
 done
 [ -s ~/.config/xdg-terminals.list ] || printf 'foot.desktop\n' > ~/.config/xdg-terminals.list
-echo "  terminal preferido: $(head -1 ~/.config/xdg-terminals.list)"
+echo "  preferred terminal: $(head -1 ~/.config/xdg-terminals.list)"
 
 # ------------------------------------------------- system integration
 # Omarchy 4 ships as a pacman package that puts the tree in
@@ -152,7 +152,7 @@ for pf in /etc/pam.d/sddm /etc/pam.d/sddm-autologin /etc/pam.d/sddm-greeter; do
   [ -f "$pf" ] && sudo sed -i '/-auth.*pam_gnome_keyring\.so/d;/-password.*pam_gnome_keyring\.so/d' "$pf"
 done
 
-log "SDDM: tema Omarchy y sesion"
+log "SDDM: Omarchy theme and session"
 sudo mkdir -p /usr/share/sddm/themes /usr/local/share/wayland-sessions
 sudo cp -a "$OMARCHY_PATH/default/sddm/omarchy" /usr/share/sddm/themes/ 2>/dev/null || true
 [ -f "$OMARCHY_PATH/default/sddm/hyprland.lua" ] && sudo cp -a "$OMARCHY_PATH/default/sddm/hyprland.lua" /usr/share/sddm/hyprland.lua
@@ -224,7 +224,7 @@ mkdir -p ~/.local/state/omarchy/migrations
 for f in "$OMARCHY_PATH"/migrations/*.sh; do
   [ -f "$f" ] && : > ~/.local/state/omarchy/migrations/"$(basename "$f")"
 done
-echo "  migraciones selladas: $(ls -1 ~/.local/state/omarchy/migrations | wc -l)"
+echo "  migrations sealed:   $(ls -1 ~/.local/state/omarchy/migrations | wc -l)"
 
 # --- branding (about + salvapantallas) -----------------------------------
 mkdir -p ~/.config/omarchy/branding
@@ -344,7 +344,7 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
 # image for nothing. herdr now builds from omarchy-pkgs, which brings its own
 # Zig.
 
-if [ "${HACER_TOOLS:-si}" != "si" ]; then
+if [ "${BUILD_TOOLS:-yes}" != "yes" ]; then
   warn "tool building disabled: ttfx, tensaku, omacalc,"
   warn "omacut, omawrite, aether, cliamp and omarchy-nvim (they can be added later"
   warn "with: yay -S <package>)"
@@ -378,7 +378,7 @@ for spec in \
   fi
 done
 echo "  built: ${TOOLS_OK[*]:-none}"
-[ ${#TOOLS_KO[@]} -gt 0 ] && warn "no compilaron: ${TOOLS_KO[*]}"
+[ ${#TOOLS_KO[@]} -gt 0 ] && warn "failed to build: ${TOOLS_KO[*]}"
 # Recorded at a FIXED system path, not in $HOME. The ~/.omarchy-arm-prov one
 # did not survive: the distributable image renames the build account and that
 # trace is lost along the way. The check that read it was therefore a check
@@ -584,9 +584,9 @@ if [ -f "$HOME/.omarchy-arm-prov/omarchy-arm-share" ]; then
   # installer so its logic is not duplicated (OBS needs the browser plugin
   # removed, whose CEF is x86-only; Pinta needs Microsoft's arm64 .NET, which
   # Arch does not package).
-  # This is the most expensive part of the build: ~45 min. HACER_LIBRES=no
+  # This is the most expensive part of the build: ~45 min. BUILD_FREE_APPS=no
   # skips it.
-  if [ "${HACER_LIBRES:-si}" = "si" ]; then
+  if [ "${BUILD_FREE_APPS:-yes}" = "yes" ]; then
     log "OBS Studio and Pinta (free software, they ship inside the image; ~45 min)"
     if /usr/local/bin/omarchy-arm-extras pinta obs; then
       echo "  pinta: $(pacman -Q pinta 2>/dev/null || echo MISSING)"
@@ -596,7 +596,7 @@ if [ -f "$HOME/.omarchy-arm-prov/omarchy-arm-share" ]; then
       warn "  omarchy-arm-extras pinta obs"
     fi
   else
-    echo "  OBS y Pinta omitidos (HACER_LIBRES=no)"
+    echo "  OBS and Pinta skipped (BUILD_FREE_APPS=no)"
   fi
 fi
 
@@ -607,8 +607,8 @@ fi
 #    OMARCHY_PATH points OUTSIDE /usr/share/omarchy, and here it points exactly
 #    there. Without the hook the system gets packages but the Omarchy tree
 #    (scripts, themes, configuration) stays frozen at the cloned version.
-log "actualizaciones: snapper + hook post-update"
-sudo pacman -S --noconfirm --needed --disable-download-timeout snapper >/dev/null 2>&1 || warn "snapper no disponible"
+log "updates: snapper + post-update hook"
+sudo pacman -S --noconfirm --needed --disable-download-timeout snapper >/dev/null 2>&1 || warn "snapper not available"
 if command -v snapper >/dev/null 2>&1; then
   sudo bash -euo pipefail "$OMARCHY_PATH/install/config/snapper.sh" >/dev/null 2>&1 \
     && echo "  snapper configured: a snapshot before every update" \
@@ -627,10 +627,10 @@ git config --global init.defaultBranch master
 # ------------------------------------------------------------ resumen
 log "resumen"
 echo "  omarchy:   $(ls -d "$OMARCHY_PATH" 2>/dev/null || echo MISSING)"
-echo "  ~/.config: $(ls ~/.config | wc -l) entradas"
+echo "  ~/.config: $(ls ~/.config | wc -l) entries"
 echo "  theme:     $(readlink -f ~/.config/omarchy/current/theme 2>/dev/null || echo 'not linked')"
 echo "  hyprland:  $(command -v Hyprland || command -v hyprland || echo 'NO')"
 echo "  omarchy-shell: $(command -v omarchy-shell || echo 'NO')"
 echo "  terminal:  $(command -v xdg-terminal-exec || echo 'NO')"
 echo ""
-echo "==> [stage3] COMPLETADO"
+echo "==> [stage3] COMPLETED"

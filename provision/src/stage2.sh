@@ -60,7 +60,7 @@ pac base base-devel linux-aarch64 \
   rsync wget curl unzip zip
 
 # ---------------------------------------------------------------- locale
-log "zona horaria, locales, teclado, hostname"
+log "timezone, locales, keyboard, hostname"
 ln -sf "/usr/share/zoneinfo/$VM_TIMEZONE" /etc/localtime
 sed -i "s/^#\(${VM_LOCALE} \)/\1/; s/^#\(${VM_LOCALE_EXTRA} \)/\1/" /etc/locale.gen
 grep -q "^${VM_LOCALE} " /etc/locale.gen || echo "${VM_LOCALE} UTF-8" >> /etc/locale.gen
@@ -178,7 +178,7 @@ install_list() {
   mapfile -t PKGS < <(grep -vE '^\s*#|^\s*$' "$file")
   echo "  $label: ${#PKGS[@]} packages"
   if pac "${PKGS[@]}"; then return 0; fi
-  warn "$label: instalacion en bloque fallida tras 3 intentos; probando uno a uno"
+  warn "$label: batch install failed after 3 attempts; trying one at a time"
   local FAILED=()
   for p in "${PKGS[@]}"; do
     pacman -S --noconfirm --needed --disable-download-timeout "$p" >/dev/null 2>&1 && continue
@@ -188,7 +188,7 @@ install_list() {
     pacman -S --noconfirm --needed --disable-download-timeout "$p" >/dev/null 2>&1 || FAILED+=("$p")
   done
   if [ ${#FAILED[@]} -gt 0 ]; then
-    warn "$label no instalados: ${FAILED[*]}"
+    warn "$label not installed: ${FAILED[*]}"
     printf '%s\n' "${FAILED[@]}" >> /root/failed-packages.txt
     [ "$fatal" = fatal ] && return 1
   fi
@@ -200,7 +200,7 @@ install_list /root/prov/packages-extra.txt "extras" soft
 set -e
 
 log "system services"
-systemctl enable sddm.service 2>/dev/null || warn "sddm no disponible"
+systemctl enable sddm.service 2>/dev/null || warn "sddm not available"
 # UTM integration: utmctl ip-address/exec/file need the guest agent
 systemctl enable qemu-guest-agent.service 2>/dev/null || true
 # The Arch Linux ARM rootfs ships with sshd started, and this stage installs
@@ -254,7 +254,7 @@ echo "  spice-vdagentd with -X (required under Hyprland)"
 #     spice-webdavd (paquete phodav) en http://localhost:9843/
 # Both are prepared: each only activates if its device exists.
 systemctl enable spice-webdavd.service 2>/dev/null || true
-echo "  spice-webdavd habilitado (modo SPICE WebDAV de UTM)"
+echo "  spice-webdavd enabled (UTM SPICE WebDAV mode)"
 
 # UTM's shared folder. The bundle declares DirectoryShareMode=VirtFS, but that
 # only exposes the device: the guest has to mount it. The tag is
@@ -416,4 +416,4 @@ echo "  dotfiles:  $(ls -d /home/$VM_USER/.config/hypr 2>/dev/null || echo 'MISS
 sync
 touch /root/STAGE2_OK
 echo ""
-echo "==> [stage2] COMPLETADO"
+echo "==> [stage2] COMPLETED"

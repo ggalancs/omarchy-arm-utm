@@ -57,7 +57,7 @@ UNIT
   systemctl --user --no-pager status omarchy-arm-clipboard.service | head -5
 }
 
-script_anfitrion() {
+host_script() {
   cat <<'MACEOF'
 #!/bin/bash
 # Run this ON THE MAC. Syncs the clipboard with the VM through whichever
@@ -112,8 +112,8 @@ vigilar() {
 
 case "${1:-}" in
   --install) instalar ;;
-  --host)    script_anfitrion ;;
+  --host)    host_script ;;
   -h|--help) uso ;;
   "")        vigilar ;;
-  *)         echo "opcion desconocida: $1" >&2; uso >&2; exit 1 ;;
+  *)         echo "unknown option: $1" >&2; uso >&2; exit 1 ;;
 esac

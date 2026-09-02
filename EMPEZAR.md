@@ -20,7 +20,7 @@ Dos caminos. El primero tarda diez minutos; el segundo, entre una hora y dos.
 | **macOS con Homebrew** | el script instala `qemu`, `expect` y `aria2` si faltan | `brew --version` |
 | **UTM 4.7 o posterior** | es donde queda registrada la VM | `brew install --cask utm` |
 | **Command Line Tools** | el script usa `git` y `python3`, que en macOS vienen de ahí | `xcode-select -p` |
-| **~40 GB libres** | el disco de construcción llega a ~13 GB y la fase de empaquetado necesita otro tanto | `df -h ~` |
+| **~40 GB free** | el disco de construcción llega a ~13 GB y la fase de empaquetado necesita otro tanto | `df -h ~` |
 | **Conexión decente** | descarga ~900 MB y luego ~1.500 paquetes desde los repos de Arch Linux ARM | |
 
 Si falta algo, instálalo así:

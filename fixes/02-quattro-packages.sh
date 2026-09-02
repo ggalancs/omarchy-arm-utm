@@ -12,7 +12,7 @@ PKGS=(quickshell bluez-tools bluez-utils ddcutil dua-cli foot inotify-tools
       libvips lua51 mpv-mpris qrencode qt6-imageformats udiskie wtype yt-dlp
       zbar cava)
 sudo pacman -S --noconfirm --needed "${PKGS[@]}" 2>&1 | tail -12 || {
-  echo "!! bloque fallido, uno a uno"
+  echo "!! batch failed, one at a time"
   for p in "${PKGS[@]}"; do sudo pacman -S --noconfirm --needed "$p" >/dev/null 2>&1 || echo "   falla: $p"; done
 }
 
@@ -31,7 +31,7 @@ o.env("GDK_SCALE", "1")
 o.monitor("", { mode = "preferred", position = "auto", scale = 1 })
 LUA
 rm -f ~/.config/hypr/monitors.conf ~/.config/hypr/autostart.conf
-echo "  monitors.lua escrito; .conf huerfanos eliminados"
+echo "  monitors.lua written; orphan .conf files removed"
 ls ~/.config/hypr/
 
 log "starting the Omarchy shell in the live session"

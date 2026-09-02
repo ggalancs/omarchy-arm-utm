@@ -10,7 +10,7 @@ log "subuid/subgid"
 sed -i "s/^$OLD:/$NEW:/" /etc/subuid /etc/subgid 2>/dev/null || true
 cat /etc/subuid /etc/subgid 2>/dev/null
 
-log "barrido final de referencias a $OLD"
+log "final sweep for references to $OLD"
 echo "  /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null || echo "    none"
 echo "  /home:"; grep -rl "\b$OLD\b" /home/$NEW/.config /home/$NEW/.bashrc 2>/dev/null | head -5 || echo "    none"
 echo "  /usr/local/bin:"; grep -rl "\b$OLD\b" /usr/local/bin 2>/dev/null | head -5 || echo "    none"
@@ -23,7 +23,7 @@ echo "  symlink omarchy: $(readlink /home/$NEW/.local/share/omarchy)"
 echo "  autologin: $(grep -h User= /etc/sddm.conf.d/*.conf 2>/dev/null | tr '\n' ' ')"
 echo "  binarios omarchy: $(ls /usr/local/bin | wc -l)"
 echo "  ttfx: $(command -v ttfx || echo NO)"
-echo "  migraciones selladas: $(ls -1 /home/$NEW/.local/state/omarchy/migrations 2>/dev/null | wc -l)"
+echo "  migrations sealed:   $(ls -1 /home/$NEW/.local/state/omarchy/migrations 2>/dev/null | wc -l)"
 sync
 echo ""
 echo "==> SANITIZE2_OK"

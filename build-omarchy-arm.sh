@@ -33,21 +33,21 @@
 #    package   compact, compress and sign with sha256
 #
 #  Requisitos: macOS en Apple Silicon, Homebrew, UTM 4.7+, Command Line Tools
-#  (git, python3) y ~40 GB libres. No necesita sudo.
+#  (git, python3) y ~40 GB free. No necesita sudo.
 #  ────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 
 # ───────────────────────────────── parametros ──────────────────────────────
 # Which variables the environment already carries, BEFORE the ':=' below fill
 # them in. Without this there is no way to tell "the user passed it" from "that
-# is the default", and detectar_del_anfitrion overwrote what the user had set:
+# is the default", and detect_from_host overwrote what the user had set:
 # `UTM_MEM=16384 ./build-omarchy-arm.sh --yes` built with a different figure.
-FIJADO_POR_ENTORNO=""
+SET_BY_ENV=""
 for _v in VM_TIMEZONE VM_KEYMAP VM_XKB UTM_CPUS UTM_MEM; do
-  [ -n "${!_v:-}" ] && FIJADO_POR_ENTORNO="$FIJADO_POR_ENTORNO $_v"
+  [ -n "${!_v:-}" ] && SET_BY_ENV="$SET_BY_ENV $_v"
 done
 unset _v
-del_entorno() { case " $FIJADO_POR_ENTORNO " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+from_env() { case " $SET_BY_ENV " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
 : "${W:=$HOME/omarchy-arm-build}"        # directorio de trabajo
 : "${VM_NAME:=Omarchy ARM}"              # nombre de la VM en UTM
@@ -94,39 +94,39 @@ die()   { echo "  ${c_err}✗ $*${c_off}" >&2; exit 1; }
 # The script was born unattended and must stay that way: with no terminal, or
 # with --yes, nothing is asked and the defaults apply. With a terminal it asks
 # about what is genuinely a decision, and nothing else.
-INTERACTIVO=0
-[[ -t 0 && -t 1 ]] && INTERACTIVO=1
-[[ -n ${ASSUME_YES:-} ]] && INTERACTIVO=0
+INTERACTIVE=0
+[[ -t 0 && -t 1 ]] && INTERACTIVE=1
+[[ -n ${ASSUME_YES:-} ]] && INTERACTIVE=0
 
-# The questionnaire's answers are saved in $W/respuestas.env so --from and
+# The questionnaire's answers are saved in $W/answers.env so --from and
 # --only do not throw them away. Resuming used to regenerate config.env with
 # the defaults: the VM ended up with the 'builder' account and its password
 # even though the user had typed something else, with no warning at all.
-RESPUESTAS_VARS=(VM_NAME VM_USER VM_PASSWORD VM_FULLNAME VM_EMAIL VM_HOSTNAME
+ANSWER_VARS=(VM_NAME VM_USER VM_PASSWORD VM_FULLNAME VM_EMAIL VM_HOSTNAME
                  VM_TIMEZONE VM_KEYMAP VM_XKB VM_LOCALE VM_LOCALE_EXTRA
                  OMARCHY_REF DIST_NEW_USER DISK_SIZE UTM_CPUS UTM_MEM
-                 HACER_TOOLS HACER_LIBRES HACER_DIST)
+                 BUILD_TOOLS BUILD_FREE_APPS BUILD_DIST)
 
 shq() { printf "%s" "${1-}" | sed "s/'/'\\\\''/g"; }
 
-guardar_respuestas() {
+save_answers() {
   mkdir -p "$W" 2>/dev/null || return 0
   local v
-  for v in "${RESPUESTAS_VARS[@]}"; do
+  for v in "${ANSWER_VARS[@]}"; do
     printf "%s='%s'\n" "$v" "$(shq "${!v-}")"
-  done > "$W/respuestas.env"
+  done > "$W/answers.env"
 }
 
 cargar_respuestas() {
-  [[ -f "$W/respuestas.env" ]] || return 0
+  [[ -f "$W/answers.env" ]] || return 0
   # What was saved must NOT overwrite what the user has just put in the
   # environment: `UTM_MEM=16384 ./build-omarchy-arm.sh --from utm` has to
   # respect that 16384. It is sourced in a subshell, the values are read, and
   # only the ones that did not come from the environment get assigned.
   local v val
-  for v in "${RESPUESTAS_VARS[@]}"; do
-    del_entorno "$v" && continue
-    val=$(. "$W/respuestas.env" >/dev/null 2>&1; printf '%s' "${!v-}")
+  for v in "${ANSWER_VARS[@]}"; do
+    from_env "$v" && continue
+    val=$(. "$W/answers.env" >/dev/null 2>&1; printf '%s' "${!v-}")
     printf -v "$v" '%s' "$val"
   done
   # CAREFUL: PHASES is NOT touched here. Trimming it at this point broke four
@@ -140,20 +140,22 @@ cargar_respuestas() {
 ask() {  # ask <variable> <pregunta> [valor por defecto]
   local var="$1" q="$2" def="${3:-}" cur ans
   cur="${!var:-$def}"
-  if (( ! INTERACTIVO )); then printf -v "$var" '%s' "$cur"; return; fi
+  if (( ! INTERACTIVE )); then printf -v "$var" '%s' "$cur"; return; fi
   read -r -p "  $q [${cur}]: " ans </dev/tty || ans=""
   printf -v "$var" '%s' "${ans:-$cur}"
 }
 
-confirm() {  # confirm <pregunta> <si|no por defecto>
-  local q="$1" def="${2:-si}" ans
-  if (( ! INTERACTIVO )); then [[ $def == si ]]; return; fi
-  read -r -p "  $q [$([[ $def == si ]] && echo 'S/n' || echo 's/N')]: " ans </dev/tty || ans=""
+confirm() {  # confirm <question> <yes|no default>
+  local q="$1" def="${2:-yes}" ans
+  if (( ! INTERACTIVE )); then [[ $def == yes ]]; return; fi
+  read -r -p "  $q [$([[ $def == yes ]] && echo 'Y/n' || echo 'y/N')]: " ans </dev/tty || ans=""
   ans="${ans:-$def}"
   # ${var,,} is bash 4 and macOS ships bash 3.2: there it is an expansion error
   # that aborts the whole function, and confirm returned "yes" by accident.
   ans=$(printf '%s' "$ans" | tr '[:upper:]' '[:lower:]')
-  case "$ans" in s|si|sí|y|yes) return 0 ;; *) return 1 ;; esac
+  # Spanish y/yes are still accepted: the questionnaire is answered by hand
+    # and a Spanish speaker typing "s" should not be read as "no".
+    case "$ans" in s|si|sí|y|yes) return 0 ;; *) return 1 ;; esac
 }
 
 # Defaults taken from the Mac itself, so most questions are answered with Enter
@@ -162,15 +164,15 @@ confirm() {  # confirm <pregunta> <si|no por defecto>
 # the environment, theirs wins. It used to be assigned unconditionally and,
 # since the unattended mode's `return` comes AFTER this call,
 # `UTM_MEM=16384 ./build-omarchy-arm.sh --yes` ended up building with 8192.
-detectar_del_anfitrion() {
+detect_from_host() {
   local tz kb ncpu ram
-  if ! del_entorno VM_TIMEZONE; then
+  if ! from_env VM_TIMEZONE; then
     tz=$(readlink /etc/localtime 2>/dev/null | sed 's#.*/zoneinfo/##')
     [[ -n $tz ]] && VM_TIMEZONE="$tz"
   fi
   # The two are independent: setting only VM_XKB must not leave VM_KEYMAP on
   # the layout hardcoded at the top.
-  if ! del_entorno VM_KEYMAP || ! del_entorno VM_XKB; then
+  if ! from_env VM_KEYMAP || ! from_env VM_XKB; then
     kb=$(defaults read ~/Library/Preferences/com.apple.HIToolbox.plist AppleSelectedInputSources 2>/dev/null \
          | sed -n 's/.*"KeyboardLayout Name" = "\([^"]*\)".*/\1/p' | head -1)
     local km="" xk=""
@@ -183,13 +185,13 @@ detectar_del_anfitrion() {
       Portuguese*) km=pt; xk=pt ;;
       Italian*)  km=it; xk=it ;;
     esac
-    [[ -n $km ]] && ! del_entorno VM_KEYMAP && VM_KEYMAP="$km"
-    [[ -n $xk ]] && ! del_entorno VM_XKB    && VM_XKB="$xk"
+    [[ -n $km ]] && ! from_env VM_KEYMAP && VM_KEYMAP="$km"
+    [[ -n $xk ]] && ! from_env VM_XKB    && VM_XKB="$xk"
   fi
   ncpu=$(sysctl -n hw.perflevel0.logicalcpu 2>/dev/null || sysctl -n hw.ncpu)
   ram=$(( $(sysctl -n hw.memsize) / 1024 / 1024 ))
-  del_entorno UTM_CPUS || { (( ncpu > 2 )) && UTM_CPUS=$(( ncpu / 2 )); }
-  if ! del_entorno UTM_MEM; then
+  from_env UTM_CPUS || { (( ncpu > 2 )) && UTM_CPUS=$(( ncpu / 2 )); }
+  if ! from_env UTM_MEM; then
     (( ram >= 16384 )) && UTM_MEM=8192
     (( ram >= 32768 )) && UTM_MEM=12288
   fi
@@ -221,7 +223,7 @@ ph_deps() {
   # another 6.5, and the zip 4. With APFS clones the peak is around 30.
   local free; free=$(df -g "$HOME" | tail -1 | awk '{print $4}')
   (( free > 40 )) || die "~40 GB of free space are needed (there are ${free} GB)"
-  ok "qemu $(qemu-system-aarch64 --version | head -1 | awk '{print $4}'), UTM $(defaults read /Applications/UTM.app/Contents/Info.plist CFBundleShortVersionString), ${free} GB libres"
+  ok "qemu $(qemu-system-aarch64 --version | head -1 | awk '{print $4}'), UTM $(defaults read /Applications/UTM.app/Contents/Info.plist CFBundleShortVersionString), ${free} GB free"
 }
 
 # Any phase can be run on its own with --only/--from, so the directories cannot
@@ -230,7 +232,7 @@ ensure_dirs() { mkdir -p "$W"/{dl,vm,provision,scripts,logs,dist,shots}; }
 
 # ─────────────────────────────── fase: fetch ───────────────────────────────
 ph_fetch() {
-  phase "fetch · imagenes base"
+  phase "fetch · base images"
   local iso="$W/dl/alpine-virt-aarch64.iso"
   local tgz="$W/dl/alarm-rootfs.tgz"
 
@@ -257,7 +259,7 @@ ph_fetch() {
       die "the Alpine ISO does not match its published sha256"
     fi
     mv "$W/dl/$(basename "$iso").parcial" "$iso"
-    [[ -n $wsha ]] && info "sha256 verificado" || warn "no published sha256: not verified"
+    [[ -n $wsha ]] && info "sha256 verified" || warn "no published sha256: not verified"
   fi
   ok "Alpine $(du -h "$iso" | cut -f1)"
 
@@ -346,7 +348,7 @@ core, ext = dd(core), dd(ext)
 (out/'packages-core.txt').write_text("# core\n"+"\n".join(core)+"\n")
 (out/'packages-extra.txt').write_text("# extras best-effort\n"+"\n".join(ext)+"\n")
 print(f"  core={len(core)}  extras={len(ext)}  no ARM equivalent={len(set(miss))}")
-print("  no disponibles:", " ".join(sorted(set(miss))))
+print("  not available:", " ".join(sorted(set(miss))))
 PYEOF
   rm -rf "$d" "$base" "$core" "$extra" /tmp/alarm-pkgs.$$
   # Without this a write failure would go unnoticed and the build would die
@@ -398,10 +400,10 @@ else
   warn "btrfs unavailable in the live kernel -> ext4 will be used for the root"
   ROOTFS=ext4
 fi
-grep -qw vfat /proc/filesystems || warn "vfat no listado en /proc/filesystems"
+grep -qw vfat /proc/filesystems || warn "vfat not listed in /proc/filesystems"
 echo "  raiz: $ROOTFS   filesystems: $(tr '\n' ' ' < /proc/filesystems | tr -s ' ')"
 
-log "particionando $DISK (GPT: ESP 1GiB + raiz $ROOTFS)"
+log "partitioning $DISK (GPT: ESP 1GiB + root $ROOTFS)"
 umount -R /mnt 2>/dev/null || true
 wipefs -a "$DISK" >/dev/null 2>&1 || true
 parted -s "$DISK" mklabel gpt
@@ -420,7 +422,7 @@ parted -s "$DISK" print
 
 MOPT_ROOT=""
 if [ "$ROOTFS" = btrfs ]; then
-  log "subvolumenes btrfs @ y @home"
+  log "btrfs subvolumes @ and @home"
   mount -t btrfs "${DISK}2" /mnt
   btrfs subvolume create /mnt/@     >/dev/null
   btrfs subvolume create /mnt/@home >/dev/null
@@ -437,11 +439,11 @@ else
 fi
 df -h /mnt
 
-log "desplegando rootfs de Arch Linux ARM (bsdtar -xpf, preserva xattr/ACL)"
+log "unpacking the Arch Linux ARM rootfs (bsdtar -xpf, preserves xattr/ACL)"
 # The ESP is mounted LATER: vfat cannot hold the symlinks /boot carries in the
 # tarball. pacman repopulates the kernel in stage2 onto the mounted ESP.
 bsdtar -xpf "$PROV/alarm-rootfs.tgz" -C /mnt
-echo "  contenido: $(ls /mnt | tr '\n' ' ')"
+echo "  contents: $(ls /mnt | tr '\n' ' ')"
 [ -d /mnt/etc ] && [ -d /mnt/usr ] || { warn "rootfs incompleto"; exit 1; }
 
 log "mounting the ESP at /boot"
@@ -464,7 +466,7 @@ log "DNS inside the chroot"
 rm -f /mnt/etc/resolv.conf
 printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /mnt/etc/resolv.conf
 
-log "copiando payload"
+log "copying payload"
 mkdir -p /mnt/root/prov
 cp "$PROV/stage2.sh" "$PROV/stage3.sh" "$PROV/config.env" \
    "$PROV/packages-core.txt" "$PROV/packages-extra.txt" /mnt/root/prov/
@@ -485,19 +487,19 @@ ROOT_MOUNT_OPTS=$MOPT_ROOT
 EOF
 chmod +x /mnt/root/prov/stage2.sh /mnt/root/prov/stage3.sh
 
-log "entrando en chroot -> stage2"
+log "entering chroot -> stage2"
 set +e
 chroot /mnt /bin/bash /root/prov/stage2.sh
 rc=$?
 set -e
 
-log "desmontando"
+log "unmounting"
 sync
 umount -R /mnt/tmp /mnt/run /mnt/dev /mnt/sys /mnt/proc 2>/dev/null || true
 umount -R /mnt/boot 2>/dev/null || true
 umount -R /mnt 2>/dev/null || umount -l /mnt
 sync
-echo "==> [stage1] terminado rc=$rc"
+echo "==> [stage1] finished rc=$rc"
 echo "TOK_BUILD_$rc"
 trap - EXIT
 exit $rc
@@ -568,7 +570,7 @@ pac base base-devel linux-aarch64 \
   rsync wget curl unzip zip
 
 # ---------------------------------------------------------------- locale
-log "zona horaria, locales, teclado, hostname"
+log "timezone, locales, keyboard, hostname"
 ln -sf "/usr/share/zoneinfo/$VM_TIMEZONE" /etc/localtime
 sed -i "s/^#\(${VM_LOCALE} \)/\1/; s/^#\(${VM_LOCALE_EXTRA} \)/\1/" /etc/locale.gen
 grep -q "^${VM_LOCALE} " /etc/locale.gen || echo "${VM_LOCALE} UTF-8" >> /etc/locale.gen
@@ -686,7 +688,7 @@ install_list() {
   mapfile -t PKGS < <(grep -vE '^\s*#|^\s*$' "$file")
   echo "  $label: ${#PKGS[@]} packages"
   if pac "${PKGS[@]}"; then return 0; fi
-  warn "$label: instalacion en bloque fallida tras 3 intentos; probando uno a uno"
+  warn "$label: batch install failed after 3 attempts; trying one at a time"
   local FAILED=()
   for p in "${PKGS[@]}"; do
     pacman -S --noconfirm --needed --disable-download-timeout "$p" >/dev/null 2>&1 && continue
@@ -696,7 +698,7 @@ install_list() {
     pacman -S --noconfirm --needed --disable-download-timeout "$p" >/dev/null 2>&1 || FAILED+=("$p")
   done
   if [ ${#FAILED[@]} -gt 0 ]; then
-    warn "$label no instalados: ${FAILED[*]}"
+    warn "$label not installed: ${FAILED[*]}"
     printf '%s\n' "${FAILED[@]}" >> /root/failed-packages.txt
     [ "$fatal" = fatal ] && return 1
   fi
@@ -708,7 +710,7 @@ install_list /root/prov/packages-extra.txt "extras" soft
 set -e
 
 log "system services"
-systemctl enable sddm.service 2>/dev/null || warn "sddm no disponible"
+systemctl enable sddm.service 2>/dev/null || warn "sddm not available"
 # UTM integration: utmctl ip-address/exec/file need the guest agent
 systemctl enable qemu-guest-agent.service 2>/dev/null || true
 # The Arch Linux ARM rootfs ships with sshd started, and this stage installs
@@ -762,7 +764,7 @@ echo "  spice-vdagentd with -X (required under Hyprland)"
 #     spice-webdavd (paquete phodav) en http://localhost:9843/
 # Both are prepared: each only activates if its device exists.
 systemctl enable spice-webdavd.service 2>/dev/null || true
-echo "  spice-webdavd habilitado (modo SPICE WebDAV de UTM)"
+echo "  spice-webdavd enabled (UTM SPICE WebDAV mode)"
 
 # UTM's shared folder. The bundle declares DirectoryShareMode=VirtFS, but that
 # only exposes the device: the guest has to mount it. The tag is
@@ -924,7 +926,7 @@ echo "  dotfiles:  $(ls -d /home/$VM_USER/.config/hypr 2>/dev/null || echo 'MISS
 sync
 touch /root/STAGE2_OK
 echo ""
-echo "==> [stage2] COMPLETADO"
+echo "==> [stage2] COMPLETED"
 __PAYLOAD_PROVISION_STAGE2_SH__
 chmod +x "$W/provision/stage2.sh"
 
@@ -945,10 +947,10 @@ export PATH="$OMARCHY_PATH/bin:$PATH:$HOME/.local/bin"
 export OMARCHY_CHROOT_INSTALL=1
 
 # ---------------------------------------------------------- the Omarchy repo
-log "clonando basecamp/omarchy (rama ${OMARCHY_REF:-quattro} = Omarchy 4; master es 3.8.5)"
+log "cloning basecamp/omarchy (branch ${OMARCHY_REF:-quattro} = Omarchy 4; master is 3.8.5)"
 rm -rf "$OMARCHY_PATH"
 mkdir -p "$(dirname "$OMARCHY_PATH")"
-git clone --depth 1 --branch "${OMARCHY_REF:-quattro}" https://github.com/basecamp/omarchy.git "$OMARCHY_PATH" || { warn "clone fallido"; exit 1; }
+git clone --depth 1 --branch "${OMARCHY_REF:-quattro}" https://github.com/basecamp/omarchy.git "$OMARCHY_PATH" || { warn "clone failed"; exit 1; }
 # core.fileMode=false BEFORE the chmod: otherwise the permission changes leave
 # the checkout dirty and `git pull --ff-only` then refuses to update it.
 git -C "$OMARCHY_PATH" config core.fileMode false
@@ -957,7 +959,7 @@ echo "  version: $(cat "$OMARCHY_PATH/version" 2>/dev/null)"
 
 # ------------------------------------------------------------ dotfiles
 # Equivalent to install/config/config.sh
-log "copiando dotfiles a ~/.config"
+log "copying dotfiles to ~/.config"
 mkdir -p ~/.config
 cp -R "$OMARCHY_PATH"/config/* ~/.config/
 cp "$OMARCHY_PATH/default/bashrc" ~/.bashrc
@@ -983,7 +985,7 @@ AUR_OK=(); AUR_KO=()
 for p in yay xdg-terminal-exec; do
   if aur_install "$p"; then AUR_OK+=("$p"); else AUR_KO+=("$p"); fi
 done
-echo "  AUR ok:    ${AUR_OK[*]:-ninguno}"
+echo "  AUR ok:    ${AUR_OK[*]:-none}"
 echo "  AUR failed: ${AUR_KO[*]:-none}"
 
 # A stand-in if xdg-terminal-exec did not build: Omarchy uses
@@ -1018,7 +1020,7 @@ for f in com.mitchellh.ghostty.desktop ghostty.desktop \
   done
 done
 [ -s ~/.config/xdg-terminals.list ] || printf 'foot.desktop\n' > ~/.config/xdg-terminals.list
-echo "  terminal preferido: $(head -1 ~/.config/xdg-terminals.list)"
+echo "  preferred terminal: $(head -1 ~/.config/xdg-terminals.list)"
 
 # ------------------------------------------------- system integration
 # Omarchy 4 ships as a pacman package that puts the tree in
@@ -1084,7 +1086,7 @@ for pf in /etc/pam.d/sddm /etc/pam.d/sddm-autologin /etc/pam.d/sddm-greeter; do
   [ -f "$pf" ] && sudo sed -i '/-auth.*pam_gnome_keyring\.so/d;/-password.*pam_gnome_keyring\.so/d' "$pf"
 done
 
-log "SDDM: tema Omarchy y sesion"
+log "SDDM: Omarchy theme and session"
 sudo mkdir -p /usr/share/sddm/themes /usr/local/share/wayland-sessions
 sudo cp -a "$OMARCHY_PATH/default/sddm/omarchy" /usr/share/sddm/themes/ 2>/dev/null || true
 [ -f "$OMARCHY_PATH/default/sddm/hyprland.lua" ] && sudo cp -a "$OMARCHY_PATH/default/sddm/hyprland.lua" /usr/share/sddm/hyprland.lua
@@ -1156,7 +1158,7 @@ mkdir -p ~/.local/state/omarchy/migrations
 for f in "$OMARCHY_PATH"/migrations/*.sh; do
   [ -f "$f" ] && : > ~/.local/state/omarchy/migrations/"$(basename "$f")"
 done
-echo "  migraciones selladas: $(ls -1 ~/.local/state/omarchy/migrations | wc -l)"
+echo "  migrations sealed:   $(ls -1 ~/.local/state/omarchy/migrations | wc -l)"
 
 # --- branding (about + salvapantallas) -----------------------------------
 mkdir -p ~/.config/omarchy/branding
@@ -1276,7 +1278,7 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
 # image for nothing. herdr now builds from omarchy-pkgs, which brings its own
 # Zig.
 
-if [ "${HACER_TOOLS:-si}" != "si" ]; then
+if [ "${BUILD_TOOLS:-yes}" != "yes" ]; then
   warn "tool building disabled: ttfx, tensaku, omacalc,"
   warn "omacut, omawrite, aether, cliamp and omarchy-nvim (they can be added later"
   warn "with: yay -S <package>)"
@@ -1310,7 +1312,7 @@ for spec in \
   fi
 done
 echo "  built: ${TOOLS_OK[*]:-none}"
-[ ${#TOOLS_KO[@]} -gt 0 ] && warn "no compilaron: ${TOOLS_KO[*]}"
+[ ${#TOOLS_KO[@]} -gt 0 ] && warn "failed to build: ${TOOLS_KO[*]}"
 # Recorded at a FIXED system path, not in $HOME. The ~/.omarchy-arm-prov one
 # did not survive: the distributable image renames the build account and that
 # trace is lost along the way. The check that read it was therefore a check
@@ -1516,9 +1518,9 @@ if [ -f "$HOME/.omarchy-arm-prov/omarchy-arm-share" ]; then
   # installer so its logic is not duplicated (OBS needs the browser plugin
   # removed, whose CEF is x86-only; Pinta needs Microsoft's arm64 .NET, which
   # Arch does not package).
-  # This is the most expensive part of the build: ~45 min. HACER_LIBRES=no
+  # This is the most expensive part of the build: ~45 min. BUILD_FREE_APPS=no
   # skips it.
-  if [ "${HACER_LIBRES:-si}" = "si" ]; then
+  if [ "${BUILD_FREE_APPS:-yes}" = "yes" ]; then
     log "OBS Studio and Pinta (free software, they ship inside the image; ~45 min)"
     if /usr/local/bin/omarchy-arm-extras pinta obs; then
       echo "  pinta: $(pacman -Q pinta 2>/dev/null || echo MISSING)"
@@ -1528,7 +1530,7 @@ if [ -f "$HOME/.omarchy-arm-prov/omarchy-arm-share" ]; then
       warn "  omarchy-arm-extras pinta obs"
     fi
   else
-    echo "  OBS y Pinta omitidos (HACER_LIBRES=no)"
+    echo "  OBS and Pinta skipped (BUILD_FREE_APPS=no)"
   fi
 fi
 
@@ -1539,8 +1541,8 @@ fi
 #    OMARCHY_PATH points OUTSIDE /usr/share/omarchy, and here it points exactly
 #    there. Without the hook the system gets packages but the Omarchy tree
 #    (scripts, themes, configuration) stays frozen at the cloned version.
-log "actualizaciones: snapper + hook post-update"
-sudo pacman -S --noconfirm --needed --disable-download-timeout snapper >/dev/null 2>&1 || warn "snapper no disponible"
+log "updates: snapper + post-update hook"
+sudo pacman -S --noconfirm --needed --disable-download-timeout snapper >/dev/null 2>&1 || warn "snapper not available"
 if command -v snapper >/dev/null 2>&1; then
   sudo bash -euo pipefail "$OMARCHY_PATH/install/config/snapper.sh" >/dev/null 2>&1 \
     && echo "  snapper configured: a snapshot before every update" \
@@ -1559,13 +1561,13 @@ git config --global init.defaultBranch master
 # ------------------------------------------------------------ resumen
 log "resumen"
 echo "  omarchy:   $(ls -d "$OMARCHY_PATH" 2>/dev/null || echo MISSING)"
-echo "  ~/.config: $(ls ~/.config | wc -l) entradas"
+echo "  ~/.config: $(ls ~/.config | wc -l) entries"
 echo "  theme:     $(readlink -f ~/.config/omarchy/current/theme 2>/dev/null || echo 'not linked')"
 echo "  hyprland:  $(command -v Hyprland || command -v hyprland || echo 'NO')"
 echo "  omarchy-shell: $(command -v omarchy-shell || echo 'NO')"
 echo "  terminal:  $(command -v xdg-terminal-exec || echo 'NO')"
 echo ""
-echo "==> [stage3] COMPLETADO"
+echo "==> [stage3] COMPLETED"
 __PAYLOAD_PROVISION_STAGE3_SH__
 chmod +x "$W/provision/stage3.sh"
 
@@ -1640,7 +1642,7 @@ log "removing /root/prov from the installed system"
 ls /mnt/root/prov 2>/dev/null | tr '\n' ' '; echo
 rm -rf /mnt/root/prov
 
-log "desmontando"
+log "unmounting"
 sync
 umount -R /mnt/tmp /mnt/run /mnt/dev /mnt/sys /mnt/proc 2>/dev/null || true
 umount -R /mnt/boot 2>/dev/null || true
@@ -1686,21 +1688,21 @@ if [ -L /usr/share/omarchy ]; then
   # directory, skips this whole block (the guard is [ -L ... ]) and calls the
   # image good. That is why the partial copy is deleted before the link is
   # restored: 'ln -sfn' onto a real directory creates the link INSIDE it.
-  volver_atras() {
+  roll_back() {
     warn "$1"
     rm -rf /usr/share/omarchy
     ln -sfn "$TARGET" /usr/share/omarchy
     exit 1
   }
   cp -a "$TARGET" /usr/share/omarchy \
-    || volver_atras "could not copy $TARGET to /usr/share/omarchy"
+    || roll_back "could not copy $TARGET to /usr/share/omarchy"
   chown -R root:root /usr/share/omarchy
-  N_ORIG=$(find "$TARGET" -mindepth 1 | wc -l)
-  N_COPIA=$(find /usr/share/omarchy -mindepth 1 | wc -l)
-  [ "$N_COPIA" -ge "$N_ORIG" ] \
-    || volver_atras "la copia quedo incompleta ($N_COPIA de $N_ORIG entradas)"
+  N_ORIGINAL=$(find "$TARGET" -mindepth 1 | wc -l)
+  N_COPY=$(find /usr/share/omarchy -mindepth 1 | wc -l)
+  [ "$N_COPY" -ge "$N_ORIGINAL" ] \
+    || roll_back "the copy came out incomplete ($N_COPY of $N_ORIGINAL entries)"
   rm -rf "$TARGET"
-  echo "  /usr/share/omarchy is now a real directory ($(du -sh /usr/share/omarchy | cut -f1), $N_COPIA entradas)"
+  echo "  /usr/share/omarchy is now a real directory ($(du -sh /usr/share/omarchy | cut -f1), $N_COPY entries)"
 fi
 
 log "2/10 renaming the user $OLD -> $NEW"
@@ -1727,7 +1729,7 @@ EOF
 grep -rl "$OLD" /etc/sddm.conf.d/ 2>/dev/null | while read -r f; do sed -i "s/\b$OLD\b/$NEW/g" "$f"; done
 cat /etc/sddm.conf.d/20-autologin.conf
 
-log "4/10 credenciales y claves"
+log "4/10 credentials and keys"
 rm -rf "/home/$NEW/.ssh"
 rm -f /etc/ssh/ssh_host_*        # se regeneran solas en el primer arranque
 systemctl disable sshd.service 2>/dev/null || true
@@ -1747,7 +1749,7 @@ cat > /etc/hosts <<'EOF'
 127.0.1.1   omarchy.localdomain omarchy
 EOF
 
-log "6/10 identidad personal (git, historiales, cache)"
+log "6/10 personal identity (git, histories, cache)"
 rm -f "/home/$NEW/.gitconfig" "/home/$NEW/.config/git/config"
 rm -f "/home/$NEW/.bash_history" "/home/$NEW/.zsh_history" "/home/$NEW/.local/share/fish/fish_history"
 rm -rf "/home/$NEW/.cache" "/home/$NEW/.local/state/omarchy/first-run.log"
@@ -1794,7 +1796,7 @@ log "7c/10 slimming: what was only needed to build"
 # 425 MiB) plus Rust and Go in the home directory. None of it is needed to use
 # the image, and it accounts for ~2 GB of the zip.
 for p in dotnet-sdk-bin dotnet-targeting-pack-bin aspnet-targeting-pack-bin; do
-  pacman -Q "$p" >/dev/null 2>&1 && { pacman -Rns --noconfirm "$p" >/dev/null 2>&1 && echo "  quitado $p"; }
+  pacman -Q "$p" >/dev/null 2>&1 && { pacman -Rns --noconfirm "$p" >/dev/null 2>&1 && echo "  removed $p"; }
 done
 # Omarchy 4 retires these four: quickshell is the bar, the menu, the OSD and
 # the notification daemon. mako additionally steals
@@ -1802,12 +1804,12 @@ done
 # notifications unthemed. They should not be installed at all, but if a future
 # version of the list brings them back, out they go.
 for p in mako swayosd walker elephant; do
-  pacman -Q "$p" >/dev/null 2>&1 && { pacman -Rns --noconfirm "$p" >/dev/null 2>&1 && echo "  jubilado $p"; }
+  pacman -Q "$p" >/dev/null 2>&1 && { pacman -Rns --noconfirm "$p" >/dev/null 2>&1 && echo "  retired $p"; }
 done
 rm -rf "/home/$NEW/.config/mako" "/home/$NEW/.config/walker" "/home/$NEW/.config/swayosd"
 rm -f  /usr/local/bin/walker
 orph=$(pacman -Qdtq 2>/dev/null | tr '\n' ' ')
-[ -n "${orph// /}" ] && { echo "  huerfanos: $orph"; pacman -Rns --noconfirm $orph >/dev/null 2>&1; }
+[ -n "${orph// /}" ] && { echo "  orphans: $orph"; pacman -Rns --noconfirm $orph >/dev/null 2>&1; }
 rm -rf "/home/$NEW/.cargo" "/home/$NEW/go" "/home/$NEW/.rustup" "/home/$NEW/.npm" 2>/dev/null
 echo "  essentials that must remain: $(for p in hyprland quickshell sddm; do printf '%s ' "$(pacman -Q $p 2>/dev/null || echo FALTA-$p)"; done)"
 
@@ -1822,7 +1824,7 @@ if [ -n "${FW// /}" ]; then
   # not needed either. If anything objects, leave it as it is and break
   # nothing.
   pacman -Rdd --noconfirm $FW linux-firmware >/dev/null 2>&1 \
-    && echo "  retirados" || echo "  (could not be removed; leaving them)"
+    && echo "  removed" || echo "  (could not be removed; leaving them)"
 fi
 # Documentation and manuals: 469 MiB. This is an image for trying out a
 # desktop, not a server where you would sit and read man pages. Omarchy's own
@@ -1969,7 +1971,7 @@ for _vuelta in 1 2 3 4; do
   pacman -Rns --noconfirm "${HUERFANOS[@]}" >/dev/null 2>&1 \
     || { warn "could not remove: ${HUERFANOS[*]}"; break; }
 done
-echo "  huerfanos restantes: $(pacman -Qtdq 2>/dev/null | wc -l)"
+echo "  orphans left:       $(pacman -Qtdq 2>/dev/null | wc -l)"
 
 log "10/10 freeing unused space (so it compresses better)"
 sync
@@ -1981,7 +1983,7 @@ log "subuid/subgid"
 sed -i "s/^$OLD:/$NEW:/" /etc/subuid /etc/subgid 2>/dev/null || true
 cat /etc/subuid /etc/subgid 2>/dev/null
 
-log "barrido final de referencias a $OLD"
+log "final sweep for references to $OLD"
 echo "  /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null || echo "    none"
 echo "  /home:"; grep -rl "\b$OLD\b" /home/$NEW/.config /home/$NEW/.bashrc 2>/dev/null | head -5 || echo "    none"
 echo "  /usr/local/bin:"; grep -rl "\b$OLD\b" /usr/local/bin 2>/dev/null | head -5 || echo "    none"
@@ -1995,7 +1997,7 @@ echo "  symlink omarchy: $(readlink /home/$NEW/.local/share/omarchy)"
 echo "  autologin: $(grep -h User= /etc/sddm.conf.d/*.conf 2>/dev/null | tr '\n' ' ')"
 echo "  binarios omarchy: $(find /usr/bin -maxdepth 1 -name 'omarchy-*' | wc -l) en /usr/bin"
 echo "  ttfx: $(command -v ttfx || echo NO)"
-echo "  migraciones selladas: $(ls -1 /home/$NEW/.local/state/omarchy/migrations 2>/dev/null | wc -l)"
+echo "  migrations sealed:   $(ls -1 /home/$NEW/.local/state/omarchy/migrations 2>/dev/null | wc -l)"
 sync
 echo ""
 log "Nautilus/GTK bookmarks pointing at the old home"
@@ -2019,7 +2021,7 @@ log "symlinks pointing at the old home"
 # dangling link leaves the desktop grey and unstyled with no visible error.
 mapfile -t BADLINKS < <(find /home/$NEW /etc /usr/bin /usr/local /opt -xdev -type l \
   -lname "*/home/$OLD/*" 2>/dev/null)
-echo "  encontrados: ${#BADLINKS[@]}"
+echo "  found: ${#BADLINKS[@]}"
 for l in "${BADLINKS[@]:-}"; do
   [ -n "$l" ] || continue
   tgt=$(readlink "$l")
@@ -2028,7 +2030,7 @@ for l in "${BADLINKS[@]:-}"; do
 done
 chown -h $NEW:$NEW "${BADLINKS[@]:-/home/$NEW}" 2>/dev/null || true
 
-log "barrido final"
+log "final sweep"
 echo "  /etc:   $(grep -rl "\b$OLD\b" /etc 2>/dev/null | wc -l) coincidencias"
 echo "  /home:  $(grep -rl "\b$OLD\b" /home/$NEW/.config /home/$NEW/.bashrc /home/$NEW/.bash_profile 2>/dev/null | wc -l) coincidencias"
 echo "  enlaces a /home/$OLD: $(find /home/$NEW /etc /usr/bin /usr/local /opt -xdev -type l -lname "*/home/$OLD/*" 2>/dev/null | wc -l)"
@@ -2065,7 +2067,7 @@ echo "  WARNING: from here on the image must not be booted again. The first"
 echo "  boot regenerates machine-id, the random seed and the logs, and those"
 echo "  would be identical across every distributed copy. If it has to be"
 echo "  booted to verify something, run this phase again afterwards."
-echo "  claves ssh host: $(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l) (0 = se regeneran)"
+echo "  host ssh keys:   $(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l) (0 = regenerated)"
 echo "  hostname:   $(cat /etc/hostname)"
 sync
 fstrim -av 2>&1 | head -2 || true
@@ -2322,7 +2324,7 @@ do_1password() {
   info "AgileBits publishes arm64 ONLY as a tarball: there is no .deb or .rpm for this architecture."
   local url=https://downloads.1password.com/linux/tar/stable/aarch64/1password-latest.tar.gz
   mkdir -p "$WORK"; rm -rf "$WORK/1p"; mkdir -p "$WORK/1p"
-  curl -fL --progress-bar "$url" -o "$WORK/1p/1p.tar.gz" || { fail "descarga fallida"; return 1; }
+  curl -fL --progress-bar "$url" -o "$WORK/1p/1p.tar.gz" || { fail "download failed"; return 1; }
   # It is a password manager: the signature is verified before installing.
   local KEY=3FEF9748469ADBE15DA7CA80AC2D62742012EA22
   if curl -fsSL "$url.sig" -o "$WORK/1p/1p.tar.gz.sig" 2>/dev/null; then
@@ -2361,7 +2363,7 @@ do_obsidian() {
         | head -1 | sed 's/.*"\(https[^"]*\)"/\1/')
   [ -n "$url" ] || { fail "no arm64 tarball found in the recent releases"; return 1; }
   info "$(basename "$url")"
-  mkdir -p "$WORK"; curl -fL --progress-bar "$url" -o "$WORK/obsidian.tar.gz" || { fail "descarga fallida"; return 1; }
+  mkdir -p "$WORK"; curl -fL --progress-bar "$url" -o "$WORK/obsidian.tar.gz" || { fail "download failed"; return 1; }
   sudo rm -rf /opt/obsidian; sudo mkdir -p /opt/obsidian
   sudo tar -xzf "$WORK/obsidian.tar.gz" -C /opt/obsidian --strip-components=1 || { fail "could not extract"; return 1; }
   sudo ln -sfn /opt/obsidian/obsidian /usr/local/bin/obsidian
@@ -2611,7 +2613,7 @@ for f in "$TREE"/bin/*; do
   # the sanitizer performs (see stage3).
   sudo ln -sfn "/usr/share/omarchy/bin/$b" "$t" 2>/dev/null && n=$((n+1))
 done
-[ "$n" -gt 0 ] && echo "  $n binarios nuevos enlazados en /usr/bin"
+[ "$n" -gt 0 ] && echo "  $n new binaries linked into /usr/bin"
 # Links pointing at commands already removed from the tree
 sudo find /usr/bin -xtype l -delete 2>/dev/null || true
 exit 0
@@ -2678,7 +2680,7 @@ UNIT
   systemctl --user --no-pager status omarchy-arm-clipboard.service | head -5
 }
 
-script_anfitrion() {
+host_script() {
   cat <<'MACEOF'
 #!/bin/bash
 # Run this ON THE MAC. Syncs the clipboard with the VM through whichever
@@ -2733,10 +2735,10 @@ vigilar() {
 
 case "${1:-}" in
   --install) instalar ;;
-  --host)    script_anfitrion ;;
+  --host)    host_script ;;
   -h|--help) uso ;;
   "")        vigilar ;;
-  *)         echo "opcion desconocida: $1" >&2; uso >&2; exit 1 ;;
+  *)         echo "unknown option: $1" >&2; uso >&2; exit 1 ;;
 esac
 __PAYLOAD_PROVISION_CLIPBRD_SH__
 chmod +x "$W/provision/clipbrd.sh"
@@ -2821,7 +2823,7 @@ class Agente:
                 tipo, a1, a2, size = struct.unpack("<IIII", self._leer(16))
                 datos = self._leer(size) if size else b""
             except (EOFError, OSError) as e:
-                log("socket cerrado:", e); return
+                log("socket closed:", e); return
             log("←", tipo, a1, a2, size)
 
             if tipo == CLIPBOARD_GRAB:
@@ -3183,7 +3185,7 @@ proc wait_for {pat code msg {t 900}} {
     expect {
         -ex $pat {}
         timeout  { die $code "TIMEOUT: $msg" }
-        eof      { die [expr {$code+40}] "EOF inesperado: $msg" }
+        eof      { die [expr {$code+40}] "unexpected EOF: $msg" }
     }
 }
 
@@ -3670,8 +3672,8 @@ DISK='/dev/vda'
 OMARCHY_REF='$(cfgq "$OMARCHY_REF")'
 DIST_OLD_USER='$(cfgq "$VM_USER")'
 DIST_NEW_USER='$(cfgq "$DIST_NEW_USER")'
-HACER_TOOLS='$(cfgq "$HACER_TOOLS")'
-HACER_LIBRES='$(cfgq "$HACER_LIBRES")'
+BUILD_TOOLS='$(cfgq "$BUILD_TOOLS")'
+BUILD_FREE_APPS='$(cfgq "$BUILD_FREE_APPS")'
 CFGEOF
   # The harnesses carry the root as the marker @OMARM_ROOT@, substituted when
   # they are deployed. It used to be the literal path of the Mac they were
@@ -3718,7 +3720,7 @@ ph_build() {
   # Rebuilding discards the previous disk, which is ~40 min of work. If there
   # one and the session is interactive, ask; otherwise a copy is kept.
   if [[ -s $W/vm/omarchy-arm.qcow2 ]]; then
-    if confirm "A built disk already exists ($(du -h "$W/vm/omarchy-arm.qcow2" | cut -f1)). ¿Descartarlo y reconstruir?" no; then
+    if confirm "A built disk already exists ($(du -h "$W/vm/omarchy-arm.qcow2" | cut -f1)). Discard it and rebuild?" no; then
       rm -f "$W/vm/omarchy-arm.qcow2"
     else
       mv "$W/vm/omarchy-arm.qcow2" "$W/vm/omarchy-arm.qcow2.anterior"
@@ -3729,7 +3731,7 @@ ph_build() {
   qemu-img create -f qcow2 "$W/vm/omarchy-arm.qcow2" "$DISK_SIZE" >/dev/null
   dd if=/dev/zero of="$W/vm/efi-vars.fd" bs=1m count=64 status=none
 
-  info "arrancando el constructor (Alpine live → chroot → 3 etapas)"
+  info "starting the builder (Alpine live -> chroot -> 3 stages)"
   info "this takes ~40 min depending on the network; the full log is in $W/logs/build.log"
   VM_SMP=$BUILD_SMP VM_MEM=$BUILD_MEM PROV_ISO="$W/provision/provision.iso" \
     expect -f "$W/scripts/build.exp" > "$W/logs/build.log" 2>&1
@@ -3785,7 +3787,7 @@ ph_verify() {
   # verification possible, and going on to sanitize/package packaged an image
   # nobody has
   # mirado. Si de verdad quieres saltartelo: --from sanitize.
-  [[ -n $pty ]] || die "could not open the serial port for '$VM_NAME'; without it no verification is possible (si quieres continuar igualmente: --from sanitize)"
+  [[ -n $pty ]] || die "could not open the serial port for '$VM_NAME'; without it no verification is possible (to carry on anyway: --from sanitize)"
   # This phase used to collect metrics and compare them with nothing, so it
   # ended in "ok" no matter what. Now the guest emits a verdict and the host
   # checks it. Six conditions, all required:
@@ -3977,9 +3979,9 @@ ph_package() {
   # and found the builder's account instead.
   #
   # It is only deleted if this invocation created it -- its UUID is in
-  # make-utm.log -- and we reached the end. CONSERVAR_VM=si keeps it for
+  # make-utm.log -- and we reached the end. KEEP_VM=yes keeps it for
   # debugging.
-  if [ "${CONSERVAR_VM:-}" != si ] && [ -f "$W/logs/make-utm.log" ]; then
+  if [ "${KEEP_VM:-}" != yes ] && [ -f "$W/logs/make-utm.log" ]; then
     local VU
     VU=$(grep -o 'UUID: *[0-9A-Fa-f-]\{36\}' "$W/logs/make-utm.log" | tail -1 | awk '{print $2}')
     if [ -n "$VU" ] && "$UTMCTL" list 2>/dev/null | grep -q "$VU"; then
@@ -4286,20 +4288,20 @@ __PAYLOAD_LEEME_MD__
 # locales) stays an environment variable: they are details of
 # implementacion, no decisiones.
 # With ':=' so they can be set from the environment, like everything else:
-#   HACER_LIBRES=no ./build-omarchy-arm.sh --yes
-#   CONSERVAR_VM=si ./build-omarchy-arm.sh --yes   # no retira la VM intermedia
-: "${HACER_TOOLS:=si}"
-: "${HACER_LIBRES:=si}"
-: "${HACER_DIST:=si}"
+#   BUILD_FREE_APPS=no ./build-omarchy-arm.sh --yes
+#   KEEP_VM=yes ./build-omarchy-arm.sh --yes  # keeps the intermediate VM
+: "${BUILD_TOOLS:=yes}"
+: "${BUILD_FREE_APPS:=yes}"
+: "${BUILD_DIST:=yes}"
 
 cuestionario() {
-  detectar_del_anfitrion
-  if (( ! INTERACTIVO )); then
+  detect_from_host
+  if (( ! INTERACTIVE )); then
     # No terminal: the historical behaviour, fully automatic. They are saved
     # anyway, so a later --from does not start with different values. But if
     # answers from an earlier run exist, they are not overwritten: a stray
     # `--yes` used to destroy what the user had typed by hand.
-    [[ -f "$W/respuestas.env" ]] || guardar_respuestas
+    [[ -f "$W/answers.env" ]] || save_answers
     return
   fi
   phase "configuracion"
@@ -4317,10 +4319,10 @@ cuestionario() {
 
   # ~40 min of compiling. Without them the desktop works, but the screensaver,
   # the screenshot annotator and the calculator are missing, among others.
-  if confirm "Build the 17 Omarchy tools that do not exist for ARM (~40 min)?" si; then
-    HACER_TOOLS=si
+  if confirm "Build the 18 packages that do not exist for ARM (~40 min)?" yes; then
+    BUILD_TOOLS=yes
   else
-    HACER_TOOLS=no
+    BUILD_TOOLS=no
     warn "without them ttfx, tensaku, omacalc, omacut, omawrite, aether, cliamp... will be missing"
   fi
   echo
@@ -4328,34 +4330,34 @@ cuestionario() {
   # OBS and Pinta are the most expensive part of the build. They go in because
   # they are free software and the distributed image carries them, but for a
   # throwaway test VM they are surplus.
-  if confirm "Incluir OBS Studio y Pinta (software libre, se compilan: ~45 min)?" si; then
-    HACER_LIBRES=si
+  if confirm "Include OBS Studio and Pinta (free software, built from source: ~45 min)?" yes; then
+    BUILD_FREE_APPS=yes
   else
-    HACER_LIBRES=no
+    BUILD_FREE_APPS=no
     info "they can be added later from inside: omarchy-arm-extras pinta obs"
   fi
   echo
 
   # The distinction that changes the result most: an image to hand out versus
   # a VM for your own use.
-  info "Dos usos posibles:"
+  info "Two possible uses:"
   info "  - image to hand out  -> renames the user to '$DIST_NEW_USER', wipes"
   info "    SSH keys and identity, and produces a ~6.5 GB zip (~30 min extra)"
   info "  - VM for yourself    -> left as it is, with the user '$VM_USER'"
   if confirm "Prepare the image for distribution?" no; then
-    HACER_DIST=si
+    BUILD_DIST=yes
     ask DIST_NEW_USER "User of the distributable image" "$DIST_NEW_USER"
   else
-    HACER_DIST=no
+    BUILD_DIST=no
     ask VM_USER     "User of the VM"     "$VM_USER"
     ask VM_PASSWORD "Contrasena"           "$VM_PASSWORD"
     ask VM_FULLNAME "Nombre completo"      "$VM_FULLNAME"
   fi
   echo
   info "summary: $VM_KEYMAP/$VM_XKB · $VM_TIMEZONE · ${UTM_CPUS} cores - ${UTM_MEM} MiB - disk $DISK_SIZE"
-  info "         herramientas: $HACER_TOOLS · OBS+Pinta: $HACER_LIBRES · distribute: $HACER_DIST"
-  confirm "Empezar?" si || die "cancelado"
-  guardar_respuestas
+  info "         herramientas: $BUILD_TOOLS · OBS+Pinta: $BUILD_FREE_APPS · distribute: $BUILD_DIST"
+  confirm "Start?" yes || die "cancelled"
+  save_answers
 }
 
 # ──────────────────────────────────── main ─────────────────────────────────
@@ -4371,9 +4373,9 @@ while (($#)); do
     --from) run_from="${2:-}"; [[ -n $run_from ]] || { usage; die "--from needs a phase (${PHASES[*]})"; }; shift 2 ;;
     --only) run_only="${2:-}"; [[ -n $run_only ]] || { usage; die "--only needs a phase (${PHASES[*]})"; }; shift 2 ;;
     --list) printf '%s\n' "${PHASES[@]}"; exit 0 ;;
-    --yes|-y|--sin-preguntas) ASSUME_YES=1; INTERACTIVO=0; shift ;;
+    --yes|-y|--sin-preguntas) ASSUME_YES=1; INTERACTIVE=0; shift ;;
     -h|--help) usage; exit 0 ;;
-    *) die "opcion desconocida: $1" ;;
+    *) die "unknown option: $1" ;;
   esac
 done
 
@@ -4396,7 +4398,7 @@ done
 for sel in "$run_from" "$run_only"; do
   [[ -z $sel ]] && continue
   printf '%s\n' "${PHASES[@]}" | grep -qxF "$sel" \
-    || die "fase desconocida: '$sel' (validas: ${PHASES[*]})"
+    || die "unknown phase: '$sel' (valid: ${PHASES[*]})"
 done
 
 # Resuming or running a single phase must not reopen the questionnaire, but it
@@ -4406,18 +4408,18 @@ if [[ -z $run_from && -z $run_only ]]; then
   cuestionario
 else
   cargar_respuestas || true
-  if [[ -f "$W/respuestas.env" ]]; then
-    info "resuming with the answers from $W/respuestas.env (user '$VM_USER', distribute: ${HACER_DIST:-no})"
+  if [[ -f "$W/answers.env" ]]; then
+    info "resuming with the answers from $W/answers.env (user '$VM_USER', distribute: ${BUILD_DIST:-no})"
   else
-    warn "no $W/respuestas.env: the defaults will be used, which may not be what you chose"
+    warn "no $W/answers.env: the defaults will be used, which may not be what you chose"
   fi
 fi
 
 # The phase trim is decided HERE: after the questionnaire and after loading
-# the answers, with HACER_DIST's final value, and never when the user has named
+# the answers, with BUILD_DIST's final value, and never when the user has named
 # sanitize or package by hand -- that would mean doing nothing and exiting
 # successfully, which is exactly what was just removed in two other places.
-if [[ ${HACER_DIST:-si} == no \
+if [[ ${BUILD_DIST:-yes} == no \
       && $run_from != sanitize && $run_from != package \
       && $run_only != sanitize && $run_only != package ]]; then
   PHASES=(deps fetch prepare build utm verify)
@@ -4434,4 +4436,4 @@ for p in "${PHASES[@]}"; do
   "ph_$p" || die "phase '$p' failed"
 done
 echo
-echo "${c_ok}Completado en $(( (SECONDS-t0)/60 )) min.${c_off}"
+echo "${c_ok}Completed in $(( (SECONDS-t0)/60 )) min.${c_off}"

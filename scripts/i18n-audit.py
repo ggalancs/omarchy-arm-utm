@@ -162,6 +162,59 @@ ES_SURE = re.compile(r'(?<![-\w])(no se pudo|no encuentro|no encontre|montando|'
 # because the vocabulary listed only the unaccented spelling of that verb.
 ES_CHARS = re.compile(r'[áéíóúüñ¿¡ÁÉÍÓÚÜÑ]')
 
+# Enumerating Spanish words was a losing game: five rounds of adding to the
+# lists above, and the build script still printed "sha256 verified", "469 GB
+# libres" and "no disponibles" through an audit that reported zero. None of
+# those words was on any list, and there is no list that would have held them.
+#
+# So this asks a different question. A word is suspect when it carries Spanish
+# morphology AND the system English dictionary does not know it. The dictionary
+# alone is useless -- it has never heard of "clipboard" or "timezone" -- and
+# the morphology alone catches "avocado" and "commando", but the pair is quiet
+# on English and loud on Spanish.
+MORPH = re.compile(r'(cion|sion|ado|ada|ados|adas|ido|ida|idos|idas|ando|endo|'
+                   r'mente|ncia|dad|aje|ajes|oso|osa|iones|ones|encia|ancia|'
+                   r'able|ables|ible|ibles|enes|amos|aron|aban|arse|irse)$',
+                   re.IGNORECASE)
+# Words with no distinctive Spanish shape, which morphology cannot reach and
+# the dictionary alone would not flag without also flagging half of English.
+# Kept deliberately short: anything that can be caught by shape is not here.
+PLAIN_ES = {'libre', 'libres', 'fichero', 'ficheros', 'carpeta', 'carpetas',
+            'usuario', 'usuarios', 'paquete', 'paquetes', 'clave', 'claves',
+            'arbol', 'arranque', 'llavero', 'ruta', 'rutas', 'ninguno',
+            'ninguna', 'anfitrion', 'aviso', 'avisos', 'hecho', 'listo',
+            'huerfanos', 'huerfano', 'correcto', 'correcta', 'falta', 'faltan',
+            'sobra', 'sobran', 'queda', 'quedan', 'error de', 'tanda'}
+# Technical English the 1913 dictionary behind /usr/share/dict/words predates.
+TECH_OK = {'unattended', 'automounted', 'sandboxed', 'sandboxed', 'unicode',
+           'metadata', 'sudo', 'systemd', 'ide', 'ida'}
+
+def _english_words():
+    try:
+        with open('/usr/share/dict/words', errors='replace') as fh:
+            return {w.strip().lower() for w in fh}
+    except OSError:
+        return set()
+
+ENGLISH = _english_words()
+
+def spanish_words(text):
+    """Words with Spanish shape that English does not claim."""
+    out = []
+    for w in re.findall(r"[A-Za-z]{4,}", text):
+        lw = w.lower()
+        if lw in ENGLISH or lw in TECH_OK:
+            continue
+        # English plurals: the dictionary lists the singular, so "ones" looked
+        # Spanish (it ends in -ones) and flagged a sentence that was English
+        # throughout. Spanish plurals survive this -- "libre" and "imagene" are
+        # not English words either.
+        if lw.endswith('s') and (lw[:-1] in ENGLISH or lw[:-2:] in ENGLISH):
+            continue
+        if MORPH.search(lw) or lw in PLAIN_ES:
+            out.append(w)
+    return out
+
 def spanish_strings(path):
     hits = []
     for n, line in enumerate(open(path, errors='replace'), 1):
@@ -176,6 +229,7 @@ def spanish_strings(path):
             words = len(body.split())
             need = 1 if words <= 4 else 2
             if (ES_CHARS.search(body) or ES_SURE.search(body)
+                    or spanish_words(body)
                     or len(ES_STR.findall(body)) >= need):
                 hits.append((n, lit[:78]))
     return hits

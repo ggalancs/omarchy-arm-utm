@@ -30,21 +30,21 @@ if [ -L /usr/share/omarchy ]; then
   # directory, skips this whole block (the guard is [ -L ... ]) and calls the
   # image good. That is why the partial copy is deleted before the link is
   # restored: 'ln -sfn' onto a real directory creates the link INSIDE it.
-  volver_atras() {
+  roll_back() {
     warn "$1"
     rm -rf /usr/share/omarchy
     ln -sfn "$TARGET" /usr/share/omarchy
     exit 1
   }
   cp -a "$TARGET" /usr/share/omarchy \
-    || volver_atras "could not copy $TARGET to /usr/share/omarchy"
+    || roll_back "could not copy $TARGET to /usr/share/omarchy"
   chown -R root:root /usr/share/omarchy
-  N_ORIG=$(find "$TARGET" -mindepth 1 | wc -l)
-  N_COPIA=$(find /usr/share/omarchy -mindepth 1 | wc -l)
-  [ "$N_COPIA" -ge "$N_ORIG" ] \
-    || volver_atras "la copia quedo incompleta ($N_COPIA de $N_ORIG entradas)"
+  N_ORIGINAL=$(find "$TARGET" -mindepth 1 | wc -l)
+  N_COPY=$(find /usr/share/omarchy -mindepth 1 | wc -l)
+  [ "$N_COPY" -ge "$N_ORIGINAL" ] \
+    || roll_back "the copy came out incomplete ($N_COPY of $N_ORIGINAL entries)"
   rm -rf "$TARGET"
-  echo "  /usr/share/omarchy is now a real directory ($(du -sh /usr/share/omarchy | cut -f1), $N_COPIA entradas)"
+  echo "  /usr/share/omarchy is now a real directory ($(du -sh /usr/share/omarchy | cut -f1), $N_COPY entries)"
 fi
 
 log "2/10 renaming the user $OLD -> $NEW"
@@ -71,7 +71,7 @@ EOF
 grep -rl "$OLD" /etc/sddm.conf.d/ 2>/dev/null | while read -r f; do sed -i "s/\b$OLD\b/$NEW/g" "$f"; done
 cat /etc/sddm.conf.d/20-autologin.conf
 
-log "4/10 credenciales y claves"
+log "4/10 credentials and keys"
 rm -rf "/home/$NEW/.ssh"
 rm -f /etc/ssh/ssh_host_*        # se regeneran solas en el primer arranque
 systemctl disable sshd.service 2>/dev/null || true
@@ -91,7 +91,7 @@ cat > /etc/hosts <<'EOF'
 127.0.1.1   omarchy.localdomain omarchy
 EOF
 
-log "6/10 identidad personal (git, historiales, cache)"
+log "6/10 personal identity (git, histories, cache)"
 rm -f "/home/$NEW/.gitconfig" "/home/$NEW/.config/git/config"
 rm -f "/home/$NEW/.bash_history" "/home/$NEW/.zsh_history" "/home/$NEW/.local/share/fish/fish_history"
 rm -rf "/home/$NEW/.cache" "/home/$NEW/.local/state/omarchy/first-run.log"
@@ -138,7 +138,7 @@ log "7c/10 slimming: what was only needed to build"
 # 425 MiB) plus Rust and Go in the home directory. None of it is needed to use
 # the image, and it accounts for ~2 GB of the zip.
 for p in dotnet-sdk-bin dotnet-targeting-pack-bin aspnet-targeting-pack-bin; do
-  pacman -Q "$p" >/dev/null 2>&1 && { pacman -Rns --noconfirm "$p" >/dev/null 2>&1 && echo "  quitado $p"; }
+  pacman -Q "$p" >/dev/null 2>&1 && { pacman -Rns --noconfirm "$p" >/dev/null 2>&1 && echo "  removed $p"; }
 done
 # Omarchy 4 retires these four: quickshell is the bar, the menu, the OSD and
 # the notification daemon. mako additionally steals
@@ -146,12 +146,12 @@ done
 # notifications unthemed. They should not be installed at all, but if a future
 # version of the list brings them back, out they go.
 for p in mako swayosd walker elephant; do
-  pacman -Q "$p" >/dev/null 2>&1 && { pacman -Rns --noconfirm "$p" >/dev/null 2>&1 && echo "  jubilado $p"; }
+  pacman -Q "$p" >/dev/null 2>&1 && { pacman -Rns --noconfirm "$p" >/dev/null 2>&1 && echo "  retired $p"; }
 done
 rm -rf "/home/$NEW/.config/mako" "/home/$NEW/.config/walker" "/home/$NEW/.config/swayosd"
 rm -f  /usr/local/bin/walker
 orph=$(pacman -Qdtq 2>/dev/null | tr '\n' ' ')
-[ -n "${orph// /}" ] && { echo "  huerfanos: $orph"; pacman -Rns --noconfirm $orph >/dev/null 2>&1; }
+[ -n "${orph// /}" ] && { echo "  orphans: $orph"; pacman -Rns --noconfirm $orph >/dev/null 2>&1; }
 rm -rf "/home/$NEW/.cargo" "/home/$NEW/go" "/home/$NEW/.rustup" "/home/$NEW/.npm" 2>/dev/null
 echo "  essentials that must remain: $(for p in hyprland quickshell sddm; do printf '%s ' "$(pacman -Q $p 2>/dev/null || echo FALTA-$p)"; done)"
 
@@ -166,7 +166,7 @@ if [ -n "${FW// /}" ]; then
   # not needed either. If anything objects, leave it as it is and break
   # nothing.
   pacman -Rdd --noconfirm $FW linux-firmware >/dev/null 2>&1 \
-    && echo "  retirados" || echo "  (could not be removed; leaving them)"
+    && echo "  removed" || echo "  (could not be removed; leaving them)"
 fi
 # Documentation and manuals: 469 MiB. This is an image for trying out a
 # desktop, not a server where you would sit and read man pages. Omarchy's own
@@ -313,7 +313,7 @@ for _vuelta in 1 2 3 4; do
   pacman -Rns --noconfirm "${HUERFANOS[@]}" >/dev/null 2>&1 \
     || { warn "could not remove: ${HUERFANOS[*]}"; break; }
 done
-echo "  huerfanos restantes: $(pacman -Qtdq 2>/dev/null | wc -l)"
+echo "  orphans left:       $(pacman -Qtdq 2>/dev/null | wc -l)"
 
 log "10/10 freeing unused space (so it compresses better)"
 sync
@@ -325,7 +325,7 @@ log "subuid/subgid"
 sed -i "s/^$OLD:/$NEW:/" /etc/subuid /etc/subgid 2>/dev/null || true
 cat /etc/subuid /etc/subgid 2>/dev/null
 
-log "barrido final de referencias a $OLD"
+log "final sweep for references to $OLD"
 echo "  /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null || echo "    none"
 echo "  /home:"; grep -rl "\b$OLD\b" /home/$NEW/.config /home/$NEW/.bashrc 2>/dev/null | head -5 || echo "    none"
 echo "  /usr/local/bin:"; grep -rl "\b$OLD\b" /usr/local/bin 2>/dev/null | head -5 || echo "    none"
@@ -339,7 +339,7 @@ echo "  symlink omarchy: $(readlink /home/$NEW/.local/share/omarchy)"
 echo "  autologin: $(grep -h User= /etc/sddm.conf.d/*.conf 2>/dev/null | tr '\n' ' ')"
 echo "  binarios omarchy: $(find /usr/bin -maxdepth 1 -name 'omarchy-*' | wc -l) en /usr/bin"
 echo "  ttfx: $(command -v ttfx || echo NO)"
-echo "  migraciones selladas: $(ls -1 /home/$NEW/.local/state/omarchy/migrations 2>/dev/null | wc -l)"
+echo "  migrations sealed:   $(ls -1 /home/$NEW/.local/state/omarchy/migrations 2>/dev/null | wc -l)"
 sync
 echo ""
 log "Nautilus/GTK bookmarks pointing at the old home"
@@ -363,7 +363,7 @@ log "symlinks pointing at the old home"
 # dangling link leaves the desktop grey and unstyled with no visible error.
 mapfile -t BADLINKS < <(find /home/$NEW /etc /usr/bin /usr/local /opt -xdev -type l \
   -lname "*/home/$OLD/*" 2>/dev/null)
-echo "  encontrados: ${#BADLINKS[@]}"
+echo "  found: ${#BADLINKS[@]}"
 for l in "${BADLINKS[@]:-}"; do
   [ -n "$l" ] || continue
   tgt=$(readlink "$l")
@@ -372,7 +372,7 @@ for l in "${BADLINKS[@]:-}"; do
 done
 chown -h $NEW:$NEW "${BADLINKS[@]:-/home/$NEW}" 2>/dev/null || true
 
-log "barrido final"
+log "final sweep"
 echo "  /etc:   $(grep -rl "\b$OLD\b" /etc 2>/dev/null | wc -l) coincidencias"
 echo "  /home:  $(grep -rl "\b$OLD\b" /home/$NEW/.config /home/$NEW/.bashrc /home/$NEW/.bash_profile 2>/dev/null | wc -l) coincidencias"
 echo "  enlaces a /home/$OLD: $(find /home/$NEW /etc /usr/bin /usr/local /opt -xdev -type l -lname "*/home/$OLD/*" 2>/dev/null | wc -l)"
@@ -409,7 +409,7 @@ echo "  WARNING: from here on the image must not be booted again. The first"
 echo "  boot regenerates machine-id, the random seed and the logs, and those"
 echo "  would be identical across every distributed copy. If it has to be"
 echo "  booted to verify something, run this phase again afterwards."
-echo "  claves ssh host: $(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l) (0 = se regeneran)"
+echo "  host ssh keys:   $(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l) (0 = regenerated)"
 echo "  hostname:   $(cat /etc/hostname)"
 sync
 fstrim -av 2>&1 | head -2 || true

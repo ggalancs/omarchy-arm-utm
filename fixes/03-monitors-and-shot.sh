@@ -24,7 +24,7 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = omarchy
 -- hl.monitor({ output = "Virtual-1", mode = "1920x1200@60", position = "0x0", scale = 1 })
 LUA
 
-log "recargando Hyprland"
+log "reloading Hyprland"
 hyprctl reload 2>&1 | head -3
 sleep 2
 echo "  configerrors: [$(hyprctl configerrors 2>&1 | head -3)]"

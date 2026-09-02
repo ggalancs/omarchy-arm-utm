@@ -15,7 +15,7 @@ if command -v snapper >/dev/null; then
   sudo bash -euo pipefail /usr/share/omarchy/install/config/snapper.sh 2>&1 | sed 's/^/  /'
   echo "  configs: $(sudo snapper --csvout list-configs 2>/dev/null | awk -F, 'NR>1{print $1}' | tr '\n' ' ')"
 else
-  echo "  snapper no disponible"
+  echo "  snapper not available"
 fi
 
 log "2/3 post-update hook that updates the Omarchy tree"

@@ -64,7 +64,7 @@ cat > /etc/hosts <<'EOF'
 127.0.1.1   omarchy.localdomain omarchy
 EOF
 
-log "6/10 identidad personal (git, historiales, cache)"
+log "6/10 personal identity (git, histories, cache)"
 rm -f "/home/$NEW/.gitconfig" "/home/$NEW/.config/git/config"
 rm -f "/home/$NEW/.bash_history" "/home/$NEW/.zsh_history" "/home/$NEW/.local/share/fish/fish_history"
 rm -rf "/home/$NEW/.cache" "/home/$NEW/.local/state/omarchy/first-run.log"
@@ -167,7 +167,7 @@ else
 fi
 
 log "9/10 checking that nothing is still tied to $OLD"
-echo "  referencias en /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null | head -5 || echo "    ninguna"
+echo "  referencias en /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null | head -5 || echo "    none"
 echo "  home:"; ls -ld "/home/$NEW"; ls /home/
 echo "  owner of stray files:"; find /home/$NEW -maxdepth 2 ! -user "$NEW" 2>/dev/null | head -3 || echo "    all correct"
 
@@ -182,9 +182,9 @@ sed -i "s/^$OLD:/$NEW:/" /etc/subuid /etc/subgid 2>/dev/null || true
 cat /etc/subuid /etc/subgid 2>/dev/null
 
 log "final sweep for references to $OLD"
-echo "  /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null || echo "    ninguna"
-echo "  /home:"; grep -rl "\b$OLD\b" /home/$NEW/.config /home/$NEW/.bashrc 2>/dev/null | head -5 || echo "    ninguna"
-echo "  /usr/local/bin:"; grep -rl "\b$OLD\b" /usr/local/bin 2>/dev/null | head -5 || echo "    ninguna"
+echo "  /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null || echo "    none"
+echo "  /home:"; grep -rl "\b$OLD\b" /home/$NEW/.config /home/$NEW/.bashrc 2>/dev/null | head -5 || echo "    none"
+echo "  /usr/local/bin:"; grep -rl "\b$OLD\b" /usr/local/bin 2>/dev/null | head -5 || echo "    none"
 echo "  /usr/share/omarchy (no debe apuntar a /home):"; ls -ld /usr/share/omarchy
 
 log "system coherence"
@@ -194,7 +194,7 @@ echo "  symlink omarchy: $(readlink /home/$NEW/.local/share/omarchy)"
 echo "  autologin: $(grep -h User= /etc/sddm.conf.d/*.conf 2>/dev/null | tr '\n' ' ')"
 echo "  binarios omarchy: $(ls /usr/local/bin | wc -l)"
 echo "  ttfx: $(command -v ttfx || echo NO)"
-echo "  migraciones selladas: $(ls -1 /home/$NEW/.local/state/omarchy/migrations 2>/dev/null | wc -l)"
+echo "  migrations sealed:   $(ls -1 /home/$NEW/.local/state/omarchy/migrations 2>/dev/null | wc -l)"
 sync
 echo ""
 log "Nautilus/GTK bookmarks pointing at the old home"
@@ -219,7 +219,7 @@ log "symlinks pointing at the old home"
 # leaves the desktop grey and unstyled, with no visible error at all.
 mapfile -t BADLINKS < <(find /home/$NEW /etc /usr/local /opt -xdev -type l \
   -lname "*/home/$OLD/*" 2>/dev/null)
-echo "  encontrados: ${#BADLINKS[@]}"
+echo "  found: ${#BADLINKS[@]}"
 for l in "${BADLINKS[@]:-}"; do
   [ -n "$l" ] || continue
   tgt=$(readlink "$l")
@@ -228,7 +228,7 @@ for l in "${BADLINKS[@]:-}"; do
 done
 chown -h $NEW:$NEW "${BADLINKS[@]:-/home/$NEW}" 2>/dev/null || true
 
-log "barrido final"
+log "final sweep"
 echo "  /etc:   $(grep -rl "\b$OLD\b" /etc 2>/dev/null | wc -l) coincidencias"
 echo "  /home:  $(grep -rl "\b$OLD\b" /home/$NEW/.config /home/$NEW/.bashrc /home/$NEW/.bash_profile 2>/dev/null | wc -l) coincidencias"
 echo "  enlaces a /home/$OLD: $(find /home/$NEW /etc /usr/local /opt -xdev -type l -lname "*/home/$OLD/*" 2>/dev/null | wc -l)"
@@ -251,7 +251,7 @@ echo "  WARNING: from here on the image must not be booted again. The first"
 echo "  boot regenerates machine-id, the random seed and the logs, and those"
 echo "  would then be identical in every distributed copy. If it has to be"
 echo "  booted to verify something, repeat this phase afterwards."
-echo "  claves ssh host: $(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l) (0 = se regeneran)"
+echo "  host ssh keys:   $(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l) (0 = regenerated)"
 echo "  hostname:   $(cat /etc/hostname)"
 sync
 fstrim -av 2>&1 | head -2 || true

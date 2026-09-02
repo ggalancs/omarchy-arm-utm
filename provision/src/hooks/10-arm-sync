@@ -37,7 +37,7 @@ for f in "$TREE"/bin/*; do
   # the sanitizer performs (see stage3).
   sudo ln -sfn "/usr/share/omarchy/bin/$b" "$t" 2>/dev/null && n=$((n+1))
 done
-[ "$n" -gt 0 ] && echo "  $n binarios nuevos enlazados en /usr/bin"
+[ "$n" -gt 0 ] && echo "  $n new binaries linked into /usr/bin"
 # Links pointing at commands already removed from the tree
 sudo find /usr/bin -xtype l -delete 2>/dev/null || true
 exit 0

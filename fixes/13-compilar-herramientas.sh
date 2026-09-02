@@ -59,7 +59,7 @@ build() {                      # build <origen> <paquete>
 rm -f /tmp/tools.done
 mkdir -p "$WORK"
 
-log "########## 1. datos y scripts (rapidos) ##########"
+log "########## 1. data and scripts (fast) ##########"
 build aur     yaru-icon-theme
 build aur     ttf-ia-writer
 build aur     tzupdate
@@ -83,8 +83,8 @@ build omapkgs tensaku
 build omapkgs hyprland-preview-share-picker
 
 log "RESUMEN"
-echo "  compilados (${#OK[@]}): ${OK[*]:-ninguno}"
-echo "  fallidos   (${#KO[@]}): ${KO[*]:-ninguno}"
+echo "  built (${#OK[@]}): ${OK[*]:-none}"
+echo "  failed  (${#KO[@]}): ${KO[*]:-none}"
 echo ""
 echo "  binaries available now:"
 for b in omacalc omacut omawrite aether cliamp herdr tensaku ttfx tzupdate mise try; do

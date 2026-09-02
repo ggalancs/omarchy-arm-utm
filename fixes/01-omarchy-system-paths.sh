@@ -29,7 +29,7 @@ for f in "$OM"/bin/*; do
   chmod +x "$f"
   ln -sfn "$f" "/usr/local/bin/$(basename "$f")" && n=$((n+1))
 done
-echo "  $n binarios enlazados"
+echo "  $n binaries linked"
 ls -l /usr/local/bin/start-hyprland /usr/local/bin/omarchy-theme-set 2>&1 | head -3
 
 log "3/8 shell hooks and uwsm session"

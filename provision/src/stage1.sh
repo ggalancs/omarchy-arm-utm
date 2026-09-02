@@ -35,10 +35,10 @@ else
   warn "btrfs unavailable in the live kernel -> ext4 will be used for the root"
   ROOTFS=ext4
 fi
-grep -qw vfat /proc/filesystems || warn "vfat no listado en /proc/filesystems"
+grep -qw vfat /proc/filesystems || warn "vfat not listed in /proc/filesystems"
 echo "  raiz: $ROOTFS   filesystems: $(tr '\n' ' ' < /proc/filesystems | tr -s ' ')"
 
-log "particionando $DISK (GPT: ESP 1GiB + raiz $ROOTFS)"
+log "partitioning $DISK (GPT: ESP 1GiB + root $ROOTFS)"
 umount -R /mnt 2>/dev/null || true
 wipefs -a "$DISK" >/dev/null 2>&1 || true
 parted -s "$DISK" mklabel gpt
@@ -57,7 +57,7 @@ parted -s "$DISK" print
 
 MOPT_ROOT=""
 if [ "$ROOTFS" = btrfs ]; then
-  log "subvolumenes btrfs @ y @home"
+  log "btrfs subvolumes @ and @home"
   mount -t btrfs "${DISK}2" /mnt
   btrfs subvolume create /mnt/@     >/dev/null
   btrfs subvolume create /mnt/@home >/dev/null
@@ -74,11 +74,11 @@ else
 fi
 df -h /mnt
 
-log "desplegando rootfs de Arch Linux ARM (bsdtar -xpf, preserva xattr/ACL)"
+log "unpacking the Arch Linux ARM rootfs (bsdtar -xpf, preserves xattr/ACL)"
 # The ESP is mounted LATER: vfat cannot hold the symlinks /boot carries in the
 # tarball. pacman repopulates the kernel in stage2 onto the mounted ESP.
 bsdtar -xpf "$PROV/alarm-rootfs.tgz" -C /mnt
-echo "  contenido: $(ls /mnt | tr '\n' ' ')"
+echo "  contents: $(ls /mnt | tr '\n' ' ')"
 [ -d /mnt/etc ] && [ -d /mnt/usr ] || { warn "rootfs incompleto"; exit 1; }
 
 log "mounting the ESP at /boot"
@@ -101,7 +101,7 @@ log "DNS inside the chroot"
 rm -f /mnt/etc/resolv.conf
 printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /mnt/etc/resolv.conf
 
-log "copiando payload"
+log "copying payload"
 mkdir -p /mnt/root/prov
 cp "$PROV/stage2.sh" "$PROV/stage3.sh" "$PROV/config.env" \
    "$PROV/packages-core.txt" "$PROV/packages-extra.txt" /mnt/root/prov/
@@ -122,19 +122,19 @@ ROOT_MOUNT_OPTS=$MOPT_ROOT
 EOF
 chmod +x /mnt/root/prov/stage2.sh /mnt/root/prov/stage3.sh
 
-log "entrando en chroot -> stage2"
+log "entering chroot -> stage2"
 set +e
 chroot /mnt /bin/bash /root/prov/stage2.sh
 rc=$?
 set -e
 
-log "desmontando"
+log "unmounting"
 sync
 umount -R /mnt/tmp /mnt/run /mnt/dev /mnt/sys /mnt/proc 2>/dev/null || true
 umount -R /mnt/boot 2>/dev/null || true
 umount -R /mnt 2>/dev/null || umount -l /mnt
 sync
-echo "==> [stage1] terminado rc=$rc"
+echo "==> [stage1] finished rc=$rc"
 echo "TOK_BUILD_$rc"
 trap - EXIT
 exit $rc

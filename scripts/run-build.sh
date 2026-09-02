@@ -5,7 +5,7 @@ set -e
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 
-echo "=== preparando ISO de aprovisionamiento ==="
+echo "=== preparing the provisioning ISO ==="
 rm -rf provision/iso && mkdir -p provision/iso
 cp provision/src/stage1.sh provision/src/stage2.sh provision/src/stage3.sh \
    provision/src/config.env provision/src/packages-core.txt provision/src/packages-extra.txt \
@@ -23,5 +23,5 @@ rm -f vm/omarchy-arm.qcow2 vm/efi-vars.fd
 qemu-img create -f qcow2 vm/omarchy-arm.qcow2 80G >/dev/null
 dd if=/dev/zero of=vm/efi-vars.fd bs=1m count=64 status=none
 
-echo "=== $(date '+%F %T') construyendo Arch Linux ARM + Hyprland + Omarchy ==="
+echo "=== $(date '+%F %T') building Arch Linux ARM + Hyprland + Omarchy ==="
 exec expect -f scripts/build.exp
