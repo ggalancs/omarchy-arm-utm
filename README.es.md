@@ -76,7 +76,7 @@ de ARM que necesitan precedencia en el `PATH`.
   uwsm, xdg-desktop-portal-hyprland, SDDM con autologin y tema Omarchy
 - **Dotfiles, temas y los 442 comandos `omarchy-*`**, en `/usr/bin` como hace
   el paquete de upstream
-- **17 herramientas de Omarchy construidas para aarch64** que no se publican
+- **18 paquetes construidos para aarch64** que no se publican
   para ARM: `tensaku`, `omacalc`, `omacut`, `omawrite`, `aether`, `cliamp`,
   `ttfx`, `omarchy-nvim`, `mise`, `tzupdate`, `yaru-icon-theme`,
   `ttf-ia-writer`, `hyprland-preview-share-picker`, `xdg-terminal-exec`,
@@ -363,7 +363,7 @@ El veredicto que emite el invitado por la consola serie:
 VEREDICTO_OK
 ```
 
-**Compilan las 17 herramientas**, `herdr` incluida: sale del PKGBUILD del propio
+**Compilan las 18 paquetes**, `herdr` incluida: sale del PKGBUILD del propio
 Omarchy, que declara `aarch64` y se descarga el Zig 0.15.2 oficial de ziglang.org
 en vez de depender de la versión que empaqueten los repositorios.
 

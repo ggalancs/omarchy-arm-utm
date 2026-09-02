@@ -108,12 +108,14 @@ there. Fix the file from the terminal you already have.
 Works: the full Hyprland desktop with Omarchy's bar, themes, menu, terminal,
 browser, and the 442 `omarchy-*` commands.
 
-It also carries Omarchy's own tools **compiled for aarch64**, which upstream
-does not publish for ARM: `tensaku` (screenshot annotation), `omacalc`,
-`omacut`, `omawrite`, `aether` (themes), `cliamp` (player), `ttfx` (screensaver
-effects), `omarchy-nvim`, `mise`, `tzupdate`, `yaru-icon-theme`,
-`ttf-ia-writer`, `hyprland-preview-share-picker`, `xdg-terminal-exec`,
-`tobi-try`, `ufw-docker` and `yay`.
+It also carries **18 packages compiled for aarch64** because none of them
+has no aarch64 build. Nine come from Omarchy's own package repository:
+`herdr`, `tensaku` (screenshot annotation), `omacalc`, `omacut`, `omawrite`,
+`ttfx` (screensaver effects), `omarchy-nvim`, `tobi-try` and
+`hyprland-preview-share-picker`. The other nine are AUR packages the desktop
+depends on, which declare `x86_64` only: `aether` (themes), `cliamp` (player),
+`mise`, `tzupdate`, `yaru-icon-theme`, `ttf-ia-writer`, `xdg-terminal-exec`,
+`ufw-docker` and `yay`.
 
 Plus two open-source applications already built for ARM: **OBS Studio 32.2.2**
 (without the browser plugin, whose CEF is x86-only) and **Pinta 3.1.2** (on

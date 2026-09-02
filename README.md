@@ -372,7 +372,7 @@ The guest-side verdict, read back over the serial console:
 VEREDICTO_OK
 ```
 
-**All 17 tools build**, `herdr` included: it comes from Omarchy's own PKGBUILD,
+**All 18 packages build**, `herdr` included: it comes from Omarchy's own PKGBUILD,
 which declares `aarch64` and fetches the official Zig 0.15.2 from ziglang.org
 rather than relying on whatever the repos happen to ship.
 

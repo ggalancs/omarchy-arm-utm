@@ -26,7 +26,7 @@ open *.utm
 User `omarchy`, password `omarchy` (also root). **Change it with `passwd`.**
 
 Arch Linux ARM aarch64 · Hyprland 0.56.1 · the Omarchy 4 desktop · 442
-`omarchy-*` commands · 17 tools built for ARM · OBS Studio and Pinta.
+`omarchy-*` commands · 18 packages built for ARM · OBS Studio and Pinta.
 
 ## What changed on 2026-09-01
 
@@ -74,7 +74,7 @@ Arch Linux ARM aarch64 · Hyprland 0.56.1 · the Omarchy 4 desktop · 442
   through `/etc/conf.d/spice-vdagentd`, the extension point Arch's own unit
   already reads. If you are on an affected image, `fixes/19-portapapeles.sh`
   undoes it in place.
-- **All 17 tools now build.** `herdr` was the one that never did; it now comes
+- **All 18 packages now build.** `herdr` was the one that never did; it now comes
   from Omarchy's own PKGBUILD, which declares `aarch64` and fetches the official
   Zig 0.15.2 instead of relying on the version the repos happen to ship. Its
   desktop shortcuts stop being dead links.
