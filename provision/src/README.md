@@ -106,10 +106,10 @@ there. Fix the file from the terminal you already have.
 ## What to expect
 
 Works: the full Hyprland desktop with Omarchy's bar, themes, menu, terminal,
-browser, and the 442 `omarchy-*` commands.
+browser, and the 445 `omarchy-*` commands.
 
-It also carries **18 packages compiled for aarch64** because none of them
-has no aarch64 build. Nine come from Omarchy's own package repository:
+It also carries **18 packages compiled for aarch64**, because none of them
+has an aarch64 build upstream. Nine come from Omarchy's own package repository:
 `herdr`, `tensaku` (screenshot annotation), `omacalc`, `omacut`, `omawrite`,
 `ttfx` (screensaver effects), `omarchy-nvim`, `tobi-try` and
 `hyprland-preview-share-picker`. The other nine are AUR packages the desktop

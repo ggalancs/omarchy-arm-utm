@@ -114,7 +114,7 @@ def escribir_portapapeles(texto):
         subprocess.run(["wl-copy", "--type", "text/plain;charset=utf-8"],
                        input=texto.encode("utf-8"), timeout=5)
     except Exception as e:
-        log("wl-copy fallo:", e)
+        log("wl-copy failed:", e)
 
 
 def resolucion():

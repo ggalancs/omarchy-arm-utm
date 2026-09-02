@@ -1,22 +1,22 @@
-# Imágenes base descargadas (~900 MB) — el script las baja y las verifica
+# Downloaded base images (~900 MB) -- the script fetches and verifies them
 dl/
 
-# Discos de construcción (decenas de GB)
+# Build disks (tens of GB)
 vm/
 build-test/
 
-# La imagen distribuible: 6,5 GB, no cabe en un repositorio.
-# Se publica como release. El LEEME y el sha256 sí se versionan.
+# The distributable image: 6.5 GB, too large for a repository.
+# It is published as a release. The README and the sha256 are versioned.
 dist/*.zip
 dist/*.utm/
 
-# Salidas de ejecución
+# Run output
 logs/
 provision/*.iso
 provision/repair-iso/*.log
 
-# Solo se versionan las dos capturas que la documentacion usa; el resto son
-# instantaneas de depuracion (39 MB) que no aportan nada a quien clone el repo.
+# Only the two screenshots the documentation uses are versioned; the rest are
+# debugging snapshots (39 MB) that give a person cloning the repo nothing.
 shots/*
 !shots/hires.png
 !shots/dist-final.png
@@ -24,11 +24,13 @@ shots/*
 # macOS
 .DS_Store
 
-# Borradores de los mensajes para las discusiones de Omarchy
+# Drafts of the messages for the Omarchy discussions
 publicar/
 
-# Directorio de construcción de la v2
+# Build directory for v2
 build-v2/
 build-v3/
 build-v4/
 build-v5/
+__pycache__/
+*.pyc

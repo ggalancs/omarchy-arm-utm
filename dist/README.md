@@ -1,11 +1,5 @@
 # Omarchy on Arch Linux ARM — a UTM image for Apple Silicon
 
-**2026-09-01** · describes `omarchy-arm-utm-v2.zip`, the recommended file.
-The 6.5 GB `omarchy-arm-utm.zip` next to it is the first release and keeps the
-plain name so links and checksums published with it still resolve to the exact
-bytes they were written for; it carries its own README inside. `VERSIONS.md`
-compares the two.
-
 Built with
 [`build-omarchy-arm.sh`](https://github.com/ggalancs/omarchy-arm-utm).
 
@@ -68,6 +62,18 @@ It keeps whatever desktop session was already configured.
 
 ## Keyboard
 
+**The image ships the `us` layout.** Earlier images carried the builder's
+Spanish one, which moved every symbol and trapped people: one could not type
+`:` in nvim to edit the file that sets the layout, another could not type his
+own password because his QWERTZ keyboard turned `y` into `z`. To change it:
+
+```bash
+hyprctl keyword input:kb_layout gb        # this session only
+```
+
+and edit `~/.config/hypr/input.lua` to keep it. `kb_variant = "mac"` helps on a
+Mac keyboard.
+
 macOS takes the Cmd key before UTM ever sees it (Cmd+Space opens Spotlight), so
 this VM ships with Alt and Super swapped:
 
@@ -84,17 +90,32 @@ If you prefer the original behaviour, drop `altwin:swap_lalt_lwin` from
 Accessibility and Input Monitoring permissions for UTM in System Settings →
 Privacy & Security).
 
+**If Hyprland comes up in emergency mode** ("no binds registered"), the session
+config lost its bootstrap line. Restore it in `~/.config/hypr/hyprland.lua`:
+
+```lua
+dofile((os.getenv("OMARCHY_PATH") or "/usr/share/omarchy") .. "/default/hypr/bootstrap.lua")
+```
+
+then `hyprctl reload`. Do **not** reach for SUPER+R or `uwsm stop` first: both
+land you on the SDDM greeter, and SDDM only auto-logs-in when the service
+starts, so restarting it needs a password you may not be able to type from
+there. Fix the file from the terminal you already have.
+(Reported by RBeach in omacom/omarchy#7956.)
+
 ## What to expect
 
 Works: the full Hyprland desktop with Omarchy's bar, themes, menu, terminal,
-browser, and the 442 `omarchy-*` commands.
+browser, and the 445 `omarchy-*` commands.
 
-It also carries Omarchy's own tools **compiled for aarch64**, which upstream
-does not publish for ARM: `tensaku` (screenshot annotation), `omacalc`,
-`omacut`, `omawrite`, `aether` (themes), `cliamp` (player), `ttfx` (screensaver
-effects), `omarchy-nvim`, `mise`, `tzupdate`, `yaru-icon-theme`,
-`ttf-ia-writer`, `hyprland-preview-share-picker`, `xdg-terminal-exec`,
-`tobi-try`, `ufw-docker` and `yay`.
+It also carries **18 packages compiled for aarch64**, because none of them
+has an aarch64 build upstream. Nine come from Omarchy's own package repository:
+`herdr`, `tensaku` (screenshot annotation), `omacalc`, `omacut`, `omawrite`,
+`ttfx` (screensaver effects), `omarchy-nvim`, `tobi-try` and
+`hyprland-preview-share-picker`. The other nine are AUR packages the desktop
+depends on, which declare `x86_64` only: `aether` (themes), `cliamp` (player),
+`mise`, `tzupdate`, `yaru-icon-theme`, `ttf-ia-writer`, `xdg-terminal-exec`,
+`ufw-docker` and `yay`.
 
 Plus two open-source applications already built for ARM: **OBS Studio 32.2.2**
 (without the browser plugin, whose CEF is x86-only) and **Pinta 3.1.2** (on
@@ -102,10 +123,25 @@ Microsoft's official arm64 .NET).
 
 Limits that come from running Omarchy on ARM:
 
-- **No GL acceleration inside the VM.** Windows are drawn in software
-  (llvmpipe). Under virtio-gpu, GPU clients map but never paint; blur and
-  shadows ship disabled to compensate. Smooth for ordinary use, not for video
-  or 3D.
+- **Software rendering by default — and that may not be what you want.** The
+  image ships `LIBGL_ALWAYS_SOFTWARE=1` because under UTM 4.7 GPU clients map
+  their windows and never paint them: a black terminal, a black browser.
+  llvmpipe draws everything correctly instead, at the cost of the GPU, and blur
+  and shadows ship disabled to compensate.
+
+  **On UTM 5.0.x that bug is gone.** Two independent reports measured a fully
+  GPU-composited desktop with the flag removed, Hyprland's idle CPU dropping
+  from ~17% to ~3%, and 4K video playing without dropped frames. The guest
+  cannot tell which UTM is hosting it — the QEMU machine type is not a version
+  indicator — so the choice is yours, and it is one command:
+
+  ```bash
+  omarchy-arm-gpu          # what is set now
+  omarchy-arm-gpu --on     # try hardware GL, then log out and back in
+  omarchy-arm-gpu --off    # back to software if anything renders black
+  ```
+
+  (Found by @gillesgoetsch and @Fail-Safe on the project's issue tracker.)
 - **The disk ships compressed** inside the `.qcow2`. It takes half the space
   and decompresses on the fly; if you would rather have read speed than space,
   `qemu-img convert -O qcow2 disk.qcow2 uncompressed.qcow2`.
@@ -131,6 +167,15 @@ systemctl --user status omarchy-arm-vdagent     # your session's agent
 `omarchy-arm-share` inside. It works out on its own whether UTM is in VirtFS or
 SPICE WebDAV mode and mounts it on `/mnt/share` accordingly.
 `omarchy-arm-share --status` shows how it went, `--umount` releases it.
+
+If the mount succeeds but every access says **"Permission denied"**, the host
+ownership does not match your account: 9p passes the Mac's uid (usually 501)
+straight through, and yours is 1000. `omarchy-arm-share` claims the mount for
+you, and the fix is stored on the host side, so it survives reboots.
+
+**VirtFS is the mode to prefer.** SPICE WebDAV mounts cleanly as your own user,
+but directory I/O over it has been reported to wedge the FUSE mount and the
+SPICE channel together; if you hit that, switch the mode to VirtFS in UTM.
 
 If `ls /mnt/share` reports **"No such device"** or **"No such file or
 directory"**, UTM is not offering any folder. Select it again under *Sharing*
@@ -188,6 +233,17 @@ needs Widevine, which ships inside Google Chrome arm64. Install `chrome`, then
 
 **`omarchy-update` works**, but the day Omarchy introduces a new package of its
 own, it will skip it with a warning rather than install it.
+
+## Omarchy's own packages: `target not found`
+
+*Install > AI > ChatGPT Desktop* and similar menu entries fail with pacman's
+`error: target not found`. They call `omarchy-pkg-add` against Omarchy's own
+repository, which publishes x86_64 only, so on ARM there is nothing to install.
+
+[omarchy-mac/omarchy-pkgs-aarch64](https://github.com/omarchy-mac/omarchy-pkgs-aarch64)
+rebuilds most of them for aarch64. It is a community repository: unofficial and
+unsigned, the same trust model as Omarchy's own. If you add it, packaging bugs
+belong to them, not here.
 
 ## Your own apps
 

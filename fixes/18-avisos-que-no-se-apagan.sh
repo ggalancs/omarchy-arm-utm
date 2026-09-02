@@ -74,7 +74,7 @@ omarchy-provision-first-run --force 2>&1 | tail -3
 
 echo "==> verification"
 printf "   unidades instaladas: %s\n" "$(ls /usr/lib/systemd/user/*.service 2>/dev/null | wc -l)"
-printf "   first-run marcado:  %s\n" "$(omarchy-done check first-run-user && echo sí || echo NO)"
-printf "   kernel en ejecución: %s\n" "$(uname -r)"
+printf "   first-run marked:   %s\n" "$(omarchy-done check first-run-user && echo yes || echo NO)"
+printf "   running kernel:      %s\n" "$(uname -r)"
 printf "   lo posee:            %s\n" "$(pacman -Qoq /usr/lib/modules/"$(uname -r)"/modules.builtin 2>/dev/null || echo "(nadie)")"
 echo "   omarchy-update-restart should not ask for a reboot from now on."

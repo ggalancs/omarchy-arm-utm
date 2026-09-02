@@ -24,7 +24,7 @@ if {[string match "@*@" $ROOT]} {
 spawn -noecho $ROOT/scripts/qemu-build.sh
 
 # --- Alpine live login (root, no password)
-wait_for "localhost login:" 10 "el live de Alpine no llegó al login" 300
+wait_for "localhost login:" 10 "the Alpine live environment never reached the login" 300
 send "root\r"
 wait_for "localhost:~#" 11 "no root shell in Alpine" 120
 
@@ -110,7 +110,7 @@ expect {
         catch { wait_for "TOK_TAIL_" 15 "tail" 300 }
         exit 20
     }
-    eof { die 16 "EOF durante la construcción" }
+    eof { die 16 "EOF during the build" }
 }
 
 # --- verification of the resulting disk

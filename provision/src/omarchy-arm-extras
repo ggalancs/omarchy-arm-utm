@@ -94,7 +94,7 @@ aur_build() {
 
   rm -rf "$dir"; mkdir -p "$WORK"
   git clone -q "https://aur.archlinux.org/$base.git" "$dir" 2>/dev/null
-  [ -f "$dir/PKGBUILD" ] || { fail "no se pudo clonar $pkg (base: $base)"; return 1; }
+  [ -f "$dir/PKGBUILD" ] || { fail "could not clone $pkg (base: $base)"; return 1; }
 
   # Several PKGBUILDs verify the upstream signature in check(). If the key is
   # not in the keyring, makepkg aborts. The ones the PKGBUILD itself declares
@@ -143,9 +143,9 @@ do_1password() {
   else
     warn "no .sig available; installing without verifying the signature"
   fi
-  tar -xzf "$WORK/1p/1p.tar.gz" -C "$WORK/1p" || { fail "no se pudo extraer"; return 1; }
+  tar -xzf "$WORK/1p/1p.tar.gz" -C "$WORK/1p" || { fail "could not extract"; return 1; }
   local src; src=$(find "$WORK/1p" -maxdepth 1 -type d -name '1password-*' | head -1)
-  [ -n "$src" ] || { fail "el tarball no tiene la forma esperada"; return 1; }
+  [ -n "$src" ] || { fail "the tarball is not shaped as expected"; return 1; }
   sudo mkdir -p /opt/1Password
   sudo cp -a "$src"/. /opt/1Password/
   ( cd /opt/1Password && sudo ./after-install.sh ) >/dev/null 2>&1 || warn "after-install.sh reported errors (usually harmless)"
@@ -169,7 +169,7 @@ do_obsidian() {
   info "$(basename "$url")"
   mkdir -p "$WORK"; curl -fL --progress-bar "$url" -o "$WORK/obsidian.tar.gz" || { fail "descarga fallida"; return 1; }
   sudo rm -rf /opt/obsidian; sudo mkdir -p /opt/obsidian
-  sudo tar -xzf "$WORK/obsidian.tar.gz" -C /opt/obsidian --strip-components=1 || { fail "no se pudo extraer"; return 1; }
+  sudo tar -xzf "$WORK/obsidian.tar.gz" -C /opt/obsidian --strip-components=1 || { fail "could not extract"; return 1; }
   sudo ln -sfn /opt/obsidian/obsidian /usr/local/bin/obsidian
   sudo install -Dm644 /dev/stdin /usr/local/share/applications/obsidian.desktop <<'DESK'
 [Desktop Entry]
@@ -229,7 +229,7 @@ o.bind("SUPER + SHIFT + M", "Spotify", o.launch("google-chrome-stable --app=http
 LUA
     ok "SUPER+SHIFT+M rebound (log out and back in to apply)"
   fi
-  info "${c_dim}Alternativa en terminal, ya instalada: spotify-player${c_off}"
+  info "${c_dim}Terminal alternative, already installed: spotify-player${c_off}"
 }
 
 do_pinta() {
@@ -320,7 +320,7 @@ show_list() {
   local k
   while read -r k; do
     if is_installed "$k"; then
-      printf "  ${c_hi}%-15s${c_off} %s ${c_dim}[ya instalada]${c_off}\n" "$k" "$(catalog_desc "$k")"
+      printf "  ${c_hi}%-15s${c_off} %s ${c_dim}[already installed]${c_off}\n" "$k" "$(catalog_desc "$k")"
     else
       printf "  ${c_hi}%-15s${c_off} %s\n" "$k" "$(catalog_desc "$k")"
     fi

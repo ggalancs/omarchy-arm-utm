@@ -214,7 +214,7 @@ ph_deps() {
   # git and python3 come from the Command Line Tools, which are not there on a
   # brand-new Mac. They are used in 'prepare' and in the branch check.
   for c in git python3 zip shasum curl hdiutil; do
-    command -v "$c" >/dev/null || die "falta '$c' (¿ejecutaste 'xcode-select --install'?)"
+    command -v "$c" >/dev/null || die "missing '$c' (did you run 'xcode-select --install'?)"
   done
   [[ -x $UTMCTL ]] || die "UTM is missing: brew install --cask utm"
   # Measured on a real build: the disk reaches 9.5 GB, the copy for sanitizing
@@ -972,7 +972,7 @@ aur_install() {
   rm -rf "/tmp/aur/$p"
   git clone --depth 1 -q "https://aur.archlinux.org/$p.git" "/tmp/aur/$p" || { warn "clone $p"; return 1; }
   ( cd "/tmp/aur/$p" && makepkg -si --noconfirm --needed --noprogressbar ) >"/tmp/aur/$p.log" 2>&1 \
-    || { warn "makepkg $p falló (log: /tmp/aur/$p.log)"; tail -15 "/tmp/aur/$p.log"; return 1; }
+    || { warn "makepkg $p failed (log: /tmp/aur/$p.log)"; tail -15 "/tmp/aur/$p.log"; return 1; }
   echo "  ok: $p"
 }
 
@@ -984,7 +984,7 @@ for p in yay xdg-terminal-exec; do
   if aur_install "$p"; then AUR_OK+=("$p"); else AUR_KO+=("$p"); fi
 done
 echo "  AUR ok:    ${AUR_OK[*]:-ninguno}"
-echo "  AUR falló: ${AUR_KO[*]:-ninguno}"
+echo "  AUR failed: ${AUR_KO[*]:-none}"
 
 # A stand-in if xdg-terminal-exec did not build: Omarchy uses
 # $TERMINAL=xdg-terminal-exec
@@ -1100,7 +1100,7 @@ export PATH="/usr/local/bin:$PATH"
 log "applying the Tokyo Night theme"
 mkdir -p ~/.config/omarchy/themes
 if command -v omarchy-theme-set >/dev/null 2>&1; then
-  omarchy-theme-set "Tokyo Night" || warn "omarchy-theme-set falló; enlazando a mano"
+  omarchy-theme-set "Tokyo Night" || warn "omarchy-theme-set failed; linking by hand"
 fi
 if [ ! -e ~/.config/omarchy/current/theme ]; then
   mkdir -p ~/.config/omarchy/current
@@ -3164,7 +3164,7 @@ if {[string match "@*@" $ROOT]} {
 spawn -noecho $ROOT/scripts/qemu-build.sh
 
 # --- Alpine live login (root, no password)
-wait_for "localhost login:" 10 "el live de Alpine no llegó al login" 300
+wait_for "localhost login:" 10 "the Alpine live environment never reached the login" 300
 send "root\r"
 wait_for "localhost:~#" 11 "no root shell in Alpine" 120
 
@@ -3250,7 +3250,7 @@ expect {
         catch { wait_for "TOK_TAIL_" 15 "tail" 300 }
         exit 20
     }
-    eof { die 16 "EOF durante la construcción" }
+    eof { die 16 "EOF during the build" }
 }
 
 # --- verification of the resulting disk
@@ -4075,10 +4075,10 @@ there. Fix the file from the terminal you already have.
 ## What to expect
 
 Works: the full Hyprland desktop with Omarchy's bar, themes, menu, terminal,
-browser, and the 442 `omarchy-*` commands.
+browser, and the 445 `omarchy-*` commands.
 
-It also carries **18 packages compiled for aarch64** because none of them
-has no aarch64 build. Nine come from Omarchy's own package repository:
+It also carries **18 packages compiled for aarch64**, because none of them
+has an aarch64 build upstream. Nine come from Omarchy's own package repository:
 `herdr`, `tensaku` (screenshot annotation), `omacalc`, `omacut`, `omawrite`,
 `ttfx` (screensaver effects), `omarchy-nvim`, `tobi-try` and
 `hyprland-preview-share-picker`. The other nine are AUR packages the desktop

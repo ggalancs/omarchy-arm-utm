@@ -40,7 +40,7 @@ aur_install() {
   rm -rf "/tmp/aur/$p"
   git clone --depth 1 -q "https://aur.archlinux.org/$p.git" "/tmp/aur/$p" || { warn "clone $p"; return 1; }
   ( cd "/tmp/aur/$p" && makepkg -si --noconfirm --needed --noprogressbar ) >"/tmp/aur/$p.log" 2>&1 \
-    || { warn "makepkg $p falló (log: /tmp/aur/$p.log)"; tail -15 "/tmp/aur/$p.log"; return 1; }
+    || { warn "makepkg $p failed (log: /tmp/aur/$p.log)"; tail -15 "/tmp/aur/$p.log"; return 1; }
   echo "  ok: $p"
 }
 
@@ -52,7 +52,7 @@ for p in yay xdg-terminal-exec; do
   if aur_install "$p"; then AUR_OK+=("$p"); else AUR_KO+=("$p"); fi
 done
 echo "  AUR ok:    ${AUR_OK[*]:-ninguno}"
-echo "  AUR falló: ${AUR_KO[*]:-ninguno}"
+echo "  AUR failed: ${AUR_KO[*]:-none}"
 
 # A stand-in if xdg-terminal-exec did not build: Omarchy uses
 # $TERMINAL=xdg-terminal-exec
@@ -168,7 +168,7 @@ export PATH="/usr/local/bin:$PATH"
 log "applying the Tokyo Night theme"
 mkdir -p ~/.config/omarchy/themes
 if command -v omarchy-theme-set >/dev/null 2>&1; then
-  omarchy-theme-set "Tokyo Night" || warn "omarchy-theme-set falló; enlazando a mano"
+  omarchy-theme-set "Tokyo Night" || warn "omarchy-theme-set failed; linking by hand"
 fi
 if [ ! -e ~/.config/omarchy/current/theme ]; then
   mkdir -p ~/.config/omarchy/current

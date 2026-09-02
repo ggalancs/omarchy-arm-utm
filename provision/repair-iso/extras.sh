@@ -162,7 +162,7 @@ do_obsidian() {
   url=$(curl -fsSL --max-time 30 "https://api.github.com/repos/obsidianmd/obsidian-releases/releases?per_page=15" \
         | grep -oE '"browser_download_url": *"[^"]*obsidian-[0-9.]+-arm64\.tar\.gz"' \
         | head -1 | sed 's/.*"\(https[^"]*\)"/\1/')
-  [ -n "$url" ] || { fail "no encontré ningún tarball arm64 en los últimos releases"; return 1; }
+  [ -n "$url" ] || { fail "found no arm64 tarball in the latest releases"; return 1; }
   info "$(basename "$url")"
   mkdir -p "$WORK"; curl -fL --progress-bar "$url" -o "$WORK/obsidian.tar.gz" || { fail "descarga fallida"; return 1; }
   sudo rm -rf /opt/obsidian; sudo mkdir -p /opt/obsidian
@@ -212,7 +212,7 @@ do_spotify_web() {
       "$(have google-chrome-stable && echo 'google-chrome-stable --app=https://open.spotify.com')" \
       >/dev/null 2>&1 && ok "lanzador creado en el menú de aplicaciones"
   else
-    warn "omarchy-webapp-install no está disponible"
+    warn "omarchy-webapp-install is not available"
   fi
   # Reassign SUPER+SHIFT+M, which in Omarchy points at the native binary
   local f="$HOME/.config/hypr/bindings.lua"
@@ -238,7 +238,7 @@ do_pinta() {
   [ -n "$file" ] || { fail "could not find the Pinta package"; return 1; }
   info "$file  ${c_dim}(the path says x86_64 but the package is arch=any)${c_off}"
   mkdir -p "$WORK"; curl -fL --progress-bar "$url$file" -o "$WORK/$file" || return 1
-  sudo pacman -U --noconfirm "$WORK/$file" >/dev/null 2>&1 && ok "$(pacman -Q pinta)" || { fail "pacman -U falló"; return 1; }
+  sudo pacman -U --noconfirm "$WORK/$file" >/dev/null 2>&1 && ok "$(pacman -Q pinta)" || { fail "pacman -U failed"; return 1; }
   warn "it stays outside the update manager: every version has to be redone by hand"
 }
 
@@ -359,7 +359,7 @@ done
 title "Resumen"
 [ ${#OK_LIST[@]} -gt 0 ] && ok "instalado: ${OK_LIST[*]}"
 if [ ${#KO_LIST[@]} -gt 0 ]; then
-  fail "falló: ${KO_LIST[*]}"
+  fail "failed: ${KO_LIST[*]}"
   # The working directory is not deleted: the build.log files are in there,
   # and they are the only way to find out why something failed.
   info "logs in $WORK/<package>/build.log"

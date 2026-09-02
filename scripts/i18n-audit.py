@@ -45,6 +45,12 @@ FILEISH = re.compile(r'\S*[/.][A-Za-z0-9._-]+')
 
 def comment_lines(path, text):
     """Yield (lineno, text) for lines that are entirely a comment."""
+    # Markdown is not code: '#' starts a heading, not a comment, so every
+    # heading of README.es.md and EMPEZAR.md came back as untranslated text.
+    # Those two are Spanish on purpose -- they exist so a Spanish reader has
+    # something to read -- and counting them made the total meaningless.
+    if path.suffix in ('.md', '.markdown'):
+        return
     suf = path.suffix
     pref = ('--',) if suf == '.lua' else ('#',)
     for i, l in enumerate(text.splitlines(), 1):
@@ -116,7 +122,10 @@ def lint_continuations(paths):
 # Only the text inside double quotes on a line that prints something. Shell
 # flags (-la) and substitutions ($x, $(cmd)) are stripped first: they are not
 # prose, and they used to trip the detector on lines that were already English.
-OUTPUT_LINE = re.compile(r'\b(echo|log|warn|die|fail|info|printf|note)\b')
+# `print` is on this list because leaving it off made the audit blind to every
+# Python script in the repo: sync-payloads.py was printing "266 lineas" at the
+# maintainer through a run that reported zero.
+OUTPUT_LINE = re.compile(r'\b(echo|log|warn|die|fail|info|printf|print|note)\b')
 QUOTED = re.compile(r'"([^"\\]*(?:\\.[^"\\]*)*)"')
 SUBST = re.compile(r'\$\([^)]*\)|\$\{[^}]*\}|\$\w+|-\w+')
 
@@ -144,6 +153,13 @@ ES_SURE = re.compile(r'(?<![-\w])(no se pudo|no encuentro|no encontre|montando|'
                      r'esperado|obtenido|retirado|quitando|limpieza)'
                      r'(?![-\w])', re.IGNORECASE)
 
+# Characters that only Spanish uses here. This started as the cheapest rule and
+# should have been the first: the word lists above are judgement calls, but a
+# tilde is not. It was added after an accented Spanish verb sat in a warning
+# in the main script through an audit that reported zero,
+# because the vocabulary listed only the unaccented spelling of that verb.
+ES_CHARS = re.compile(r'[áéíóúüñ¿¡ÁÉÍÓÚÜÑ]')
+
 def spanish_strings(path):
     hits = []
     for n, line in enumerate(open(path, errors='replace'), 1):
@@ -151,7 +167,8 @@ def spanish_strings(path):
             continue
         for lit in QUOTED.findall(line):
             body = SUBST.sub(' ', lit)
-            if ES_SURE.search(body) or len(ES_STR.findall(body)) >= 2:
+            if (ES_CHARS.search(body) or ES_SURE.search(body)
+                    or len(ES_STR.findall(body)) >= 2):
                 hits.append((n, lit[:78]))
     return hits
 

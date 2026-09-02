@@ -15,14 +15,14 @@ git -C "$TREE" rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 # The tree may belong to the user (development VM) or to root (shipped image)
 if [ -w "$TREE/.git" ]; then GIT=(git -C "$TREE"); else GIT=(sudo git -C "$TREE"); fi
 
-echo -e "\e[32m\nActualizar el árbol de Omarchy (checkout git)\e[0m"
+echo -e "\e[32m\nUpdate the Omarchy tree (git checkout)\e[0m"
 before=$("${GIT[@]}" rev-parse --short HEAD 2>/dev/null)
 if ! "${GIT[@]}" pull --ff-only 2>&1 | sed 's/^/  /'; then
   echo "  could not fast-forward; the tree is left as it was"
   exit 0
 fi
 after=$("${GIT[@]}" rev-parse --short HEAD 2>/dev/null)
-if [ "$before" = "$after" ]; then echo "  ya estaba al día ($after)"; exit 0; fi
+if [ "$before" = "$after" ]; then echo "  was already up to date ($after)"; exit 0; fi
 echo "  $before → $after"
 
 # Link the new binaries, respecting the ARM-specific wrappers
