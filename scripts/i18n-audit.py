@@ -182,10 +182,11 @@ def spanish_strings(path):
 
 # Lines of generated configuration, not code: systemd unit Description=,
 # .desktop Name= and friends. They live inside heredocs, so no output function
-# appears on the line and the scan above never looked at them -- while
-# `Name=Instalar apps que faltan` was an entry in the user's application menu
-# and `Description=Portapapeles compartido...` was what `systemctl status`
-# printed. Both shipped in every image.
+# appears on the line and the scan above never looked at them -- while a
+# .desktop Name= was an entry in the user's application menu and a systemd
+# Description= was what `systemctl status` printed, both in Spanish, in every
+# image the project has published. (No sample is quoted: a Spanish one here
+# would make this file report itself for ever.)
 CONFIG_FIELD = re.compile(r'^\s*(Description|Name|GenericName|Comment|Keywords)=(.+)$')
 
 def spanish_config(path):
