@@ -11,7 +11,7 @@
 | "Update System" notification | gone | repeats on every boot |
 | "Reboot?" after each update | gone | repeats forever |
 | `sshd` | disabled | enabled, with a trivial password |
-| `sha256` | `d0fe1192c00e7b499d4e31a5dc7cf625f4745764f049e100a1b5eff50a6359e2` | `9d6afb16843bd868c9503dbfdaaa5f1ff7634b23f9a972b344ec27ca0a795fb4` |
+| `sha256` | `a301f6a8e0806a35736cdebaa10f4c7e083b8a96fd9c348a5c15bbed2f05a44a` | `9d6afb16843bd868c9503dbfdaaa5f1ff7634b23f9a972b344ec27ca0a795fb4` |
 
 The plain name belongs to the first release and keeps it, so links and checksums
 published back in August still resolve to the exact bytes they were written

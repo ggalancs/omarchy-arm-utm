@@ -23,11 +23,11 @@ LIST=/media/guest-check-base.sh
 run_list() { bash "$LIST" builder 2>&1; }
 
 # The count comes from the VERDICT, not from counting lines by their prefix.
-# list prints "  FAIL   ", not "  bad  ", and the first attempt grepped the
-# The first attempt grepped the wrong prefix: it reported SEVEN "blind" checks
-# that were in fact working. Believing it would have meant going out to fix
-# healthy code. VERDICT_WITH_N is counted by the list itself and does not
-# depend on how it prints.
+# The list prints "  FAIL   ", and the first attempt here grepped for a
+# different prefix, so it reported SEVEN "blind" checks that were in fact
+# working. Believing it would have meant going out to fix healthy code.
+# VERDICT_WITH_N is counted by the list itself and does not depend on how
+# the list chooses to print.
 count_failures() {
   case "$1" in
     *VERDICT_CLEAN*) echo 0 ;;
