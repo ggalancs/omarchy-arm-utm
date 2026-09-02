@@ -73,13 +73,13 @@ echo
 echo "== 3. the list has to see them =="
 AFTER=$(pasar)
 echo "   checks gone red: $(cuenta "$AFTER")"
-echo "$AFTER" | grep "FALLO" | sed "s/^/     /"
+echo "$AFTER" | grep "FAIL" | sed "s/^/     /"
 
 echo
 echo "== 4. verdict =="
 BLIND=0
 for e in "${EXPECTED[@]}"; do
-  echo "$AFTER" | grep "FALLO" | grep -qFi "$e" \
+  echo "$AFTER" | grep "FAIL" | grep -qFi "$e" \
     || { echo "   BLIND: nothing reacted to '$e'"; BLIND=$((BLIND+1)); }
 done
 echo "$AFTER" | grep -q VERDICT_CLEAN && { echo "   SERIOUS: says CLEAN with the image broken"; BLIND=$((BLIND+1)); }

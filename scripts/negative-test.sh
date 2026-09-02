@@ -44,7 +44,7 @@ if echo "$BEFORE" | grep -q VERDICT_CLEAN; then
   BASE_OK=1
 else
   echo "   NOT clean; the negative test means nothing starting from here:"
-  echo "$BEFORE" | grep "FALLO" | sed "s/^/     /"
+  echo "$BEFORE" | grep "FAIL" | sed "s/^/     /"
   BASE_OK=0
 fi
 
@@ -96,13 +96,13 @@ echo "== 3. the list has to see them =="
 AFTER=$(pasar)
 FAILURES=$(cuenta "$AFTER")
 echo "   checks gone red: $FAILURES"
-echo "$AFTER" | grep "FALLO" | sed "s/^/     /"
+echo "$AFTER" | grep "FAIL" | sed "s/^/     /"
 
 echo
 echo "== 4. verdict =="
 BLIND=0
 for e in "${EXPECTED[@]}"; do
-  echo "$AFTER" | grep "FALLO" | grep -qFi "$e" \
+  echo "$AFTER" | grep "FAIL" | grep -qFi "$e" \
     || { echo "   BLIND: nothing reacted to '$e'"; BLIND=$((BLIND+1)); }
 done
 if echo "$AFTER" | grep -q VERDICT_CLEAN; then

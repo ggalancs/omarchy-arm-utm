@@ -6,12 +6,12 @@
 |---|---|---|
 | | **← download this one** | the first release |
 | Size | 3.6 GB (3.8 GB unpacked) | 6.5 GB (13 GB unpacked) |
-| Published | 2026-09-01 | 2026-08-23 |
+| Published | 2026-09-02 | 2026-08-23 |
 | Shared clipboard | **works, verified both ways** | does not work |
 | "Update System" notification | gone | repeats on every boot |
 | "Reboot?" after each update | gone | repeats forever |
 | `sshd` | disabled | enabled, with a trivial password |
-| `sha256` | `96d4ac82915f8e8044eeb7a1d02312cc8b69728619bdafd09a25fd08b511cde9` | `9d6afb16843bd868c9503dbfdaaa5f1ff7634b23f9a972b344ec27ca0a795fb4` |
+| `sha256` | `d0fe1192c00e7b499d4e31a5dc7cf625f4745764f049e100a1b5eff50a6359e2` | `9d6afb16843bd868c9503dbfdaaa5f1ff7634b23f9a972b344ec27ca0a795fb4` |
 
 The plain name belongs to the first release and keeps it, so links and checksums
 published back in August still resolve to the exact bytes they were written
@@ -27,6 +27,49 @@ User `omarchy`, password `omarchy` (also root). **Change it with `passwd`.**
 
 Arch Linux ARM aarch64 · Hyprland 0.56.1 · the Omarchy 4 desktop · 442
 `omarchy-*` commands · 18 packages built for ARM · OBS Studio and Pinta.
+
+## What changed on 2026-09-02
+
+Everything here came from people who used the image and reported what broke.
+
+- **The image no longer ships the builder's keyboard.** It shipped `es` — mine —
+  because the step that prepares it for distribution never reset the layout. On
+  any other keyboard every symbol moves, and the trap closes on itself: one user
+  spent two and a half hours unable to type `:` in nvim to edit the very file
+  that sets the layout, and another could not log in at all because his QWERTZ
+  keyboard typed `omarchz` for the password. It now ships `us`, `kb_options` is
+  untouched so Option-as-SUPER still works, and a build invariant fails if an
+  image is ever about to go out with the builder's layout again.
+  (@schpengle, @snirt, @gillesgoetsch, and the fix from @mphaxise.)
+- **`omarchy-arm-gpu`.** The README used to state flatly that there is no GL
+  acceleration in the VM. On UTM 5.0.x that is wrong: two independent reports
+  measured a fully GPU-composited desktop with `LIBGL_ALWAYS_SOFTWARE=1`
+  removed, with Hyprland's idle CPU dropping from ~17% to ~3%. The flag stays as
+  the safe default, because under UTM 4.7 the black-window bug is real and the
+  guest cannot tell which host it is on. It is now one command either way:
+  `omarchy-arm-gpu --on` / `--off`. (@gillesgoetsch, @Fail-Safe.)
+- **Shared folders in VirtFS mode mounted but denied every access.** 9p passes
+  the host's uid straight through, so UTM's default share arrives owned by 501
+  while the guest account is 1000. `omarchy-arm-share` now claims the mount; the
+  change is stored as host-side xattrs, so it is a one-time fix rather than a
+  per-boot hack. (RBeach, @BeachFrontMT.)
+- **`omarchy-arm-user`.** The image logs in on its own and the Omarchy SDDM theme
+  shows the last user rather than a list, so a second account left you stuck. One
+  command switches the autologin or turns it off, keeping the desktop session.
+- **The build no longer fails on dual-stack hosts.** `apk update` died with
+  "DNS: transient error" because slirp handed the Mac's IPv6-first resolvers to
+  an IPv4-only guest. (@wouter1981.)
+- **The published checksum could not drift again.** It is written by hand in
+  five places, and `shasum -c` failed against a good download because one of
+  them lagged a rebuild. The build now refuses to finish quietly while they
+  disagree with the artifact. (@mphaxise.)
+- Documented: the community aarch64 repository for Omarchy's own packages, so
+  *Install > AI > …* stops failing with `target not found`; that SPICE WebDAV
+  I/O has been reported to wedge, and VirtFS is the mode to prefer; and how to
+  recover from Hyprland's emergency mode without landing on a login screen you
+  cannot get past.
+- The tool count was wrong everywhere: **18 packages, not 17**, and the list we
+  published omitted `herdr` — the one that took longest to get building.
 
 ## What changed on 2026-09-01
 
