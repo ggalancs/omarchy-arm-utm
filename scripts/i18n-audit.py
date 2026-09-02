@@ -180,12 +180,34 @@ def spanish_strings(path):
                 hits.append((n, lit[:78]))
     return hits
 
+# Lines of generated configuration, not code: systemd unit Description=,
+# .desktop Name= and friends. They live inside heredocs, so no output function
+# appears on the line and the scan above never looked at them -- while
+# `Name=Instalar apps que faltan` was an entry in the user's application menu
+# and `Description=Portapapeles compartido...` was what `systemctl status`
+# printed. Both shipped in every image.
+CONFIG_FIELD = re.compile(r'^\s*(Description|Name|GenericName|Comment|Keywords)=(.+)$')
+
+def spanish_config(path):
+    hits = []
+    for n, line in enumerate(open(path, errors='replace'), 1):
+        m = CONFIG_FIELD.match(line)
+        if not m:
+            continue
+        body = SUBST.sub(' ', m.group(2))
+        words = len(body.split())
+        need = 1 if words <= 4 else 2
+        if (ES_CHARS.search(body) or ES_SURE.search(body)
+                or len(ES_STR.findall(body)) >= need):
+            hits.append((n, line.strip()[:78]))
+    return hits
+
 def audit_strings(paths):
     total = 0
     rows = []
     for p in paths:
         try:
-            hits = spanish_strings(p)
+            hits = spanish_strings(p) + spanish_config(p)
         except (OSError, UnicodeDecodeError):
             continue
         if hits:

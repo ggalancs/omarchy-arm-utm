@@ -246,7 +246,7 @@ if [ -n "$EXTRAS_SRC" ]; then
   install -Dm755 "$EXTRAS_SRC" /usr/local/bin/omarchy-arm-extras
   install -Dm644 /dev/stdin /usr/local/share/applications/omarchy-arm-extras.desktop <<'DESK'
 [Desktop Entry]
-Name=Instalar apps que faltan (ARM)
+Name=Install missing apps (ARM)
 Comment=1Password, Obsidian, Typora, LocalSend, Chrome, OBS, Pinta
 Exec=xdg-terminal-exec omarchy-arm-extras
 Icon=system-software-install

@@ -138,10 +138,15 @@ echo "==> user service"
 mkdir -p ~/.config/systemd/user
 cat > ~/.config/systemd/user/omarchy-arm-vdagent.service <<'UNIT'
 [Unit]
-Description=Portapapeles compartido con el anfitrion (SPICE sobre Wayland)
+Description=Shared clipboard with the host (SPICE over Wayland)
 After=graphical-session.target
 PartOf=graphical-session.target
 ConditionEnvironment=WAYLAND_DISPLAY
+# With no SPICE channel from the host (UTM with clipboard sharing off, or a
+# different hypervisor) the agent has nobody to talk to. Skipping cleanly
+# beats failing and being restarted every few seconds for the whole session.
+# Reported by mphaxise in #13.
+ConditionPathExists=/dev/virtio-ports/com.redhat.spice.0
 
 [Service]
 Type=simple

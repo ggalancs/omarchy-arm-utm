@@ -510,7 +510,7 @@ if [ -f "$HOME/.omarchy-arm-prov/omarchy-arm-extras" ]; then
   sudo install -Dm755 "$HOME/.omarchy-arm-prov/omarchy-arm-extras" /usr/local/bin/omarchy-arm-extras
   sudo install -Dm644 /dev/stdin /usr/local/share/applications/omarchy-arm-extras.desktop <<'DESK'
 [Desktop Entry]
-Name=Instalar apps que faltan (ARM)
+Name=Install missing apps (ARM)
 Comment=1Password, Obsidian, Typora, LocalSend, Google Chrome
 Exec=xdg-terminal-exec omarchy-arm-extras
 Icon=system-software-install
@@ -543,10 +543,15 @@ if [ -f "$HOME/.omarchy-arm-prov/omarchy-arm-vdagent" ]; then
   mkdir -p ~/.config/systemd/user
   cat > ~/.config/systemd/user/omarchy-arm-vdagent.service <<'UNIT'
 [Unit]
-Description=Portapapeles compartido con el anfitrion (SPICE sobre Wayland)
+Description=Shared clipboard with the host (SPICE over Wayland)
 After=graphical-session.target
 PartOf=graphical-session.target
 ConditionEnvironment=WAYLAND_DISPLAY
+# With no SPICE channel from the host (UTM with clipboard sharing off, or a
+# different hypervisor) the agent has nobody to talk to. Skipping cleanly
+# beats failing and being restarted every few seconds for the whole session.
+# Reported by mphaxise in #13.
+ConditionPathExists=/dev/virtio-ports/com.redhat.spice.0
 
 [Service]
 Type=simple
