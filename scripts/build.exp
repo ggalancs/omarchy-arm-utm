@@ -51,16 +51,34 @@ wait_for "TOK_TGZ_0" 14 "the Arch Linux ARM rootfs is missing from the ISO" 60
 # byte received, so a long-but-progressing build is safe and only true silence
 # trips it.
 #
-# 45 minutes, not 20. The first attempt used 20 and it fired on a healthy build
-# during "building the Omarchy tools": compiling 17 packages has genuinely
-# quiet stretches, and stage3 itself documents OBS alone at ~45 min. A bound
-# below the longest legitimate silence is not a safety net, it is a second way
-# to lose a build.
+# 90 minutes. Set twice too low before this, and both times against a number
+# already written down: 20 minutes died on the tool builds, then 45 died
+# compiling Qt6 + OBS -- which stage3's own comment puts at ~45 min on its own,
+# so 45 was the one figure guaranteed to be too small. A bound below the
+# longest legitimate silence is not a safety net, it is a second way to lose a
+# build, and it cost two.
+#
+# The number that matters is the longest stretch with NO output, not the
+# longest step. OBS compiles for the better part of an hour without a line
+# reaching the serial console. 90 minutes clears that with room, and is still
+# thirteen times shorter than the twenty hours the unbounded version hung for.
+#
+# The silence is not incidental: omarchy-arm-extras runs makepkg with
+# --noprogressbar, so a long compile prints nothing at all. One run did the
+# whole build including OBS in 57 minutes; another spent more than 45 inside
+# OBS alone. Compile time varies enough that no bound can distinguish slow from
+# stuck.
+#
+# So this is a bound, not a diagnosis -- which is exactly why it asks the guest
+# what it was doing before giving up. That question is what settled it: the
+# answer came back `cc1plus ... VolumeMeter.cpp.o` and `makepkg -si`, which is
+# a healthy build, not a stalled mirror. Without it there was only a guess, and
+# the guess was wrong twice in a row.
 #
 # And when it does fire, it asks the guest what it was doing before giving up.
 # Otherwise the report is a guess -- "a mirror has probably stalled" -- which is
 # exactly what it was, and a guess is not evidence.
-set timeout 2700
+set timeout 5400
 # stage1.sh emits the TOK_BUILD_<rc> token itself (piping into tee would mask
 # the return code).
 send "export DISK=/dev/vda; sh /media/prov/stage1.sh 2>&1 | tee /tmp/build.log\r"
@@ -68,7 +86,7 @@ send "export DISK=/dev/vda; sh /media/prov/stage1.sh 2>&1 | tee /tmp/build.log\r
 expect {
     timeout {
         puts "\n\n!!!!!! THE BUILD STALLED !!!!!!"
-        puts "No output for 45 minutes. Asking the guest what it was doing:\n"
+        puts "No output for 90 minutes. Asking the guest what it was doing:\n"
         # Ctrl-C the foreground job, then look. Whatever answers here is the
         # difference between "a mirror stalled" and "a compile was quiet".
         send "\003"
