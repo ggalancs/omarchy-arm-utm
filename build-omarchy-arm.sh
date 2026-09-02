@@ -476,6 +476,8 @@ cp "$PROV/stage2.sh" "$PROV/stage3.sh" "$PROV/config.env" \
 # No silent `&&`: if it is missing, say so. The quiet guard on this line
 # shipped a whole image without the command and nobody noticed until boot.
 if [ -f "$PROV/user.sh" ]; then cp "$PROV/user.sh" /mnt/root/prov/omarchy-arm-user
+fi
+if [ -f "$PROV/gpu.sh" ]; then cp "$PROV/gpu.sh" /mnt/root/prov/omarchy-arm-gpu
 else echo "  !! user.sh missing from the ISO: the image will ship without omarchy-arm-user"; fi
 cat > /mnt/root/prov/fsinfo.env <<EOF
 ROOTFS=$ROOTFS
@@ -874,10 +876,18 @@ EOF
 # theme paints the last user, not a list to pick from.
 if [ -f /root/prov/omarchy-arm-user ]; then
   install -Dm755 /root/prov/omarchy-arm-user /usr/local/bin/omarchy-arm-user
-  echo "  omarchy-arm-user instalado"
+  echo "  omarchy-arm-user installed"
+fi
+# Hardware GL is a host-version decision the guest cannot make: UTM 4.7 needs
+# the software flag, UTM 5.0.x does not, and the QEMU machine type does not
+# reveal which is hosting us. One command either way beats guessing for
+# everyone. Reported by @gillesgoetsch (#7) and @Fail-Safe (PR #8).
+if [ -f /root/prov/omarchy-arm-gpu ]; then
+  install -Dm755 /root/prov/omarchy-arm-gpu /usr/local/bin/omarchy-arm-gpu
+  echo "  omarchy-arm-gpu installed"
 fi
 sed -i '/-auth.*pam_gnome_keyring\.so/d;/-password.*pam_gnome_keyring\.so/d' /etc/pam.d/sddm 2>/dev/null || true
-echo "  sesion=$SESSION"
+echo "  session=$SESSION"
 ls /usr/local/share/wayland-sessions /usr/share/wayland-sessions 2>/dev/null
 
 # ---------------------------------------------------------------- ajustes VM
@@ -3057,6 +3067,75 @@ esac
 __PAYLOAD_PROVISION_USER_SH__
 chmod +x "$W/provision/user.sh"
 
+cat > "$W/provision/gpu.sh" <<'__PAYLOAD_PROVISION_GPU_SH__'
+#!/bin/bash
+#
+#  omarchy-arm-gpu - turn hardware GL on or off inside the VM
+#  ────────────────────────────────────────────────────────────────────────────
+#  The image ships LIBGL_ALWAYS_SOFTWARE=1. That is not a preference: under
+#  UTM 4.7 GPU clients map their windows and never paint them, so alacritty and
+#  chromium come up black. llvmpipe renders everything correctly, at the cost of
+#  the GPU.
+#
+#  On UTM 5.0.x that bug does not reproduce. Two independent reports -- issue #7
+#  and PR #8 on ggalancs/omarchy-arm-utm -- measured a fully GPU-composited
+#  desktop with the flag removed, Hyprland's idle CPU dropping from ~17% to ~3%.
+#
+#  So the right setting depends on the host's UTM version, which the guest
+#  cannot reliably detect: the QEMU machine type is not a UTM version indicator.
+#  Rather than guess for you, this makes it one command either way, and tells
+#  you how to find out which one you want.
+#
+#    omarchy-arm-gpu           what is set now
+#    omarchy-arm-gpu --on      try hardware GL (UTM 5.0.x)
+#    omarchy-arm-gpu --off     back to software rendering (safe everywhere)
+#  ────────────────────────────────────────────────────────────────────────────
+set -uo pipefail
+CONF=/etc/environment.d/90-vm-graphics.conf
+
+state() { grep -q '^LIBGL_ALWAYS_SOFTWARE=1' "$CONF" 2>/dev/null && echo software || echo hardware; }
+
+case "${1:-}" in
+  -h|--help) sed -n '3,23p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 0 ;;
+
+  "")
+    echo "Rendering: $(state)"
+    echo
+    if [ "$(state)" = software ]; then
+      echo "  Windows are drawn by llvmpipe on the CPU. Correct everywhere, but"
+      echo "  blur and shadows are off and video is not smooth."
+      echo "  On UTM 5.0.x you can probably do better:  omarchy-arm-gpu --on"
+    else
+      echo "  Hardware GL through virgl. If terminal or browser windows come up"
+      echo "  black, your UTM is too old for it:  omarchy-arm-gpu --off"
+    fi
+    ;;
+
+  --on)
+    # Commented rather than deleted: --off has to be able to put it back
+    # without knowing what the line said.
+    sudo sed -i 's/^LIBGL_ALWAYS_SOFTWARE=1/#LIBGL_ALWAYS_SOFTWARE=1/' "$CONF" || exit 1
+    echo "Hardware GL enabled. Log out and back in for it to apply."
+    echo
+    echo "How to tell whether it worked, once you are back:"
+    echo "  glxinfo -B 2>/dev/null | grep -i renderer     # should not say llvmpipe"
+    echo "  open a terminal and a browser                 # neither should be black"
+    echo
+    echo "If anything renders black, undo it:  omarchy-arm-gpu --off"
+    ;;
+
+  --off)
+    sudo sed -i 's/^#*LIBGL_ALWAYS_SOFTWARE=1/LIBGL_ALWAYS_SOFTWARE=1/' "$CONF" || exit 1
+    grep -q '^LIBGL_ALWAYS_SOFTWARE=1' "$CONF" \
+      || printf 'LIBGL_ALWAYS_SOFTWARE=1\n' | sudo tee -a "$CONF" >/dev/null
+    echo "Software rendering restored. Log out and back in for it to apply."
+    ;;
+
+  *) echo "unknown option: $1" >&2; exit 1 ;;
+esac
+__PAYLOAD_PROVISION_GPU_SH__
+chmod +x "$W/provision/gpu.sh"
+
 mkdir -p "$W/scripts"
 cat > "$W/scripts/build.exp" <<'__PAYLOAD_SCRIPTS_BUILD_EXP__'
 #!/usr/bin/expect -f
@@ -3578,7 +3657,7 @@ ph_build() {
   # ran `[ -f "$PROV/user.sh" ] && cp ...`, the file was not there, and the
   # guard swallowed it in silence. Eighty-two minutes of build to discover the
   # new command was not inside. If you add a payload, add it here.
-  cp "$W/provision"/{extras.sh,armsync.sh,clipbrd.sh,vdagent.py,share.sh,user.sh} "$d"/
+  cp "$W/provision"/{extras.sh,armsync.sh,clipbrd.sh,vdagent.py,share.sh,user.sh,gpu.sh} "$d"/
   ln "$W/dl/alarm-rootfs.tgz" "$d/alarm-rootfs.tgz" 2>/dev/null || cp "$W/dl/alarm-rootfs.tgz" "$d/"
   rm -f "$W/provision/provision.iso"
   hdiutil makehybrid -iso -joliet -default-volume-name PROVISION -o "$W/provision/provision.iso" "$d" >/dev/null
@@ -3995,10 +4074,25 @@ Microsoft's official arm64 .NET).
 
 Limits that come from running Omarchy on ARM:
 
-- **No GL acceleration inside the VM.** Windows are drawn in software
-  (llvmpipe). Under virtio-gpu, GPU clients map but never paint; blur and
-  shadows ship disabled to compensate. Smooth for ordinary use, not for video
-  or 3D.
+- **Software rendering by default — and that may not be what you want.** The
+  image ships `LIBGL_ALWAYS_SOFTWARE=1` because under UTM 4.7 GPU clients map
+  their windows and never paint them: a black terminal, a black browser.
+  llvmpipe draws everything correctly instead, at the cost of the GPU, and blur
+  and shadows ship disabled to compensate.
+
+  **On UTM 5.0.x that bug is gone.** Two independent reports measured a fully
+  GPU-composited desktop with the flag removed, Hyprland's idle CPU dropping
+  from ~17% to ~3%, and 4K video playing without dropped frames. The guest
+  cannot tell which UTM is hosting it — the QEMU machine type is not a version
+  indicator — so the choice is yours, and it is one command:
+
+  ```bash
+  omarchy-arm-gpu          # what is set now
+  omarchy-arm-gpu --on     # try hardware GL, then log out and back in
+  omarchy-arm-gpu --off    # back to software if anything renders black
+  ```
+
+  (Found by @gillesgoetsch and @Fail-Safe on the project's issue tracker.)
 - **The disk ships compressed** inside the `.qcow2`. It takes half the space
   and decompresses on the fly; if you would rather have read speed than space,
   `qemu-img convert -O qcow2 disk.qcow2 uncompressed.qcow2`.

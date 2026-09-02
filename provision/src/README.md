@@ -123,10 +123,25 @@ Microsoft's official arm64 .NET).
 
 Limits that come from running Omarchy on ARM:
 
-- **No GL acceleration inside the VM.** Windows are drawn in software
-  (llvmpipe). Under virtio-gpu, GPU clients map but never paint; blur and
-  shadows ship disabled to compensate. Smooth for ordinary use, not for video
-  or 3D.
+- **Software rendering by default — and that may not be what you want.** The
+  image ships `LIBGL_ALWAYS_SOFTWARE=1` because under UTM 4.7 GPU clients map
+  their windows and never paint them: a black terminal, a black browser.
+  llvmpipe draws everything correctly instead, at the cost of the GPU, and blur
+  and shadows ship disabled to compensate.
+
+  **On UTM 5.0.x that bug is gone.** Two independent reports measured a fully
+  GPU-composited desktop with the flag removed, Hyprland's idle CPU dropping
+  from ~17% to ~3%, and 4K video playing without dropped frames. The guest
+  cannot tell which UTM is hosting it — the QEMU machine type is not a version
+  indicator — so the choice is yours, and it is one command:
+
+  ```bash
+  omarchy-arm-gpu          # what is set now
+  omarchy-arm-gpu --on     # try hardware GL, then log out and back in
+  omarchy-arm-gpu --off    # back to software if anything renders black
+  ```
+
+  (Found by @gillesgoetsch and @Fail-Safe on the project's issue tracker.)
 - **The disk ships compressed** inside the `.qcow2`. It takes half the space
   and decompresses on the fly; if you would rather have read speed than space,
   `qemu-img convert -O qcow2 disk.qcow2 uncompressed.qcow2`.

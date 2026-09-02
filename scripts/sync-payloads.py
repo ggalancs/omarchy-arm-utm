@@ -13,6 +13,7 @@ MAPA={
  "__PAYLOAD_PROVISION_VDAGENT_PY__":"provision/src/omarchy-arm-vdagent",
  "__PAYLOAD_PROVISION_SHARE_SH__":"provision/src/omarchy-arm-share",
  "__PAYLOAD_PROVISION_USER_SH__":"provision/src/omarchy-arm-user",
+ "__PAYLOAD_PROVISION_GPU_SH__":"provision/src/omarchy-arm-gpu",
  "__PAYLOAD_LEEME_MD__":"provision/src/README.md",
  "__PAYLOAD_PROVISION_ARMSYNC_SH__":"provision/src/hooks/10-arm-sync",
  "__PAYLOAD_SCRIPTS_BUILD_EXP__":"scripts/build.exp",

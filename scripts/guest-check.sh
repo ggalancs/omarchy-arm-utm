@@ -29,6 +29,12 @@ V=$(cut -d. -f1 < /usr/share/omarchy/version)
 
 echo "== clipboard =="
 [ -x /usr/local/bin/omarchy-arm-vdagent ] && ok_ "agent installed" || bad "agent missing"
+# Shipped commands. They are the project's whole interface for the things
+# Omarchy upstream cannot do on ARM, and an image missing one looks identical
+# to an image that has it until somebody types the name.
+for c in omarchy-arm-share omarchy-arm-user omarchy-arm-gpu omarchy-arm-extras; do
+  [ -x "/usr/local/bin/$c" ] && ok_ "$c present" || bad "$c missing"
+done
 # This reads the PROCESS line, not a configuration file: it is the only thing
 # that proves the flag actually took effect, wherever it came from.
 pgrep -af spice-vdagentd | grep -q -- ' -X' && ok_ "daemon has -X" || bad "daemon lacks -X"

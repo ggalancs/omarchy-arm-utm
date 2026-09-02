@@ -1,0 +1,65 @@
+#!/bin/bash
+#
+#  omarchy-arm-gpu - turn hardware GL on or off inside the VM
+#  ────────────────────────────────────────────────────────────────────────────
+#  The image ships LIBGL_ALWAYS_SOFTWARE=1. That is not a preference: under
+#  UTM 4.7 GPU clients map their windows and never paint them, so alacritty and
+#  chromium come up black. llvmpipe renders everything correctly, at the cost of
+#  the GPU.
+#
+#  On UTM 5.0.x that bug does not reproduce. Two independent reports -- issue #7
+#  and PR #8 on ggalancs/omarchy-arm-utm -- measured a fully GPU-composited
+#  desktop with the flag removed, Hyprland's idle CPU dropping from ~17% to ~3%.
+#
+#  So the right setting depends on the host's UTM version, which the guest
+#  cannot reliably detect: the QEMU machine type is not a UTM version indicator.
+#  Rather than guess for you, this makes it one command either way, and tells
+#  you how to find out which one you want.
+#
+#    omarchy-arm-gpu           what is set now
+#    omarchy-arm-gpu --on      try hardware GL (UTM 5.0.x)
+#    omarchy-arm-gpu --off     back to software rendering (safe everywhere)
+#  ────────────────────────────────────────────────────────────────────────────
+set -uo pipefail
+CONF=/etc/environment.d/90-vm-graphics.conf
+
+state() { grep -q '^LIBGL_ALWAYS_SOFTWARE=1' "$CONF" 2>/dev/null && echo software || echo hardware; }
+
+case "${1:-}" in
+  -h|--help) sed -n '3,23p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 0 ;;
+
+  "")
+    echo "Rendering: $(state)"
+    echo
+    if [ "$(state)" = software ]; then
+      echo "  Windows are drawn by llvmpipe on the CPU. Correct everywhere, but"
+      echo "  blur and shadows are off and video is not smooth."
+      echo "  On UTM 5.0.x you can probably do better:  omarchy-arm-gpu --on"
+    else
+      echo "  Hardware GL through virgl. If terminal or browser windows come up"
+      echo "  black, your UTM is too old for it:  omarchy-arm-gpu --off"
+    fi
+    ;;
+
+  --on)
+    # Commented rather than deleted: --off has to be able to put it back
+    # without knowing what the line said.
+    sudo sed -i 's/^LIBGL_ALWAYS_SOFTWARE=1/#LIBGL_ALWAYS_SOFTWARE=1/' "$CONF" || exit 1
+    echo "Hardware GL enabled. Log out and back in for it to apply."
+    echo
+    echo "How to tell whether it worked, once you are back:"
+    echo "  glxinfo -B 2>/dev/null | grep -i renderer     # should not say llvmpipe"
+    echo "  open a terminal and a browser                 # neither should be black"
+    echo
+    echo "If anything renders black, undo it:  omarchy-arm-gpu --off"
+    ;;
+
+  --off)
+    sudo sed -i 's/^#*LIBGL_ALWAYS_SOFTWARE=1/LIBGL_ALWAYS_SOFTWARE=1/' "$CONF" || exit 1
+    grep -q '^LIBGL_ALWAYS_SOFTWARE=1' "$CONF" \
+      || printf 'LIBGL_ALWAYS_SOFTWARE=1\n' | sudo tee -a "$CONF" >/dev/null
+    echo "Software rendering restored. Log out and back in for it to apply."
+    ;;
+
+  *) echo "unknown option: $1" >&2; exit 1 ;;
+esac

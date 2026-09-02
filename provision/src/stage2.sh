@@ -368,10 +368,18 @@ EOF
 # theme paints the last user, not a list to pick from.
 if [ -f /root/prov/omarchy-arm-user ]; then
   install -Dm755 /root/prov/omarchy-arm-user /usr/local/bin/omarchy-arm-user
-  echo "  omarchy-arm-user instalado"
+  echo "  omarchy-arm-user installed"
+fi
+# Hardware GL is a host-version decision the guest cannot make: UTM 4.7 needs
+# the software flag, UTM 5.0.x does not, and the QEMU machine type does not
+# reveal which is hosting us. One command either way beats guessing for
+# everyone. Reported by @gillesgoetsch (#7) and @Fail-Safe (PR #8).
+if [ -f /root/prov/omarchy-arm-gpu ]; then
+  install -Dm755 /root/prov/omarchy-arm-gpu /usr/local/bin/omarchy-arm-gpu
+  echo "  omarchy-arm-gpu installed"
 fi
 sed -i '/-auth.*pam_gnome_keyring\.so/d;/-password.*pam_gnome_keyring\.so/d' /etc/pam.d/sddm 2>/dev/null || true
-echo "  sesion=$SESSION"
+echo "  session=$SESSION"
 ls /usr/local/share/wayland-sessions /usr/share/wayland-sessions 2>/dev/null
 
 # ---------------------------------------------------------------- ajustes VM

@@ -35,6 +35,9 @@ mv /usr/bin/herdr /usr/bin/herdr.guardado 2>/dev/null \
 mv /usr/local/bin/omarchy-arm-vdagent /usr/local/bin/vdagent.guardado 2>/dev/null \
   && { echo "   + clipboard agent removed"; EXPECTED+=("agent missing"); }
 
+mv /usr/local/bin/omarchy-arm-gpu /usr/local/bin/gpu.saved 2>/dev/null \
+  && { echo "   + omarchy-arm-gpu removed"; EXPECTED+=("omarchy-arm-gpu missing"); }
+
 echo "3.8.5" > /usr/share/omarchy/version 2>/dev/null \
   && { echo "   + version forged to 3.8.5"; EXPECTED+=("version 3"); }
 
