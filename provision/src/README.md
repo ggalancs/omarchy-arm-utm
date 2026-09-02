@@ -62,6 +62,18 @@ It keeps whatever desktop session was already configured.
 
 ## Keyboard
 
+**The image ships the `us` layout.** Earlier images carried the builder's
+Spanish one, which moved every symbol and trapped people: one could not type
+`:` in nvim to edit the file that sets the layout, another could not type his
+own password because his QWERTZ keyboard turned `y` into `z`. To change it:
+
+```bash
+hyprctl keyword input:kb_layout gb        # this session only
+```
+
+and edit `~/.config/hypr/input.lua` to keep it. `kb_variant = "mac"` helps on a
+Mac keyboard.
+
 macOS takes the Cmd key before UTM ever sees it (Cmd+Space opens Spotlight), so
 this VM ships with Alt and Super swapped:
 
@@ -77,6 +89,19 @@ If you prefer the original behaviour, drop `altwin:swap_lalt_lwin` from
 `~/.config/hypr/input.lua` and turn on UTM's input capture (which needs
 Accessibility and Input Monitoring permissions for UTM in System Settings →
 Privacy & Security).
+
+**If Hyprland comes up in emergency mode** ("no binds registered"), the session
+config lost its bootstrap line. Restore it in `~/.config/hypr/hyprland.lua`:
+
+```lua
+dofile((os.getenv("OMARCHY_PATH") or "/usr/share/omarchy") .. "/default/hypr/bootstrap.lua")
+```
+
+then `hyprctl reload`. Do **not** reach for SUPER+R or `uwsm stop` first: both
+land you on the SDDM greeter, and SDDM only auto-logs-in when the service
+starts, so restarting it needs a password you may not be able to type from
+there. Fix the file from the terminal you already have.
+(Reported by RBeach in omacom/omarchy#7956.)
 
 ## What to expect
 
@@ -125,6 +150,15 @@ systemctl --user status omarchy-arm-vdagent     # your session's agent
 `omarchy-arm-share` inside. It works out on its own whether UTM is in VirtFS or
 SPICE WebDAV mode and mounts it on `/mnt/share` accordingly.
 `omarchy-arm-share --status` shows how it went, `--umount` releases it.
+
+If the mount succeeds but every access says **"Permission denied"**, the host
+ownership does not match your account: 9p passes the Mac's uid (usually 501)
+straight through, and yours is 1000. `omarchy-arm-share` claims the mount for
+you, and the fix is stored on the host side, so it survives reboots.
+
+**VirtFS is the mode to prefer.** SPICE WebDAV mounts cleanly as your own user,
+but directory I/O over it has been reported to wedge the FUSE mount and the
+SPICE channel together; if you hit that, switch the mode to VirtFS in UTM.
 
 If `ls /mnt/share` reports **"No such device"** or **"No such file or
 directory"**, UTM is not offering any folder. Select it again under *Sharing*
@@ -182,6 +216,17 @@ needs Widevine, which ships inside Google Chrome arm64. Install `chrome`, then
 
 **`omarchy-update` works**, but the day Omarchy introduces a new package of its
 own, it will skip it with a warning rather than install it.
+
+## Omarchy's own packages: `target not found`
+
+*Install > AI > ChatGPT Desktop* and similar menu entries fail with pacman's
+`error: target not found`. They call `omarchy-pkg-add` against Omarchy's own
+repository, which publishes x86_64 only, so on ARM there is nothing to install.
+
+[omarchy-mac/omarchy-pkgs-aarch64](https://github.com/omarchy-mac/omarchy-pkgs-aarch64)
+rebuilds most of them for aarch64. It is a community repository: unofficial and
+unsigned, the same trust model as Omarchy's own. If you add it, packaging bugs
+belong to them, not here.
 
 ## Your own apps
 

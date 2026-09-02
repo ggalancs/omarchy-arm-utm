@@ -285,6 +285,11 @@ in a mode other than the automatic mount in /etc/fstab expects (VirtFS).
 
        omarchy-arm-share
 
+  If /mnt/share mounts but every access is "Permission denied", the host
+  ownership does not match this account: 9p passes the Mac's uid (usually 501)
+  straight through and yours is 1000. Run `omarchy-arm-share` and it claims the
+  mount for you; the fix is stored on the host side and survives reboots.
+
      To see what is going on:
 
        omarchy-arm-share --status

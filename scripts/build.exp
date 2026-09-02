@@ -38,13 +38,30 @@ wait_for "TOK_PROV_0" 13 "no se encontró el ISO de aprovisionamiento" 120
 send "test -s /media/prov/alarm-rootfs.tgz; echo TOK_TGZ_\$?\r"
 wait_for "TOK_TGZ_0" 14 "the Arch Linux ARM rootfs is missing from the ISO" 60
 
-# --- construcción completa (particionado + chroot + paquetes + dotfiles)
-set timeout -1
-# stage1.sh emits the TOK_BUILD_<rc> token itself (piping into tee
-# enmascararia el codigo de retorno).
+# --- the full build (partitioning + chroot + packages + dotfiles)
+#
+# NOT `set timeout -1`. It used to be, and a stalled mirror hung a build for
+# twenty hours in "Retrieving packages...": pacman runs with
+# DisableDownloadTimeout -- deliberately, so a ten-second stall does not abort
+# an hour of work -- which means it waits forever rather than failing, and with
+# no timeout here nothing above it noticed either. Removing the abort on slow
+# downloads traded spurious failures for infinite hangs.
+#
+# This is an inactivity timeout, not a total one: expect resets it on every
+# byte received, so a long-but-progressing build is safe and only true silence
+# trips it. Twenty minutes is far more than any single step prints nothing for.
+set timeout 1200
+# stage1.sh emits the TOK_BUILD_<rc> token itself (piping into tee would mask
+# the return code).
 send "export DISK=/dev/vda; sh /media/prov/stage1.sh 2>&1 | tee /tmp/build.log\r"
 
 expect {
+    timeout {
+        puts "\n\n!!!!!! THE BUILD STALLED !!!!!!"
+        puts "No output for 20 minutes. A mirror has almost certainly stalled:"
+        puts "pacman runs without a download timeout and waits forever.\n"
+        exit 22
+    }
     -ex "TOK_BUILD_0" {
         puts "\n\n==========================================="
         puts "   BUILD COMPLETE"

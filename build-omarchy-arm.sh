@@ -791,6 +791,11 @@ in a mode other than the automatic mount in /etc/fstab expects (VirtFS).
 
        omarchy-arm-share
 
+  If /mnt/share mounts but every access is "Permission denied", the host
+  ownership does not match this account: 9p passes the Mac's uid (usually 501)
+  straight through and yours is 1000. Run `omarchy-arm-share` and it claims the
+  mount for you; the fix is stored on the host side and survives reboots.
+
      To see what is going on:
 
        omarchy-arm-share --status
@@ -1891,15 +1896,36 @@ Type=Application
 Categories=System;PackageManager;
 DESK
   chown "$NEW:$NEW" /usr/local/share/applications/omarchy-arm-extras.desktop 2>/dev/null || true
-  echo "  /usr/local/bin/omarchy-arm-extras + entrada en el menu"
+  echo "  /usr/local/bin/omarchy-arm-extras + menu entry"
 else
   warn "the optional app installer was not on the ISO: the image will ship without it"
 fi
 
+# The image must not ship the builder's keyboard. stage3 writes
+# kb_layout = "$VM_XKB" into the user's input.lua, and nothing reset it: every
+# image published so far went out with a Spanish layout. On any other keyboard
+# the symbols move, and the trap closes on itself -- a user reported losing two
+# and a half hours because he could not type ':' in nvim to edit the very file
+# that sets the layout, and another could not log in because his QWERTZ 'y'
+# typed 'z' in the password.
+#
+# 'us' is the neutral default. kb_options is left alone so
+# altwin:swap_lalt_lwin (Option = SUPER on a Mac) keeps working.
+log "8c/10 neutral keyboard layout for distribution"
+INPUT="/home/$NEW/.config/hypr/input.lua"
+if [ -f "$INPUT" ]; then
+  sed -i 's/^\([[:space:]]*kb_layout[[:space:]]*=[[:space:]]*\)"[^"]*"/\1"us"/' "$INPUT"
+  echo "  input.lua: $(grep -o 'kb_layout[^,]*' "$INPUT" | head -1)"
+else
+  echo "  !! $INPUT not found: the image would ship the builder's layout"
+fi
+printf 'KEYMAP=us\n' > /etc/vconsole.conf
+echo "  /etc/vconsole.conf: KEYMAP=us"
+
 log "9/10 checking nothing is still tied to $OLD"
-echo "  referencias en /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null | head -5 || echo "    none"
+echo "  references in /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null | head -5 || echo "    none"
 echo "  home:"; ls -ld "/home/$NEW"; ls /home/
-echo "  propietario de ficheros sueltos:"; find /home/$NEW -maxdepth 2 ! -user "$NEW" 2>/dev/null | head -3 || echo "    todo correcto"
+echo "  owner of stray files:"; find /home/$NEW -maxdepth 2 ! -user "$NEW" 2>/dev/null | head -3 || echo "    todo correcto"
 
 log "paquetes huerfanos"
 # Build dependencies left behind by makepkg -s, and firmware for hardware a VM
@@ -2082,6 +2108,15 @@ else
 fi
 
 [ "$(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l)" -eq 0 ] && bien "no ssh host keys" || mal "ssh host keys left behind"
+# The layout that ships. Not a cosmetic detail: with the builder's layout, a
+# user could not type ':' in nvim to fix it, and another could not type his own
+# password. Both cost hours and both were silent.
+KBL=$(grep -o 'kb_layout[^,]*' "/home/$NEW/.config/hypr/input.lua" 2>/dev/null | head -1)
+case "$KBL" in
+  *'"us"'*) ok_ "neutral keyboard layout (us)" ;;
+  "")       bad "input.lua has no kb_layout: cannot tell what ships" ;;
+  *)        bad "the image ships the builder's layout: $KBL" ;;
+esac
 
 # Binaries built inside the VM: the build path stays in their debug info.
 # grep -rl does not see them because it looks at text, not symbols.
@@ -2899,6 +2934,21 @@ montar() {
 
   # 1) VirtFS: the simplest one, if the device is there
   if sudo mount -t 9p -o trans=virtio,version=9p2000.L,rw,msize=512000 "$TAG" "$PUNTO" 2>/dev/null; then
+    # 9p passes host ownership straight through (security_model=mapped-xattr),
+    # and UTM's default share is the Mac user's home: uid 501, mode 0750. The
+    # guest account is uid 1000, so the mount succeeds and every access is
+    # denied -- a failure mode that looks like the share not working at all.
+    #
+    # The chown is written back as user.virtfs.uid/gid xattrs on the host side,
+    # so it is a one-time fix that survives reboots rather than a per-boot
+    # hack. Reported and verified end-to-end by RBeach (@BeachFrontMT) in
+    # omacom/omarchy discussion #7956.
+    if ! [ -r "$PUNTO" ] || ! [ -w "$PUNTO" ]; then
+      echo "  host ownership does not match this account; claiming the mount"
+      sudo chown "$(id -u):$(id -g)" "$PUNTO" 2>/dev/null \
+        && echo "  chown applied (stored as xattrs on the host: it persists)" \
+        || echo "  ! chown failed; the share may be read-only for you"
+    fi
     echo "mounted over VirtFS (9p) on $PUNTO"; return 0
   fi
 
@@ -3049,13 +3099,30 @@ wait_for "TOK_PROV_0" 13 "no se encontró el ISO de aprovisionamiento" 120
 send "test -s /media/prov/alarm-rootfs.tgz; echo TOK_TGZ_\$?\r"
 wait_for "TOK_TGZ_0" 14 "the Arch Linux ARM rootfs is missing from the ISO" 60
 
-# --- construcción completa (particionado + chroot + paquetes + dotfiles)
-set timeout -1
-# stage1.sh emits the TOK_BUILD_<rc> token itself (piping into tee
-# enmascararia el codigo de retorno).
+# --- the full build (partitioning + chroot + packages + dotfiles)
+#
+# NOT `set timeout -1`. It used to be, and a stalled mirror hung a build for
+# twenty hours in "Retrieving packages...": pacman runs with
+# DisableDownloadTimeout -- deliberately, so a ten-second stall does not abort
+# an hour of work -- which means it waits forever rather than failing, and with
+# no timeout here nothing above it noticed either. Removing the abort on slow
+# downloads traded spurious failures for infinite hangs.
+#
+# This is an inactivity timeout, not a total one: expect resets it on every
+# byte received, so a long-but-progressing build is safe and only true silence
+# trips it. Twenty minutes is far more than any single step prints nothing for.
+set timeout 1200
+# stage1.sh emits the TOK_BUILD_<rc> token itself (piping into tee would mask
+# the return code).
 send "export DISK=/dev/vda; sh /media/prov/stage1.sh 2>&1 | tee /tmp/build.log\r"
 
 expect {
+    timeout {
+        puts "\n\n!!!!!! THE BUILD STALLED !!!!!!"
+        puts "No output for 20 minutes. A mirror has almost certainly stalled:"
+        puts "pacman runs without a download timeout and waits forever.\n"
+        exit 22
+    }
     -ex "TOK_BUILD_0" {
         puts "\n\n==========================================="
         puts "   BUILD COMPLETE"
@@ -3157,7 +3224,13 @@ exec qemu-system-aarch64 \
   -device virtio-blk-pci,drive=live,bootindex=0 \
   -drive if=none,id=prov,file="$PROV_ISO",format=raw,media=cdrom,readonly=on \
   -device virtio-blk-pci,drive=prov \
-  -netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
+  # dns=10.0.2.3 pins the guest resolver to slirp's own built-in forwarder
+  # instead of letting it inherit whatever the Mac lists first. On a dual-stack
+  # ISP macOS puts IPv6 nameservers at the top of resolv.conf, slirp hands
+  # those to a guest that has no IPv6 route, and every lookup fails: `apk
+  # update` dies with "DNS: transient error" while DHCP looks perfectly fine
+  # and the guest holds a valid 10.0.2.15. Diagnosed by @wouter1981 in issue #9.
+  -netdev user,id=n0,dns=10.0.2.3 -device virtio-net-pci,netdev=n0 \
   -device virtio-rng-pci \
   -nographic
 
@@ -3720,6 +3793,28 @@ ph_package() {
   ok "ready: $W/dist/$DIST_ZIP ($(du -h "$W/dist/$DIST_ZIP" | cut -f1))"
   cat "$W/dist/$DIST_ZIP.sha256"
 
+  # The checksum is published by hand in five places and drifts on every
+  # rebuild: a user ran `shasum -a 256 -c` against a good download and it
+  # failed, because dist/*.sha256 in the repository still held the value from a
+  # build that never shipped (issue raised by @mphaxise, PR #10). Publishing a
+  # checksum that does not match the artifact is worse than publishing none: it
+  # tells the one person who bothered to verify that the file is corrupt.
+  #
+  # This does not fix them; it refuses to let the build finish quietly while
+  # they disagree.
+  local NEWSUM; NEWSUM=$(cut -d' ' -f1 < "$W/dist/$DIST_ZIP.sha256")
+  # The repository this script was run from, not $W: that is where the files
+  # that publish the checksum live.
+  local REPO; REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+  local DESYNC=0 SRC
+  for SRC in dist/omarchy-arm-utm-v2.zip.sha256 dist/VERSIONS.md README.md EMPEZAR.md; do
+    [ -f "$REPO/$SRC" ] || continue
+    grep -q "${NEWSUM:0:16}" "$REPO/$SRC" || {
+      warn "$SRC does not carry this image's sha256"; DESYNC=1; }
+  done
+  [ "$DESYNC" = 0 ] && ok "the published sha256 agrees everywhere it is stated" \
+    || warn "update the sha256 in the files above before publishing: ${NEWSUM:0:16}..."
+
   # The VM the `utm` phase registered is an intermediate: it serves `verify`
   # and nothing else, because what ships is the sanitized bundle from dist/. It
   # stayed in UTM after every build, eleven gigabytes each, and carried a name
@@ -3814,6 +3909,18 @@ It keeps whatever desktop session was already configured.
 
 ## Keyboard
 
+**The image ships the `us` layout.** Earlier images carried the builder's
+Spanish one, which moved every symbol and trapped people: one could not type
+`:` in nvim to edit the file that sets the layout, another could not type his
+own password because his QWERTZ keyboard turned `y` into `z`. To change it:
+
+```bash
+hyprctl keyword input:kb_layout gb        # this session only
+```
+
+and edit `~/.config/hypr/input.lua` to keep it. `kb_variant = "mac"` helps on a
+Mac keyboard.
+
 macOS takes the Cmd key before UTM ever sees it (Cmd+Space opens Spotlight), so
 this VM ships with Alt and Super swapped:
 
@@ -3829,6 +3936,19 @@ If you prefer the original behaviour, drop `altwin:swap_lalt_lwin` from
 `~/.config/hypr/input.lua` and turn on UTM's input capture (which needs
 Accessibility and Input Monitoring permissions for UTM in System Settings →
 Privacy & Security).
+
+**If Hyprland comes up in emergency mode** ("no binds registered"), the session
+config lost its bootstrap line. Restore it in `~/.config/hypr/hyprland.lua`:
+
+```lua
+dofile((os.getenv("OMARCHY_PATH") or "/usr/share/omarchy") .. "/default/hypr/bootstrap.lua")
+```
+
+then `hyprctl reload`. Do **not** reach for SUPER+R or `uwsm stop` first: both
+land you on the SDDM greeter, and SDDM only auto-logs-in when the service
+starts, so restarting it needs a password you may not be able to type from
+there. Fix the file from the terminal you already have.
+(Reported by RBeach in omacom/omarchy#7956.)
 
 ## What to expect
 
@@ -3877,6 +3997,15 @@ systemctl --user status omarchy-arm-vdagent     # your session's agent
 `omarchy-arm-share` inside. It works out on its own whether UTM is in VirtFS or
 SPICE WebDAV mode and mounts it on `/mnt/share` accordingly.
 `omarchy-arm-share --status` shows how it went, `--umount` releases it.
+
+If the mount succeeds but every access says **"Permission denied"**, the host
+ownership does not match your account: 9p passes the Mac's uid (usually 501)
+straight through, and yours is 1000. `omarchy-arm-share` claims the mount for
+you, and the fix is stored on the host side, so it survives reboots.
+
+**VirtFS is the mode to prefer.** SPICE WebDAV mounts cleanly as your own user,
+but directory I/O over it has been reported to wedge the FUSE mount and the
+SPICE channel together; if you hit that, switch the mode to VirtFS in UTM.
 
 If `ls /mnt/share` reports **"No such device"** or **"No such file or
 directory"**, UTM is not offering any folder. Select it again under *Sharing*
@@ -3934,6 +4063,17 @@ needs Widevine, which ships inside Google Chrome arm64. Install `chrome`, then
 
 **`omarchy-update` works**, but the day Omarchy introduces a new package of its
 own, it will skip it with a warning rather than install it.
+
+## Omarchy's own packages: `target not found`
+
+*Install > AI > ChatGPT Desktop* and similar menu entries fail with pacman's
+`error: target not found`. They call `omarchy-pkg-add` against Omarchy's own
+repository, which publishes x86_64 only, so on ARM there is nothing to install.
+
+[omarchy-mac/omarchy-pkgs-aarch64](https://github.com/omarchy-mac/omarchy-pkgs-aarch64)
+rebuilds most of them for aarch64. It is a community repository: unofficial and
+unsigned, the same trust model as Omarchy's own. If you add it, packaging bugs
+belong to them, not here.
 
 ## Your own apps
 

@@ -255,15 +255,36 @@ Type=Application
 Categories=System;PackageManager;
 DESK
   chown "$NEW:$NEW" /usr/local/share/applications/omarchy-arm-extras.desktop 2>/dev/null || true
-  echo "  /usr/local/bin/omarchy-arm-extras + entrada en el menu"
+  echo "  /usr/local/bin/omarchy-arm-extras + menu entry"
 else
   warn "the optional app installer was not on the ISO: the image will ship without it"
 fi
 
+# The image must not ship the builder's keyboard. stage3 writes
+# kb_layout = "$VM_XKB" into the user's input.lua, and nothing reset it: every
+# image published so far went out with a Spanish layout. On any other keyboard
+# the symbols move, and the trap closes on itself -- a user reported losing two
+# and a half hours because he could not type ':' in nvim to edit the very file
+# that sets the layout, and another could not log in because his QWERTZ 'y'
+# typed 'z' in the password.
+#
+# 'us' is the neutral default. kb_options is left alone so
+# altwin:swap_lalt_lwin (Option = SUPER on a Mac) keeps working.
+log "8c/10 neutral keyboard layout for distribution"
+INPUT="/home/$NEW/.config/hypr/input.lua"
+if [ -f "$INPUT" ]; then
+  sed -i 's/^\([[:space:]]*kb_layout[[:space:]]*=[[:space:]]*\)"[^"]*"/\1"us"/' "$INPUT"
+  echo "  input.lua: $(grep -o 'kb_layout[^,]*' "$INPUT" | head -1)"
+else
+  echo "  !! $INPUT not found: the image would ship the builder's layout"
+fi
+printf 'KEYMAP=us\n' > /etc/vconsole.conf
+echo "  /etc/vconsole.conf: KEYMAP=us"
+
 log "9/10 checking nothing is still tied to $OLD"
-echo "  referencias en /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null | head -5 || echo "    none"
+echo "  references in /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null | head -5 || echo "    none"
 echo "  home:"; ls -ld "/home/$NEW"; ls /home/
-echo "  propietario de ficheros sueltos:"; find /home/$NEW -maxdepth 2 ! -user "$NEW" 2>/dev/null | head -3 || echo "    todo correcto"
+echo "  owner of stray files:"; find /home/$NEW -maxdepth 2 ! -user "$NEW" 2>/dev/null | head -3 || echo "    todo correcto"
 
 log "paquetes huerfanos"
 # Build dependencies left behind by makepkg -s, and firmware for hardware a VM
@@ -446,6 +467,15 @@ else
 fi
 
 [ "$(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l)" -eq 0 ] && bien "no ssh host keys" || mal "ssh host keys left behind"
+# The layout that ships. Not a cosmetic detail: with the builder's layout, a
+# user could not type ':' in nvim to fix it, and another could not type his own
+# password. Both cost hours and both were silent.
+KBL=$(grep -o 'kb_layout[^,]*' "/home/$NEW/.config/hypr/input.lua" 2>/dev/null | head -1)
+case "$KBL" in
+  *'"us"'*) ok_ "neutral keyboard layout (us)" ;;
+  "")       bad "input.lua has no kb_layout: cannot tell what ships" ;;
+  *)        bad "the image ships the builder's layout: $KBL" ;;
+esac
 
 # Binaries built inside the VM: the build path stays in their debug info.
 # grep -rl does not see them because it looks at text, not symbols.

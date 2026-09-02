@@ -47,6 +47,21 @@ montar() {
 
   # 1) VirtFS: the simplest one, if the device is there
   if sudo mount -t 9p -o trans=virtio,version=9p2000.L,rw,msize=512000 "$TAG" "$PUNTO" 2>/dev/null; then
+    # 9p passes host ownership straight through (security_model=mapped-xattr),
+    # and UTM's default share is the Mac user's home: uid 501, mode 0750. The
+    # guest account is uid 1000, so the mount succeeds and every access is
+    # denied -- a failure mode that looks like the share not working at all.
+    #
+    # The chown is written back as user.virtfs.uid/gid xattrs on the host side,
+    # so it is a one-time fix that survives reboots rather than a per-boot
+    # hack. Reported and verified end-to-end by RBeach (@BeachFrontMT) in
+    # omacom/omarchy discussion #7956.
+    if ! [ -r "$PUNTO" ] || ! [ -w "$PUNTO" ]; then
+      echo "  host ownership does not match this account; claiming the mount"
+      sudo chown "$(id -u):$(id -g)" "$PUNTO" 2>/dev/null \
+        && echo "  chown applied (stored as xattrs on the host: it persists)" \
+        || echo "  ! chown failed; the share may be read-only for you"
+    fi
     echo "mounted over VirtFS (9p) on $PUNTO"; return 0
   fi
 
