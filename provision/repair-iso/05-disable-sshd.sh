@@ -1,6 +1,6 @@
 #!/bin/bash
-# Fleco 2: revertir el acceso SSH que habilite solo para aprovisionar.
-# Se ejecuta como ROOT dentro del chroot.
+# Loose end 2: revert the SSH access enabled only in order to provision.
+# Runs as ROOT inside the chroot.
 set -uo pipefail
 USR=gabriel
 log() { echo ""; echo "==> $*"; }
@@ -10,16 +10,16 @@ systemctl disable sshd.service 2>&1 | tail -2 || true
 rm -f /etc/systemd/system/multi-user.target.wants/sshd.service
 echo "  enabled: $(systemctl is-enabled sshd 2>&1)"
 
-log "sudoers: sin reglas sin contrasena"
+log "sudoers: no passwordless rules"
 rm -f /etc/sudoers.d/99-fix /etc/sudoers.d/99-install
 ls -l /etc/sudoers.d/
 visudo -c -q && echo "  sudoers valido"
 
-log "la clave publica del host se conserva"
-# Reactivar el acceso: sudo systemctl enable --now sshd
+log "the host public key is kept"
+# To turn access back on: sudo systemctl enable --now sshd
 ls -l /home/$USR/.ssh/authorized_keys 2>&1
 
-log "limpieza de restos de aprovisionamiento"
+log "cleaning up provisioning leftovers"
 rm -rf /root/prov /root/STAGE2_OK /home/$USR/shots
 rm -f /tmp/*.log 2>/dev/null || true
 

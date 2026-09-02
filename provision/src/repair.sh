@@ -21,7 +21,7 @@ ip link set eth0 up 2>/dev/null || true
 udhcpc -i eth0 -q -n -t 8 >/dev/null 2>&1 || true
 ip -4 addr show eth0 2>/dev/null | grep -o 'inet [0-9.]*' || echo "  (no network; continuing anyway)"
 
-log "montando el sistema instalado"
+log "mounting the installed system"
 umount -R /mnt 2>/dev/null || true
 if mount -t btrfs -o rw,noatime,compress=zstd:3,subvol=@ /dev/vda2 /mnt 2>/dev/null; then
   mount -t btrfs -o rw,noatime,compress=zstd:3,subvol=@home /dev/vda2 /mnt/home

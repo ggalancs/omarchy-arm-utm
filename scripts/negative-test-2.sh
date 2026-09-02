@@ -10,7 +10,7 @@
 #  Runs on -snapshot: everything it breaks is discarded on shutdown.
 #  ────────────────────────────────────────────────────────────────────────────
 LIST=/media/guest-check-base.sh
-[ -r "$LIST" ] || { echo "no encuentro $LIST"; echo "END_CHECK"; exit 2; }
+[ -r "$LIST" ] || { echo "cannot find $LIST"; echo "END_CHECK"; exit 2; }
 pasar() { bash "$LIST" builder 2>&1; }
 cuenta() {
   case "$1" in

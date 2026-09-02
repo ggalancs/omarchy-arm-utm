@@ -40,7 +40,7 @@ if [ ! -e /dev/virtio-ports/com.redhat.spice.0 ]; then
 else
   echo "  ✓ canal SPICE presente"
 fi
-pacman -Q spice-vdagent >/dev/null 2>&1 && echo "  ✓ spice-vdagent instalado" \
+pacman -Q spice-vdagent >/dev/null 2>&1 && echo "  ✓ spice-vdagent installed" \
   || { echo "  x spice-vdagent missing: sudo pacman -S spice-vdagent"; fallo=1; }
 [ "$fallo" -ne 0 ] && { echo; echo "Corrige lo anterior y repite."; exit 1; }
 

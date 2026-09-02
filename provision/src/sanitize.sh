@@ -8,8 +8,8 @@ set -uo pipefail
 [ -f /root/prov/config.env ] && . /root/prov/config.env
 OLD="${DIST_OLD_USER:-${VM_USER:-}}"
 NEW="${DIST_NEW_USER:-omarchy}"
-[ -n "$OLD" ] || { echo "sanitize: no se de que usuario partir" >&2; exit 1; }
-getent passwd "$OLD" >/dev/null || { echo "sanitize: el usuario '$OLD' no existe" >&2; exit 1; }
+[ -n "$OLD" ] || { echo "sanitize: no idea which user to start from" >&2; exit 1; }
+getent passwd "$OLD" >/dev/null || { echo "sanitize: user '$OLD' does not exist" >&2; exit 1; }
 log()  { echo ""; echo "==> $*"; }
 warn() { echo "!!  $*" >&2; }
 
@@ -80,7 +80,7 @@ rm -f /etc/sudoers.d/99-fix /etc/sudoers.d/99-install
 rm -rf "/home/$NEW/.gnupg" "/home/$NEW/.local/share/keyrings" "/home/$NEW/.password-store"
 echo "  sshd: $(systemctl is-enabled sshd 2>&1)"
 
-log "5/10 identidad de la maquina"
+log "5/10 machine identity"
 : > /etc/machine-id
 rm -f /var/lib/dbus/machine-id
 ln -sf /etc/machine-id /var/lib/dbus/machine-id
@@ -105,10 +105,10 @@ log "7b/10 proprietary apps out of the distributable image"
 # Packing them into a .zip that gets redistributed would mean redistributing
 # third-party binaries, so they are removed even if the source VM had them.
 for pkg in 1password 1password-cli typora localsend-bin google-chrome obsidian-bin; do
-  pacman -Q "$pkg" >/dev/null 2>&1 && { pacman -Rns --noconfirm "$pkg" >/dev/null 2>&1 && echo "  retirado $pkg"; }
+  pacman -Q "$pkg" >/dev/null 2>&1 && { pacman -Rns --noconfirm "$pkg" >/dev/null 2>&1 && echo "  removed $pkg"; }
 done
 for d in /opt/1Password /opt/obsidian /opt/typora; do
-  [ -e "$d" ] && { rm -rf "$d"; echo "  retirado $d"; }
+  [ -e "$d" ] && { rm -rf "$d"; echo "  removed $d"; }
 done
 rm -f /usr/local/bin/obsidian /usr/local/share/applications/obsidian.desktop 2>/dev/null || true
 # Removing /opt/1Password leaves its /usr/bin links pointing at nothing. The
@@ -116,7 +116,7 @@ rm -f /usr/local/bin/obsidian /usr/local/share/applications/obsidian.desktop 2>/
 for l in $(find /usr/bin /usr/local/bin -maxdepth 1 -xtype l 2>/dev/null); do
   case "$(readlink "$l")" in
     /opt/1Password/*|/opt/obsidian/*|/opt/typora/*)
-      rm -f "$l"; echo "  enlace colgado retirado: $l" ;;
+      rm -f "$l"; echo "  dangling link removed: $l" ;;
   esac
 done
 # The traces they leave when installed: if Chrome goes, so must the shortcut
@@ -126,7 +126,7 @@ BIND="/home/$NEW/.config/hypr/bindings.lua"
 if [ -f "$BIND" ] && grep -q "open.spotify.com" "$BIND"; then
   sed -i '/^-- Spotify no tiene cliente nativo/,/^o.bind("SUPER + SHIFT + M", "Spotify"/d' "$BIND"
   sed -i '/open\.spotify\.com/d' "$BIND"
-  echo "  retirado el atajo SUPER+SHIFT+M de la webapp de Spotify"
+  echo "  removed the SUPER+SHIFT+M shortcut for the Spotify web app"
 fi
 rm -f "/home/$NEW/.local/share/applications/Spotify.desktop" \
       "/home/$NEW/.local/share/applications/spotify.desktop" 2>/dev/null || true
@@ -166,7 +166,7 @@ if [ -n "${FW// /}" ]; then
   # not needed either. If anything objects, leave it as it is and break
   # nothing.
   pacman -Rdd --noconfirm $FW linux-firmware >/dev/null 2>&1 \
-    && echo "  retirados" || echo "  (no se pudieron retirar; se dejan)"
+    && echo "  retirados" || echo "  (could not be removed; leaving them)"
 fi
 # Documentation and manuals: 469 MiB. This is an image for trying out a
 # desktop, not a server where you would sit and read man pages. Omarchy's own
@@ -197,7 +197,7 @@ rm -f /var/lib/systemd/random-seed /var/lib/systemd/credential.secret 2>/dev/nul
 : > /var/log/btmp 2>/dev/null || true
 : > /var/log/lastlog 2>/dev/null || true
 
-log "8/10 aviso al destinatario"
+log "8/10 notice for the recipient"
 cat > /etc/motd <<'EOF'
 
   Omarchy on Arch Linux ARM (aarch64) - a UTM image for Apple Silicon
@@ -329,7 +329,7 @@ echo "  ttfx: $(command -v ttfx || echo NO)"
 echo "  migraciones selladas: $(ls -1 /home/$NEW/.local/state/omarchy/migrations 2>/dev/null | wc -l)"
 sync
 echo ""
-log "marcadores de Nautilus/GTK apuntando al home antiguo"
+log "Nautilus/GTK bookmarks pointing at the old home"
 for f in /home/$NEW/.config/gtk-3.0/bookmarks /home/$NEW/.config/gtk-4.0/bookmarks; do
   [ -f "$f" ] && { sed -i "s#/home/$OLD#/home/$NEW#g" "$f"; echo "  $f:"; cat "$f"; }
 done

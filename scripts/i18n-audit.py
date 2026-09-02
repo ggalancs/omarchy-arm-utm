@@ -5,6 +5,11 @@ Two jobs:
 
   audit   list every file with Spanish comment lines, and a total. Run it
           before and after: the total is the only honest progress figure.
+  strings same, for the text the scripts PRINT. Kept separate because the
+          comment audit reported 0 for build-omarchy-arm.sh while it was
+          still printing 34 Spanish messages at the person running it --
+          comments are what a reader sees, strings are what a user sees, and
+          only counting the first one hid the ones that mattered more.
   guard   compare a file against a saved copy and refuse the change if any
           NON-COMMENT line moved. Translating comments must not touch a single
           byte of code -- a global rename already broke a deliberately split
@@ -12,6 +17,7 @@ Two jobs:
 
 Usage:
   i18n-audit.py audit [paths...]
+  i18n-audit.py strings [paths...]
   i18n-audit.py guard <before-file> <after-file>
 """
 import re, sys, pathlib
@@ -106,16 +112,88 @@ def lint_continuations(paths):
         print("  no comments inside continued commands")
     return bad
 
+
+# Only the text inside double quotes on a line that prints something. Shell
+# flags (-la) and substitutions ($x, $(cmd)) are stripped first: they are not
+# prose, and they used to trip the detector on lines that were already English.
+OUTPUT_LINE = re.compile(r'\b(echo|log|warn|die|fail|info|printf|note)\b')
+QUOTED = re.compile(r'"([^"\\]*(?:\\.[^"\\]*)*)"')
+SUBST = re.compile(r'\$\([^)]*\)|\$\{[^}]*\}|\$\w+|-\w+')
+
+# The comment detector deliberately leaves out 'el', 'de', 'no' and friends,
+# because in a long paragraph of English prose they produce false positives.
+# An output string is one short line, so on a typical Spanish error message
+# that filter found a single word and, needing two, called it English. (No
+# example is quoted here on purpose: a Spanish sample inside this file would
+# make the audit report a permanent 1, and a total nobody can drive to zero
+# is a total everybody stops reading.) Strings get their own, wider
+# vocabulary, and a short list of words that are enough on their own.
+ES_STR = re.compile(r'(?<![-\w])(el|la|los|las|un|una|de|del|al|se|le|lo|es|su|sus|'
+                    # 'no' and 'si' are English words too and produced false
+                    # positives on lines like "no CEF, no browser plugin".
+                    r'que|para|con|sin|por|como|pero|ya|hay|esta|este|esto|'
+                    r'todo|toda|solo|mas|muy|desde|hasta|cuando|porque|donde|'
+                    r'fichero|ficheros|carpeta|usuario|paquete|paquetes|clave|'
+                    r'linea|lineas|arranque|arbol|llavero|ruta|rutas|red)'
+                    r'(?![-\w])', re.IGNORECASE)
+# Words that are Spanish on their own -- no second opinion needed.
+ES_SURE = re.compile(r'(?<![-\w])(no se pudo|no encuentro|no encontre|montando|'
+                     r'aplicando|inicializando|comprobando|reintentando|instalando|'
+                     r'faltaran|desactivada|instalada|instalado|fallo|fallara|'
+                     r'compilacion|configuracion|aviso|hecho|listo|borrado|'
+                     r'esperado|obtenido|retirado|quitando|limpieza)'
+                     r'(?![-\w])', re.IGNORECASE)
+
+def spanish_strings(path):
+    hits = []
+    for n, line in enumerate(open(path, errors='replace'), 1):
+        if not OUTPUT_LINE.search(line):
+            continue
+        for lit in QUOTED.findall(line):
+            body = SUBST.sub(' ', lit)
+            if ES_SURE.search(body) or len(ES_STR.findall(body)) >= 2:
+                hits.append((n, lit[:78]))
+    return hits
+
+def audit_strings(paths):
+    total = 0
+    rows = []
+    for p in paths:
+        try:
+            hits = spanish_strings(p)
+        except (OSError, UnicodeDecodeError):
+            continue
+        if hits:
+            rows.append((str(p), len(hits)))
+            total += len(hits)
+    for name, n in sorted(rows, key=lambda r: -r[1]):
+        print("  %-44s %4d" % (name, n))
+    print("  %-44s %4s" % ("-" * 44, "-" * 4))
+    print("  %-44s %4d" % ("TOTAL", total))
+    return total
+
 if __name__ == "__main__":
     if len(sys.argv) < 2: sys.exit(__doc__)
     if sys.argv[1] == "lint-cont":
         sys.exit(1 if lint_continuations(sys.argv[2:]) else 0)
+    if sys.argv[1] == "strings":
+        MODE_STRINGS = True
     if sys.argv[1] == "guard":
         sys.exit(guard(sys.argv[2], sys.argv[3]))
     args = sys.argv[2:] or ["."]
+    # A path that does not exist used to contribute nothing and the run still
+    # printed "TOTAL 0" -- so a typo, or a flag this tool does not take, read
+    # as "no Spanish left". That is the one wrong answer this tool must never
+    # give. Refuse to audit rather than report a clean total for nothing.
+    unknown = [a for a in args if not pathlib.Path(a).exists()]
+    if unknown:
+        sys.exit("i18n-audit: no such path: " + ", ".join(unknown) +
+                 "\n(audit takes paths, not flags: " + __doc__.strip().splitlines()[-1].strip() + ")")
     ps = []
     for a in args:
         p = pathlib.Path(a)
         ps += [p] if p.is_file() else [q for q in p.rglob("*")
                if q.suffix in (".sh", ".py", ".exp", ".lua") or q.parent.name == "src"]
+    if sys.argv[1] == "strings":
+        sys.exit(0 if audit_strings(ps) == 0 else 1)
     sys.exit(0 if audit(ps) == 0 else 0)

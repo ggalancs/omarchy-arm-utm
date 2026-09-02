@@ -34,7 +34,7 @@ rm -f ~/.config/hypr/monitors.conf ~/.config/hypr/autostart.conf
 echo "  monitors.lua escrito; .conf huerfanos eliminados"
 ls ~/.config/hypr/
 
-log "arrancando el shell de Omarchy en la sesion viva"
+log "starting the Omarchy shell in the live session"
 export XDG_RUNTIME_DIR=/run/user/1000
 export HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr 2>/dev/null | head -1)
 export WAYLAND_DISPLAY=$(ls /run/user/1000 | grep -m1 '^wayland-[0-9]')

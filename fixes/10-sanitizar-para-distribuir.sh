@@ -53,7 +53,7 @@ rm -f /etc/sudoers.d/99-fix /etc/sudoers.d/99-install
 rm -rf "/home/$NEW/.gnupg" "/home/$NEW/.local/share/keyrings" "/home/$NEW/.password-store"
 echo "  sshd: $(systemctl is-enabled sshd 2>&1)"
 
-log "5/10 identidad de la maquina"
+log "5/10 machine identity"
 : > /etc/machine-id
 rm -f /var/lib/dbus/machine-id
 ln -sf /etc/machine-id /var/lib/dbus/machine-id
@@ -79,7 +79,7 @@ find /var/log -type f -name "*.log" -delete 2>/dev/null || true
 rm -rf /var/cache/pacman/pkg/* /var/tmp/* /tmp/* 2>/dev/null || true
 rm -rf /root/prov /root/.bash_history /root/.cache 2>/dev/null || true
 
-log "8/10 aviso al destinatario"
+log "8/10 notice for the recipient"
 cat > /etc/motd <<'EOF'
 
   Omarchy sobre Arch Linux ARM (aarch64) — imagen para UTM en Apple Silicon
@@ -99,7 +99,7 @@ chown "$NEW:$NEW" "/home/$NEW/Desktop/LEEME.txt"
 log "9/10 checking nothing is still tied to $OLD"
 echo "  referencias en /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null | head -5 || echo "    none"
 echo "  home:"; ls -ld "/home/$NEW"; ls /home/
-echo "  propietario de ficheros sueltos:"; find /home/$NEW -maxdepth 2 ! -user "$NEW" 2>/dev/null | head -3 || echo "    todo correcto"
+echo "  owner of stray files:"; find /home/$NEW -maxdepth 2 ! -user "$NEW" 2>/dev/null | head -3 || echo "    todo correcto"
 
 log "10/10 freeing unused space (so it compresses better)"
 sync

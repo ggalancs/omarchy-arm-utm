@@ -1,26 +1,26 @@
 #!/bin/sh
-# Reabre el sistema ya instalado en /dev/vda y ejecuta un script dentro del chroot,
-# sin volver a particionar ni descargar nada. Para iterar tras un fallo puntual.
+# Reopens the system already installed on /dev/vda and runs a script inside the
+# chroot, without repartitioning or downloading. For iterating after a failure.
 set -eu
 PROV=/media/prov
 log() { echo ""; echo "==> [repair] $*"; }
 trap 'rc=$?; [ "$rc" -ne 0 ] && echo "TOK_REPAIR_$rc"' EXIT
 
-log "modulos del kernel"
-# Montar btrfs/vfat solo necesita el modulo del kernel, no las utilidades de
-# espacio de usuario: esta etapa NO depende de que haya red.
+log "kernel modules"
+# Mounting btrfs/vfat needs only the kernel module, not the userspace tools:
+# this stage does NOT depend on the network being up.
 for m in btrfs vfat fat nls_cp437 nls_iso8859-1 nls_utf8 crc32c-generic xxhash_generic; do
   modprobe "$m" 2>/dev/null || true
 done
-grep -qw btrfs /proc/filesystems || { echo "!! el kernel del live no soporta btrfs"; exit 1; }
+grep -qw btrfs /proc/filesystems || { echo "!! the live kernel does not support btrfs"; exit 1; }
 echo "  filesystems: $(tr '\n' ' ' < /proc/filesystems | tr -s ' ')"
 
-log "red (best-effort, solo por comodidad)"
+log "network (best-effort, purely for convenience)"
 ip link set eth0 up 2>/dev/null || true
 udhcpc -i eth0 -q -n -t 8 >/dev/null 2>&1 || true
-ip -4 addr show eth0 2>/dev/null | grep -o 'inet [0-9.]*' || echo "  (sin red; se continua igualmente)"
+ip -4 addr show eth0 2>/dev/null | grep -o 'inet [0-9.]*' || echo "  (no network; carrying on anyway)"
 
-log "montando el sistema instalado"
+log "mounting the installed system"
 umount -R /mnt 2>/dev/null || true
 if mount -t btrfs -o rw,noatime,compress=zstd:3,subvol=@ /dev/vda2 /mnt 2>/dev/null; then
   mount -t btrfs -o rw,noatime,compress=zstd:3,subvol=@home /dev/vda2 /mnt/home
@@ -40,7 +40,7 @@ rm -f /mnt/etc/resolv.conf
 printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /mnt/etc/resolv.conf
 df -h /mnt /mnt/boot
 
-log "ejecutando $FIXSCRIPT dentro del chroot"
+log "running $FIXSCRIPT inside the chroot"
 mkdir -p /mnt/root/prov
 cp "$PROV/$FIXSCRIPT" /mnt/root/prov/
 [ -f "$PROV/config.env" ] && cp "$PROV/config.env" /mnt/root/prov/
@@ -59,9 +59,9 @@ chroot /mnt /bin/bash "/root/prov/$FIXSCRIPT"
 rc=$?
 set -e
 
-# El directorio de trabajo no debe quedarse dentro del sistema: se acumulan ahi
-# todos los scripts de reparacion de todas las pasadas.
-log "retirando /root/prov del sistema instalado"
+# The working directory must not be left inside the system: every repair
+# script from every pass piles up in there.
+log "removing /root/prov from the installed system"
 ls /mnt/root/prov 2>/dev/null | tr '\n' ' '; echo
 rm -rf /mnt/root/prov
 

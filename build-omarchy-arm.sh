@@ -207,7 +207,7 @@ ph_deps() {
   [[ $(uname -m) == arm64  ]] || die "Apple Silicon is required (HVF for aarch64)"
   command -v brew >/dev/null || die "Homebrew is missing: https://brew.sh"
   for f in qemu expect aria2; do
-    brew list --formula "$f" >/dev/null 2>&1 || { info "instalando $f..."; brew install "$f" >/dev/null; }
+    brew list --formula "$f" >/dev/null 2>&1 || { info "installing $f..."; brew install "$f" >/dev/null; }
   done
   command -v qemu-system-aarch64 >/dev/null || die "qemu-system-aarch64 is missing"
   command -v expect >/dev/null || die "expect is missing"
@@ -245,7 +245,7 @@ ph_fetch() {
     [[ -n $latest ]] || { warn "could not read Alpine's index; using $ALPINE_ISO"; latest="$ALPINE_ISO"; }
     info "Alpine $latest (live environment for the bootstrap)"
     aria2c -x8 -s8 -c --file-allocation=none -q -d "$W/dl" -o "$(basename "$iso").parcial" \
-      "$base/$latest" || die "no se pudo descargar Alpine ($base/$latest)"
+      "$base/$latest" || die "could not download Alpine ($base/$latest)"
     # Verified against the published sha256 before being trusted: an
     # interrupted download leaves a non-empty file that would be reused
     # forever.
@@ -264,7 +264,7 @@ ph_fetch() {
   if [[ ! -s $tgz ]]; then
     info "rootfs de Arch Linux ARM (~800 MB)"
     aria2c -x8 -s8 -c --file-allocation=none -q -d "$W/dl" -o "$(basename "$tgz")" \
-      "$ALARM_URL" || die "no se pudo descargar el rootfs de ALARM"
+      "$ALARM_URL" || die "could not download the ALARM rootfs"
   fi
   # The tarball is rebuilt every few weeks: verified against the published MD5
   local want got
@@ -275,7 +275,7 @@ ph_fetch() {
     warn "could not read $ALARM_URL.md5: the rootfs is left UNVERIFIED"
     ok "rootfs ALARM $(du -h "$tgz" | cut -f1), unverified"
   elif [[ $want != "$got" ]]; then
-    warn "MD5 no coincide (esperado $want, obtenido $got); se vuelve a descargar"
+    warn "MD5 mismatch (expected $want, got $got); downloading again"
     rm -f "$tgz"
     [[ ${FETCH_RETRY:-0} -ge 1 ]] && die "the ALARM rootfs still does not match after retrying"
     FETCH_RETRY=1 ph_fetch; return
@@ -295,7 +295,7 @@ ph_prepare() {
     defref=$(git ls-remote --symref https://github.com/basecamp/omarchy.git HEAD 2>/dev/null \
              | sed -n 's#^ref: refs/heads/\([^\t ]*\).*#\1#p' | head -1)
     [[ -n $defref ]] || die "branch '$OMARCHY_REF' does not exist and Omarchy's default branch could not be read"
-    warn "la rama '$OMARCHY_REF' ya no existe en Omarchy; se usa '$defref'"
+    warn "branch '$OMARCHY_REF' no longer exists in Omarchy; using '$defref'"
     warn "check the structure has not changed: this build assumes Omarchy 4"
     OMARCHY_REF="$defref"
   fi
@@ -305,7 +305,7 @@ ph_prepare() {
   local base=/tmp/om-base.$$ core=/tmp/alarm-core.$$ extra=/tmp/alarm-extra.$$
   curl -fsSL --max-time 60 \
     "https://raw.githubusercontent.com/basecamp/omarchy/$OMARCHY_REF/install/omarchy-base.packages" \
-    -o "$base" || die "no se pudo leer la lista de paquetes de Omarchy"
+    -o "$base" || die "could not read Omarchy's package list"
   curl -fsSL --max-time 120 http://mirror.archlinuxarm.org/aarch64/core/core.db   -o "$core"  || die "mirror ALARM no responde"
   curl -fsSL --max-time 180 http://mirror.archlinuxarm.org/aarch64/extra/extra.db -o "$extra" || die "mirror ALARM no responde"
 
@@ -444,7 +444,7 @@ bsdtar -xpf "$PROV/alarm-rootfs.tgz" -C /mnt
 echo "  contenido: $(ls /mnt | tr '\n' ' ')"
 [ -d /mnt/etc ] && [ -d /mnt/usr ] || { warn "rootfs incompleto"; exit 1; }
 
-log "montando la ESP en /boot"
+log "mounting the ESP at /boot"
 rm -rf /mnt/boot
 mkdir -p /mnt/boot
 mount -t vfat "${DISK}1" /mnt/boot
@@ -517,10 +517,10 @@ export LANG=C LC_ALL=C
 log()  { echo ""; echo "==> [stage2] $*"; }
 warn() { echo "!!  [stage2] $*"; }
 
-trap 'warn "fallo en la linea $LINENO"; exit 1' ERR
+trap 'warn "failed at line $LINENO"; exit 1' ERR
 
 # ---------------------------------------------------------------- pacman
-log "inicializando el llavero de Arch Linux ARM"
+log "initialising the Arch Linux ARM keyring"
 pacman-key --init
 pacman-key --populate archlinuxarm
 
@@ -549,7 +549,7 @@ pac() {
   local intento
   for intento in 1 2 3; do
     if pacman -S --noconfirm --needed --disable-download-timeout "$@"; then return 0; fi
-    warn "pacman fallo (intento $intento/3); reintentando en ${intento}0 s"
+    warn "pacman failed (attempt $intento/3); retrying in ${intento}0 s"
     sleep "${intento}0"
     pacman -Sy --noconfirm --disable-download-timeout >/dev/null 2>&1 || true
   done
@@ -633,8 +633,8 @@ bootctl --esp-path=/boot --no-variables install
 # already matches the repository, so the package is reinstalled by force.
 if [ ! -f /boot/Image ] && [ ! -f /boot/vmlinuz-linux-aarch64 ]; then
   echo "  /boot empty: reinstalling linux-aarch64 to repopulate it"
-  pacman -S --noconfirm --disable-download-timeout linux-aarch64 || warn "no se pudo reinstalar el kernel"
-  mkinitcpio -P || warn "mkinitcpio fallo tras reinstalar"
+  pacman -S --noconfirm --disable-download-timeout linux-aarch64 || warn "could not reinstall the kernel"
+  mkinitcpio -P || warn "mkinitcpio failed after reinstalling"
 fi
 
 KERNEL_IMG=""
@@ -647,7 +647,7 @@ INITRD=""
 for c in /boot/initramfs-linux-aarch64.img /boot/initramfs-linux.img; do
   [ -f "$c" ] && { INITRD="/$(basename "$c")"; break; }
 done
-[ -n "$INITRD" ] || { warn "no encuentro el initramfs"; ls -la /boot; exit 1; }
+[ -n "$INITRD" ] || { warn "cannot find the initramfs"; ls -la /boot; exit 1; }
 
 mkdir -p /boot/loader/entries
 cat > /boot/loader/loader.conf <<EOF
@@ -909,7 +909,7 @@ EOF
 # serial console, handy for debugging from the host
 systemctl enable serial-getty@ttyAMA0.service 2>/dev/null || true
 
-log "limpieza"
+log "cleanup"
 rm -f /etc/sudoers.d/99-install
 paccache -rk1 2>/dev/null || true
 rm -rf /var/cache/pacman/pkg/* 2>/dev/null || true
@@ -1097,7 +1097,7 @@ export OMARCHY_PATH=/usr/share/omarchy
 export PATH="/usr/local/bin:$PATH"
 
 # ------------------------------------------------------------ tema
-log "aplicando el tema Tokyo Night"
+log "applying the Tokyo Night theme"
 mkdir -p ~/.config/omarchy/themes
 if command -v omarchy-theme-set >/dev/null 2>&1; then
   omarchy-theme-set "Tokyo Night" || warn "omarchy-theme-set falló; enlazando a mano"
@@ -1261,7 +1261,7 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
   else
     mkdir -p "$HOME/.omarchy-arm-prov/fallos"
     cp "$dir/build.log" "$HOME/.omarchy-arm-prov/fallos/$pkg.log" 2>/dev/null || true
-    echo "  --- $pkg fallo; ultimas lineas de makepkg ---"
+    echo "  --- $pkg failed; last lines of makepkg ---"
     tail -20 "$dir/build.log" 2>/dev/null | sed 's/^/      /'
     echo "  --- (log completo en ~/.omarchy-arm-prov/fallos/$pkg.log) ---"
     rm -rf "$dir"
@@ -1277,7 +1277,7 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
 # Zig.
 
 if [ "${HACER_TOOLS:-si}" != "si" ]; then
-  warn "compilacion de herramientas desactivada: faltaran ttfx, tensaku, omacalc,"
+  warn "tool building disabled: ttfx, tensaku, omacalc,"
   warn "omacut, omawrite, aether, cliamp and omarchy-nvim (they can be added later"
   warn "with: yay -S <package>)"
 else
@@ -1297,7 +1297,7 @@ for spec in \
   if build_omarchy_tool "$src" "$pkg"; then
     TOOLS_OK+=("$pkg")
   else
-    echo "  reintentando $pkg (el primer intento fallo)"
+    echo "  retrying $pkg (the first attempt failed)"
     sleep 5
     if build_omarchy_tool "$src" "$pkg"; then
       TOOLS_OK+=("$pkg")
@@ -1344,7 +1344,7 @@ sudo bash "$OMARCHY_PATH/install/config/theme-system.sh" >/dev/null 2>&1 || true
 # This wrapper compares what actually matters: uname -r against the modules
 # directory owned by the kernel package. /usr/local/bin comes before /usr/bin
 # on the PATH, so it stands in for the original without touching the tree.
-log "envoltorio de omarchy-update-restart (aviso de kernel en ALARM)"
+log "omarchy-update-restart wrapper (kernel notice on ALARM)"
 sudo install -Dm755 /dev/stdin /usr/local/bin/omarchy-update-restart <<'KRN'
 #!/bin/bash
 # On Arch Linux ARM the kernel leaves no vmlinuz in /usr/lib/modules/<ver>/,
@@ -1539,11 +1539,11 @@ sudo pacman -S --noconfirm --needed --disable-download-timeout snapper >/dev/nul
 if command -v snapper >/dev/null 2>&1; then
   sudo bash -euo pipefail "$OMARCHY_PATH/install/config/snapper.sh" >/dev/null 2>&1 \
     && echo "  snapper configured: a snapshot before every update" \
-    || warn "no se pudo configurar snapper"
+    || warn "could not configure snapper"
 fi
 if [ -f "$HOME/.omarchy-arm-prov/10-arm-sync" ]; then
   install -Dm755 "$HOME/.omarchy-arm-prov/10-arm-sync" ~/.config/omarchy/hooks/post-update.d/10-arm-sync
-  echo "  hook post-update instalado"
+  echo "  post-update hook installed"
 fi
 
 log "git"
@@ -1589,7 +1589,7 @@ ip link set eth0 up 2>/dev/null || true
 udhcpc -i eth0 -q -n -t 8 >/dev/null 2>&1 || true
 ip -4 addr show eth0 2>/dev/null | grep -o 'inet [0-9.]*' || echo "  (no network; continuing anyway)"
 
-log "montando el sistema instalado"
+log "mounting the installed system"
 umount -R /mnt 2>/dev/null || true
 if mount -t btrfs -o rw,noatime,compress=zstd:3,subvol=@ /dev/vda2 /mnt 2>/dev/null; then
   mount -t btrfs -o rw,noatime,compress=zstd:3,subvol=@home /dev/vda2 /mnt/home
@@ -1659,8 +1659,8 @@ set -uo pipefail
 [ -f /root/prov/config.env ] && . /root/prov/config.env
 OLD="${DIST_OLD_USER:-${VM_USER:-}}"
 NEW="${DIST_NEW_USER:-omarchy}"
-[ -n "$OLD" ] || { echo "sanitize: no se de que usuario partir" >&2; exit 1; }
-getent passwd "$OLD" >/dev/null || { echo "sanitize: el usuario '$OLD' no existe" >&2; exit 1; }
+[ -n "$OLD" ] || { echo "sanitize: no idea which user to start from" >&2; exit 1; }
+getent passwd "$OLD" >/dev/null || { echo "sanitize: user '$OLD' does not exist" >&2; exit 1; }
 log()  { echo ""; echo "==> $*"; }
 warn() { echo "!!  $*" >&2; }
 
@@ -1731,7 +1731,7 @@ rm -f /etc/sudoers.d/99-fix /etc/sudoers.d/99-install
 rm -rf "/home/$NEW/.gnupg" "/home/$NEW/.local/share/keyrings" "/home/$NEW/.password-store"
 echo "  sshd: $(systemctl is-enabled sshd 2>&1)"
 
-log "5/10 identidad de la maquina"
+log "5/10 machine identity"
 : > /etc/machine-id
 rm -f /var/lib/dbus/machine-id
 ln -sf /etc/machine-id /var/lib/dbus/machine-id
@@ -1756,10 +1756,10 @@ log "7b/10 proprietary apps out of the distributable image"
 # Packing them into a .zip that gets redistributed would mean redistributing
 # third-party binaries, so they are removed even if the source VM had them.
 for pkg in 1password 1password-cli typora localsend-bin google-chrome obsidian-bin; do
-  pacman -Q "$pkg" >/dev/null 2>&1 && { pacman -Rns --noconfirm "$pkg" >/dev/null 2>&1 && echo "  retirado $pkg"; }
+  pacman -Q "$pkg" >/dev/null 2>&1 && { pacman -Rns --noconfirm "$pkg" >/dev/null 2>&1 && echo "  removed $pkg"; }
 done
 for d in /opt/1Password /opt/obsidian /opt/typora; do
-  [ -e "$d" ] && { rm -rf "$d"; echo "  retirado $d"; }
+  [ -e "$d" ] && { rm -rf "$d"; echo "  removed $d"; }
 done
 rm -f /usr/local/bin/obsidian /usr/local/share/applications/obsidian.desktop 2>/dev/null || true
 # Removing /opt/1Password leaves its /usr/bin links pointing at nothing. The
@@ -1767,7 +1767,7 @@ rm -f /usr/local/bin/obsidian /usr/local/share/applications/obsidian.desktop 2>/
 for l in $(find /usr/bin /usr/local/bin -maxdepth 1 -xtype l 2>/dev/null); do
   case "$(readlink "$l")" in
     /opt/1Password/*|/opt/obsidian/*|/opt/typora/*)
-      rm -f "$l"; echo "  enlace colgado retirado: $l" ;;
+      rm -f "$l"; echo "  dangling link removed: $l" ;;
   esac
 done
 # The traces they leave when installed: if Chrome goes, so must the shortcut
@@ -1777,7 +1777,7 @@ BIND="/home/$NEW/.config/hypr/bindings.lua"
 if [ -f "$BIND" ] && grep -q "open.spotify.com" "$BIND"; then
   sed -i '/^-- Spotify no tiene cliente nativo/,/^o.bind("SUPER + SHIFT + M", "Spotify"/d' "$BIND"
   sed -i '/open\.spotify\.com/d' "$BIND"
-  echo "  retirado el atajo SUPER+SHIFT+M de la webapp de Spotify"
+  echo "  removed the SUPER+SHIFT+M shortcut for the Spotify web app"
 fi
 rm -f "/home/$NEW/.local/share/applications/Spotify.desktop" \
       "/home/$NEW/.local/share/applications/spotify.desktop" 2>/dev/null || true
@@ -1817,7 +1817,7 @@ if [ -n "${FW// /}" ]; then
   # not needed either. If anything objects, leave it as it is and break
   # nothing.
   pacman -Rdd --noconfirm $FW linux-firmware >/dev/null 2>&1 \
-    && echo "  retirados" || echo "  (no se pudieron retirar; se dejan)"
+    && echo "  retirados" || echo "  (could not be removed; leaving them)"
 fi
 # Documentation and manuals: 469 MiB. This is an image for trying out a
 # desktop, not a server where you would sit and read man pages. Omarchy's own
@@ -1848,7 +1848,7 @@ rm -f /var/lib/systemd/random-seed /var/lib/systemd/credential.secret 2>/dev/nul
 : > /var/log/btmp 2>/dev/null || true
 : > /var/log/lastlog 2>/dev/null || true
 
-log "8/10 aviso al destinatario"
+log "8/10 notice for the recipient"
 cat > /etc/motd <<'EOF'
 
   Omarchy on Arch Linux ARM (aarch64) - a UTM image for Apple Silicon
@@ -1980,7 +1980,7 @@ echo "  ttfx: $(command -v ttfx || echo NO)"
 echo "  migraciones selladas: $(ls -1 /home/$NEW/.local/state/omarchy/migrations 2>/dev/null | wc -l)"
 sync
 echo ""
-log "marcadores de Nautilus/GTK apuntando al home antiguo"
+log "Nautilus/GTK bookmarks pointing at the old home"
 for f in /home/$NEW/.config/gtk-3.0/bookmarks /home/$NEW/.config/gtk-4.0/bookmarks; do
   [ -f "$f" ] && { sed -i "s#/home/$OLD#/home/$NEW#g" "$f"; echo "  $f:"; cat "$f"; }
 done
@@ -2260,7 +2260,7 @@ aur_build() {
 
   rm -rf "$dir"; mkdir -p "$WORK"
   git clone -q "https://aur.archlinux.org/$base.git" "$dir" 2>/dev/null
-  [ -f "$dir/PKGBUILD" ] || { fail "no se pudo clonar $pkg (base: $base)"; return 1; }
+  [ -f "$dir/PKGBUILD" ] || { fail "could not clone $pkg (base: $base)"; return 1; }
 
   # Several PKGBUILDs verify the upstream signature in check(). If the key is
   # not in the keyring, makepkg aborts. The ones the PKGBUILD itself declares
@@ -2309,9 +2309,9 @@ do_1password() {
   else
     warn "no .sig available; installing without verifying the signature"
   fi
-  tar -xzf "$WORK/1p/1p.tar.gz" -C "$WORK/1p" || { fail "no se pudo extraer"; return 1; }
+  tar -xzf "$WORK/1p/1p.tar.gz" -C "$WORK/1p" || { fail "could not extract"; return 1; }
   local src; src=$(find "$WORK/1p" -maxdepth 1 -type d -name '1password-*' | head -1)
-  [ -n "$src" ] || { fail "el tarball no tiene la forma esperada"; return 1; }
+  [ -n "$src" ] || { fail "the tarball is not shaped as expected"; return 1; }
   sudo mkdir -p /opt/1Password
   sudo cp -a "$src"/. /opt/1Password/
   ( cd /opt/1Password && sudo ./after-install.sh ) >/dev/null 2>&1 || warn "after-install.sh reported errors (usually harmless)"
@@ -2335,7 +2335,7 @@ do_obsidian() {
   info "$(basename "$url")"
   mkdir -p "$WORK"; curl -fL --progress-bar "$url" -o "$WORK/obsidian.tar.gz" || { fail "descarga fallida"; return 1; }
   sudo rm -rf /opt/obsidian; sudo mkdir -p /opt/obsidian
-  sudo tar -xzf "$WORK/obsidian.tar.gz" -C /opt/obsidian --strip-components=1 || { fail "no se pudo extraer"; return 1; }
+  sudo tar -xzf "$WORK/obsidian.tar.gz" -C /opt/obsidian --strip-components=1 || { fail "could not extract"; return 1; }
   sudo ln -sfn /opt/obsidian/obsidian /usr/local/bin/obsidian
   sudo install -Dm644 /dev/stdin /usr/local/share/applications/obsidian.desktop <<'DESK'
 [Desktop Entry]
@@ -2395,7 +2395,7 @@ o.bind("SUPER + SHIFT + M", "Spotify", o.launch("google-chrome-stable --app=http
 LUA
     ok "SUPER+SHIFT+M rebound (log out and back in to apply)"
   fi
-  info "${c_dim}Alternativa en terminal, ya instalada: spotify-player${c_off}"
+  info "${c_dim}Terminal alternative, already installed: spotify-player${c_off}"
 }
 
 do_pinta() {
@@ -2486,7 +2486,7 @@ show_list() {
   local k
   while read -r k; do
     if is_installed "$k"; then
-      printf "  ${c_hi}%-15s${c_off} %s ${c_dim}[ya instalada]${c_off}\n" "$k" "$(catalog_desc "$k")"
+      printf "  ${c_hi}%-15s${c_off} %s ${c_dim}[already installed]${c_off}\n" "$k" "$(catalog_desc "$k")"
     else
       printf "  ${c_hi}%-15s${c_off} %s\n" "$k" "$(catalog_desc "$k")"
     fi
@@ -2561,14 +2561,14 @@ git -C "$TREE" rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 # The tree may belong to the user (development VM) or to root (shipped image)
 if [ -w "$TREE/.git" ]; then GIT=(git -C "$TREE"); else GIT=(sudo git -C "$TREE"); fi
 
-echo -e "\e[32m\nActualizar el árbol de Omarchy (checkout git)\e[0m"
+echo -e "\e[32m\nUpdate the Omarchy tree (git checkout)\e[0m"
 before=$("${GIT[@]}" rev-parse --short HEAD 2>/dev/null)
 if ! "${GIT[@]}" pull --ff-only 2>&1 | sed 's/^/  /'; then
   echo "  could not fast-forward; the tree is left as it was"
   exit 0
 fi
 after=$("${GIT[@]}" rev-parse --short HEAD 2>/dev/null)
-if [ "$before" = "$after" ]; then echo "  ya estaba al día ($after)"; exit 0; fi
+if [ "$before" = "$after" ]; then echo "  was already up to date ($after)"; exit 0; fi
 echo "  $before → $after"
 
 # Link the new binaries, respecting the ARM-specific wrappers
@@ -2825,7 +2825,7 @@ def escribir_portapapeles(texto):
         subprocess.run(["wl-copy", "--type", "text/plain;charset=utf-8"],
                        input=texto.encode("utf-8"), timeout=5)
     except Exception as e:
-        log("wl-copy fallo:", e)
+        log("wl-copy failed:", e)
 
 
 def resolucion():
@@ -3420,7 +3420,7 @@ if [ "$DEST_DIR" = "$DOCS" ] && pgrep -x UTM >/dev/null; then
         *) echo "==> UTM not restarted: import the bundle by hand with File -> Import"; SKIP_RESTART=1 ;;
       esac
     else
-      echo "==> modo desatendido: NO se cierra UTM. Importa el bundle a mano."
+      echo "==> unattended mode: UTM is NOT closed. Import the bundle by hand."
       SKIP_RESTART=1
     fi
   fi
@@ -3734,10 +3734,10 @@ ph_utm() {
        NOTES_USER="$VM_USER" NOTES_PASS="$VM_PASSWORD" ASSUME_YES="${ASSUME_YES:-}" \
        bash "$W/scripts/make-utm.sh" "$VM_NAME" > "$ulog" 2>&1; then
     tail -20 "$ulog"
-    die "make-utm.sh fallo; log completo en $ulog"
+    die "make-utm.sh failed; full log in $ulog"
   fi
   tail -4 "$ulog"
-  [[ -f "$DOCS/$VM_NAME.utm/config.plist" ]] || die "el bundle no quedo en $DOCS"
+  [[ -f "$DOCS/$VM_NAME.utm/config.plist" ]] || die "the bundle did not end up in $DOCS"
   ok "bundle created in $DOCS/$VM_NAME.utm"
 }
 
@@ -3859,11 +3859,11 @@ ph_sanitize() {
   fi
   grep -qa "SANITIZE_OK" "$W/logs/sanitize.log" || {
     sed 's/\x1b\[[0-9;?=]*[a-zA-Z]//g' "$W/logs/sanitize.log" | tail -30
-    die "la limpieza no llego al final; revisa $W/logs/sanitize.log"
+    die "the cleanup did not reach the end; check $W/logs/sanitize.log"
   }
   grep -qa "TOK_REPAIR_0" "$W/logs/sanitize.log" || {
     sed 's/\x1b\[[0-9;?=]*[a-zA-Z]//g' "$W/logs/sanitize.log" | tail -30
-    die "la limpieza fallo; revisa $W/logs/sanitize.log"
+    die "the cleanup failed; check $W/logs/sanitize.log"
   }
   ok "image sanitized, with the distribution invariants verified"
 }
@@ -3876,7 +3876,7 @@ ph_package() {
   rm -f "$W/dist/slim.qcow2"
   # -c compresses inside the qcow2 itself: the image takes half the space on
   # the recipient's disk too, unpacked. It decompresses on read.
-  qemu-img convert -c -O qcow2 "$W/dist/dist.qcow2" "$W/dist/slim.qcow2" || die "qemu-img convert fallo"
+  qemu-img convert -c -O qcow2 "$W/dist/dist.qcow2" "$W/dist/slim.qcow2" || die "qemu-img convert failed"
   qemu-img check "$W/dist/slim.qcow2" >/dev/null || die "the compacted image does not validate"
   ok "$(du -h "$W/dist/dist.qcow2" | cut -f1) → $(du -h "$W/dist/slim.qcow2" | cut -f1)"
 
@@ -3894,7 +3894,7 @@ ph_package() {
   SRC_QCOW="$W/dist/slim.qcow2" DEST_DIR="$W/dist" UTM_CPUS=$UTM_CPUS UTM_MEM=$UTM_MEM \
     NOTES_USER="$DIST_NEW_USER" NOTES_PASS="$DIST_NEW_USER" \
     bash "$W/scripts/make-utm.sh" "$DNAME" >/dev/null \
-    || die "no se pudo crear el bundle distribuible"
+    || die "could not create the distributable bundle"
   # Last safety net: neither the plist nor the bundle's NAME may carry a trace
   # of the builder's account or working name.
   if grep -q "\b$VM_USER\b" "$W/dist/$DNAME.utm/config.plist" 2>/dev/null; then
@@ -3903,7 +3903,7 @@ ph_package() {
   # Digits included: the name carries the version. Without them this very
   # filter rejected "Omarchy 4 ARM64", which is exactly the name we want.
   if [[ "$DNAME" != "$(printf '%s' "$DNAME" | tr -cd 'A-Za-z0-9 .-')" ]]; then
-    die "el nombre de distribucion '$DNAME' lleva caracteres raros; usa letras, digitos, espacio, punto o guion"
+    die "the distribution name '$DNAME' has odd characters; use letters, digits, espacio, punto o guion"
   fi
   write_readme "$W/dist/README.md"
 
@@ -4296,7 +4296,7 @@ cuestionario() {
   # a VM for your own use.
   info "Dos usos posibles:"
   info "  - image to hand out  -> renames the user to '$DIST_NEW_USER', wipes"
-  info "    claves SSH e identidad, y genera un zip de ~6,5 GB (~30 min extra)"
+  info "    SSH keys and identity, and produces a ~6.5 GB zip (~30 min extra)"
   info "  - VM for yourself    -> left as it is, with the user '$VM_USER'"
   if confirm "Prepare the image for distribution?" no; then
     HACER_DIST=si
@@ -4387,7 +4387,7 @@ for p in "${PHASES[@]}"; do
   [[ -n $run_from && $p == "$run_from" ]] && started=1
   (( started )) || continue
   ensure_dirs
-  "ph_$p" || die "fallo en la fase '$p'"
+  "ph_$p" || die "phase '$p' failed"
 done
 echo
 echo "${c_ok}Completado en $(( (SECONDS-t0)/60 )) min.${c_off}"

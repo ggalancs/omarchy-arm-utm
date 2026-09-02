@@ -165,7 +165,7 @@ export OMARCHY_PATH=/usr/share/omarchy
 export PATH="/usr/local/bin:$PATH"
 
 # ------------------------------------------------------------ tema
-log "aplicando el tema Tokyo Night"
+log "applying the Tokyo Night theme"
 mkdir -p ~/.config/omarchy/themes
 if command -v omarchy-theme-set >/dev/null 2>&1; then
   omarchy-theme-set "Tokyo Night" || warn "omarchy-theme-set falló; enlazando a mano"
@@ -329,7 +329,7 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
   else
     mkdir -p "$HOME/.omarchy-arm-prov/fallos"
     cp "$dir/build.log" "$HOME/.omarchy-arm-prov/fallos/$pkg.log" 2>/dev/null || true
-    echo "  --- $pkg fallo; ultimas lineas de makepkg ---"
+    echo "  --- $pkg failed; last lines of makepkg ---"
     tail -20 "$dir/build.log" 2>/dev/null | sed 's/^/      /'
     echo "  --- (log completo en ~/.omarchy-arm-prov/fallos/$pkg.log) ---"
     rm -rf "$dir"
@@ -345,7 +345,7 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
 # Zig.
 
 if [ "${HACER_TOOLS:-si}" != "si" ]; then
-  warn "compilacion de herramientas desactivada: faltaran ttfx, tensaku, omacalc,"
+  warn "tool building disabled: ttfx, tensaku, omacalc,"
   warn "omacut, omawrite, aether, cliamp and omarchy-nvim (they can be added later"
   warn "with: yay -S <package>)"
 else
@@ -365,7 +365,7 @@ for spec in \
   if build_omarchy_tool "$src" "$pkg"; then
     TOOLS_OK+=("$pkg")
   else
-    echo "  reintentando $pkg (el primer intento fallo)"
+    echo "  retrying $pkg (the first attempt failed)"
     sleep 5
     if build_omarchy_tool "$src" "$pkg"; then
       TOOLS_OK+=("$pkg")
@@ -412,7 +412,7 @@ sudo bash "$OMARCHY_PATH/install/config/theme-system.sh" >/dev/null 2>&1 || true
 # This wrapper compares what actually matters: uname -r against the modules
 # directory owned by the kernel package. /usr/local/bin comes before /usr/bin
 # on the PATH, so it stands in for the original without touching the tree.
-log "envoltorio de omarchy-update-restart (aviso de kernel en ALARM)"
+log "omarchy-update-restart wrapper (kernel notice on ALARM)"
 sudo install -Dm755 /dev/stdin /usr/local/bin/omarchy-update-restart <<'KRN'
 #!/bin/bash
 # On Arch Linux ARM the kernel leaves no vmlinuz in /usr/lib/modules/<ver>/,
@@ -607,11 +607,11 @@ sudo pacman -S --noconfirm --needed --disable-download-timeout snapper >/dev/nul
 if command -v snapper >/dev/null 2>&1; then
   sudo bash -euo pipefail "$OMARCHY_PATH/install/config/snapper.sh" >/dev/null 2>&1 \
     && echo "  snapper configured: a snapshot before every update" \
-    || warn "no se pudo configurar snapper"
+    || warn "could not configure snapper"
 fi
 if [ -f "$HOME/.omarchy-arm-prov/10-arm-sync" ]; then
   install -Dm755 "$HOME/.omarchy-arm-prov/10-arm-sync" ~/.config/omarchy/hooks/post-update.d/10-arm-sync
-  echo "  hook post-update instalado"
+  echo "  post-update hook installed"
 fi
 
 log "git"

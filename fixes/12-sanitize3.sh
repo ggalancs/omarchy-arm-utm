@@ -4,7 +4,7 @@ set -uo pipefail
 NEW=omarchy
 log() { echo ""; echo "==> $*"; }
 
-log "marcadores de Nautilus/GTK apuntando al home antiguo"
+log "Nautilus/GTK bookmarks pointing at the old home"
 for f in /home/$NEW/.config/gtk-3.0/bookmarks /home/$NEW/.config/gtk-4.0/bookmarks; do
   [ -f "$f" ] && { sed -i "s#/home/gabriel#/home/$NEW#g" "$f"; echo "  $f:"; cat "$f"; }
 done
@@ -21,7 +21,7 @@ done
 log "barrido final"
 echo "  /etc:   $(grep -rl '\bgabriel\b' /etc 2>/dev/null | wc -l) coincidencias"
 echo "  /home:  $(grep -rl '\bgabriel\b' /home/$NEW/.config /home/$NEW/.bashrc /home/$NEW/.bash_profile 2>/dev/null | wc -l) coincidencias"
-echo "  (nota: /usr/local/bin/ttfx contiene la ruta de compilacion en su info de"
+echo "  (note: /usr/local/bin/ttfx carries the build path in its debug"
 echo "   debug info; it is harmless and exposes nothing useful)"
 
 log "final state for distribution"

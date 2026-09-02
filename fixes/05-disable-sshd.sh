@@ -19,7 +19,7 @@ log "the host public key is kept"
 # Reactivar el acceso: sudo systemctl enable --now sshd
 ls -l /home/$USR/.ssh/authorized_keys 2>&1
 
-log "limpieza de restos de aprovisionamiento"
+log "cleaning up provisioning leftovers"
 rm -rf /root/prov /root/STAGE2_OK /home/$USR/shots
 rm -f /tmp/*.log 2>/dev/null || true
 

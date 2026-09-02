@@ -81,7 +81,7 @@ bsdtar -xpf "$PROV/alarm-rootfs.tgz" -C /mnt
 echo "  contenido: $(ls /mnt | tr '\n' ' ')"
 [ -d /mnt/etc ] && [ -d /mnt/usr ] || { warn "rootfs incompleto"; exit 1; }
 
-log "montando la ESP en /boot"
+log "mounting the ESP at /boot"
 rm -rf /mnt/boot
 mkdir -p /mnt/boot
 mount -t vfat "${DISK}1" /mnt/boot

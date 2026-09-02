@@ -7,13 +7,13 @@ log(){ echo; echo "==> $*"; }
 log "size before"
 df -h / | tail -1
 
-log "paquetes mas grandes"
+log "largest packages"
 expac -H M '%m\t%n' 2>/dev/null | sort -rh | head -12 | sed 's/^/  /'
 
-log "quitando dependencias de compilacion"
+log "removing build dependencies"
 # Pinta needs dotnet-runtime, NOT the SDK. OBS is already compiled.
 for p in dotnet-sdk-bin dotnet-targeting-pack-bin aspnet-targeting-pack-bin; do
-  pacman -Q "$p" >/dev/null 2>&1 && { pacman -Rns --noconfirm "$p" >/dev/null 2>&1 && echo "  quitado $p" || echo "  no se pudo quitar $p"; }
+  pacman -Q "$p" >/dev/null 2>&1 && { pacman -Rns --noconfirm "$p" >/dev/null 2>&1 && echo "  quitado $p" || echo "  could not remove $p"; }
 done
 orph=$(pacman -Qdtq 2>/dev/null)
 [ -n "$orph" ] && { echo "  huerfanos: $(echo $orph | tr '\n' ' ')"; pacman -Rns --noconfirm $orph >/dev/null 2>&1; }
@@ -24,7 +24,7 @@ for p in obs-studio pinta dotnet-runtime-bin hyprland quickshell; do
 done
 command -v obs pinta omarchy-arm-extras | sed 's/^/  /'
 
-log "limpieza final"
+log "final cleanup"
 rm -rf /var/cache/pacman/pkg/* /home/$NEW/.cache/* /tmp/* 2>/dev/null
 rm -rf /home/$NEW/.cargo /home/$NEW/go 2>/dev/null
 journalctl --vacuum-time=1s >/dev/null 2>&1 || true

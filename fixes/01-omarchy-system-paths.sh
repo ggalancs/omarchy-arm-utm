@@ -32,7 +32,7 @@ done
 echo "  $n binarios enlazados"
 ls -l /usr/local/bin/start-hyprland /usr/local/bin/omarchy-theme-set 2>&1 | head -3
 
-log "3/8 hooks de shell y de sesion uwsm"
+log "3/8 shell hooks and uwsm session"
 install -Dm644 "$OM/etc/profile.d/omarchy.sh" /etc/profile.d/omarchy.sh
 install -Dm644 "$OM/default/uwsm/env.d/10-omarchy" /usr/share/uwsm/env.d/10-omarchy
 cat /etc/profile.d/omarchy.sh
@@ -80,7 +80,7 @@ chown $USR:$USR /home/$USR/.ssh/authorized_keys
 chmod 600 /home/$USR/.ssh/authorized_keys
 
 log "8/8 theme as the user, now with the right environment"
-su - $USR -c 'export OMARCHY_PATH=/usr/share/omarchy; export PATH=/usr/local/bin:$PATH; mkdir -p ~/.config/omarchy/themes; omarchy-theme-set "Tokyo Night" 2>&1 | tail -5' || echo "  (theme-set fallo)"
+su - $USR -c 'export OMARCHY_PATH=/usr/share/omarchy; export PATH=/usr/local/bin:$PATH; mkdir -p ~/.config/omarchy/themes; omarchy-theme-set "Tokyo Night" 2>&1 | tail -5' || echo "  (theme-set failed)"
 su - $USR -c 'ls -l ~/.config/omarchy/current/ 2>/dev/null; echo "OMARCHY_PATH=[$OMARCHY_PATH]"; command -v omarchy-menu start-hyprland' || true
 
 log "verification"

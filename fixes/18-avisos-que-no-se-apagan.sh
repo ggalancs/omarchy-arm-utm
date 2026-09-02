@@ -42,7 +42,7 @@ if [ -d /usr/share/omarchy/default/systemd/user ]; then
   sudo cp -a /usr/share/omarchy/default/systemd/user/. /usr/lib/systemd/user/
   echo "   $(ls /usr/lib/systemd/user/*.service 2>/dev/null | wc -l) unidades disponibles"
 else
-  echo "   no encuentro /usr/share/omarchy/default/systemd/user"
+  echo "   cannot find /usr/share/omarchy/default/systemd/user"
 fi
 
 echo "==> B. wrapper for the kernel notice"

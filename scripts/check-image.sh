@@ -15,7 +15,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 BUNDLE="${1:-}"; OLD="${2:-builder}"
 [ -d "$BUNDLE" ] || { echo "usage: $0 <bundle.utm> [build-account]"; exit 2; }
 DISK=$(find "$BUNDLE/Data" -name '*.qcow2' | head -1)
-[ -s "$DISK" ] || { echo "no encuentro el qcow2 en $BUNDLE"; exit 2; }
+[ -s "$DISK" ] || { echo "cannot find the qcow2 in $BUNDLE"; exit 2; }
 
 TMP=$(mktemp -d); [ -n "${KEEP_TMP:-}" ] || trap 'rm -rf "$TMP"' EXIT
 echo "  tmp: $TMP"

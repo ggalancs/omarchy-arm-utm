@@ -12,7 +12,7 @@
 set -uo pipefail
 log() { echo ""; echo "==> $*"; }
 
-log "LIBGL_ALWAYS_SOFTWARE en el entorno de la sesion"
+log "LIBGL_ALWAYS_SOFTWARE in the session environment"
 sudo tee /etc/environment.d/90-vm-graphics.conf >/dev/null <<'EOF'
 # virtio-gpu (virgl) bajo UTM/QEMU
 WLR_NO_HARDWARE_CURSORS=1

@@ -9,10 +9,10 @@ export LANG=C LC_ALL=C
 log()  { echo ""; echo "==> [stage2] $*"; }
 warn() { echo "!!  [stage2] $*"; }
 
-trap 'warn "fallo en la linea $LINENO"; exit 1' ERR
+trap 'warn "failed at line $LINENO"; exit 1' ERR
 
 # ---------------------------------------------------------------- pacman
-log "inicializando el llavero de Arch Linux ARM"
+log "initialising the Arch Linux ARM keyring"
 pacman-key --init
 pacman-key --populate archlinuxarm
 
@@ -41,7 +41,7 @@ pac() {
   local intento
   for intento in 1 2 3; do
     if pacman -S --noconfirm --needed --disable-download-timeout "$@"; then return 0; fi
-    warn "pacman fallo (intento $intento/3); reintentando en ${intento}0 s"
+    warn "pacman failed (attempt $intento/3); retrying in ${intento}0 s"
     sleep "${intento}0"
     pacman -Sy --noconfirm --disable-download-timeout >/dev/null 2>&1 || true
   done
@@ -125,8 +125,8 @@ bootctl --esp-path=/boot --no-variables install
 # already matches the repository, so the package is reinstalled by force.
 if [ ! -f /boot/Image ] && [ ! -f /boot/vmlinuz-linux-aarch64 ]; then
   echo "  /boot empty: reinstalling linux-aarch64 to repopulate it"
-  pacman -S --noconfirm --disable-download-timeout linux-aarch64 || warn "no se pudo reinstalar el kernel"
-  mkinitcpio -P || warn "mkinitcpio fallo tras reinstalar"
+  pacman -S --noconfirm --disable-download-timeout linux-aarch64 || warn "could not reinstall the kernel"
+  mkinitcpio -P || warn "mkinitcpio failed after reinstalling"
 fi
 
 KERNEL_IMG=""
@@ -139,7 +139,7 @@ INITRD=""
 for c in /boot/initramfs-linux-aarch64.img /boot/initramfs-linux.img; do
   [ -f "$c" ] && { INITRD="/$(basename "$c")"; break; }
 done
-[ -n "$INITRD" ] || { warn "no encuentro el initramfs"; ls -la /boot; exit 1; }
+[ -n "$INITRD" ] || { warn "cannot find the initramfs"; ls -la /boot; exit 1; }
 
 mkdir -p /boot/loader/entries
 cat > /boot/loader/loader.conf <<EOF
@@ -401,7 +401,7 @@ EOF
 # serial console, handy for debugging from the host
 systemctl enable serial-getty@ttyAMA0.service 2>/dev/null || true
 
-log "limpieza"
+log "cleanup"
 rm -f /etc/sudoers.d/99-install
 paccache -rk1 2>/dev/null || true
 rm -rf /var/cache/pacman/pkg/* 2>/dev/null || true

@@ -57,7 +57,7 @@ if [ "$DEST_DIR" = "$DOCS" ] && pgrep -x UTM >/dev/null; then
         *) echo "==> UTM not restarted: import the bundle by hand with File -> Import"; SKIP_RESTART=1 ;;
       esac
     else
-      echo "==> modo desatendido: NO se cierra UTM. Importa el bundle a mano."
+      echo "==> unattended mode: UTM is NOT closed. Import the bundle by hand."
       SKIP_RESTART=1
     fi
   fi

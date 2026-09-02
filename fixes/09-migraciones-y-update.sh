@@ -20,7 +20,7 @@ done
 echo "  selladas $n nuevas; total $(ls -1 "$STATE" | wc -l) de $(ls -1 "$MIGR"/*.sh | wc -l)"
 echo "  pending now: $(omarchy-migrate --pending 2>/dev/null | wc -l)"
 
-log "2/5 recuperando dust (lo quito la migracion fallida)"
+log "2/5 recovering dust (the failed migration removed it)"
 sudo pacman -S --noconfirm --needed dust 2>&1 | tail -3
 pacman -Q dust 2>&1
 

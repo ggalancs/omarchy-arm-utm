@@ -36,7 +36,7 @@ for p in Hyprland quickshell mako elephant udiskie swaybg; do printf "  %-12s %s
 
 log "screenshot from inside"
 mkdir -p ~/shots
-grim ~/shots/desktop.png 2>&1 && ls -lh ~/shots/desktop.png || echo "  grim fallo"
+grim ~/shots/desktop.png 2>&1 && ls -lh ~/shots/desktop.png || echo "  grim failed"
 
-log "listo"
+log "done"
 echo "==> FIX3_OK"

@@ -26,7 +26,7 @@ build() {                      # build <origen> <paquete>
              | sed -n 's/.*"PackageBase":"\([^"]*\)".*/\1/p' | head -1)
       [ -n "$base" ] || base="$pkg"
       git clone -q "https://aur.archlinux.org/$base.git" "$dir" 2>/dev/null
-      [ -f "$dir/PKGBUILD" ] || { KO+=("$pkg:clon vacio"); note "FALLO: el clon de AUR ($base) no trae PKGBUILD"; return 1; } ;;
+      [ -f "$dir/PKGBUILD" ] || { KO+=("$pkg:clon vacio"); note "FAILED: the AUR clone ($base) has no PKGBUILD"; return 1; } ;;
     omapkgs)
       # Only the package's subdirectory, with a sparse checkout
       git clone --depth 1 --filter=blob:none --sparse -q \
@@ -49,10 +49,10 @@ build() {                      # build <origen> <paquete>
   note "$(grep -m1 '^pkgver=' "$dir/PKGBUILD")  $(grep -m1 '^arch=' "$dir/PKGBUILD")"
 
   if ( cd "$dir" && makepkg -si --noconfirm --needed --noprogressbar ) >"$dir/build.log" 2>&1; then
-    OK+=("$pkg"); note "OK  $(pacman -Q "$pkg" 2>/dev/null || echo instalado)"
+    OK+=("$pkg"); note "OK  $(pacman -Q "$pkg" 2>/dev/null || echo installed)"
   else
     KO+=("$pkg:makepkg")
-    note "FALLO — ultimas lineas:"; tail -6 "$dir/build.log" | sed 's/^/      /'
+    note "FAILED -- last lines:"; tail -6 "$dir/build.log" | sed 's/^/      /'
   fi
 }
 

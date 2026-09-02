@@ -10,7 +10,7 @@
 #  Runs on -snapshot: what it breaks is discarded on shutdown.
 #  ────────────────────────────────────────────────────────────────────────────
 LIST=/media/guest-check-base.sh
-[ -r "$LIST" ] || { echo "no encuentro $LIST"; echo "END_CHECK"; exit 2; }
+[ -r "$LIST" ] || { echo "cannot find $LIST"; echo "END_CHECK"; exit 2; }
 pasar() { bash "$LIST" builder 2>&1; }
 cuenta() {
   case "$1" in
@@ -56,7 +56,7 @@ A=/home/omarchy/.config/hypr/autostart.lua
   echo "   + autostart launching the stock agent"; EXPECTED+=("autostart launches the stock agent"); }
 
 # A priority-3 error in the boot journal.
-systemd-cat -p err echo "error de prueba de la tanda 3" 2>/dev/null \
+systemd-cat -p err echo "test error from batch 3" 2>/dev/null \
   && { sleep 2; echo "   + priority-err entry in the journal"; EXPECTED+=("errors in the journal"); }
 
 pkill -f quickshell 2>/dev/null && { sleep 2; echo "   + quickshell killed"; EXPECTED+=("quickshell not running"); }
