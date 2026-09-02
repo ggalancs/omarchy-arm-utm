@@ -86,7 +86,7 @@ aur_build() {
   # exist while $dir is built, and with set -u the script aborts.
   local pkg="$1" want="${2:-$1}"
   local dir="$WORK/$pkg" base
-  pacman -Q "$want" >/dev/null 2>&1 && { ok "$want ya instalado"; return 0; }
+  pacman -Q "$want" >/dev/null 2>&1 && { ok "$want already installed"; return 0; }
 
   base=$(curl -fsSL --max-time 20 "https://aur.archlinux.org/rpc/v5/info?arg[]=$pkg" \
          | sed -n 's/.*"PackageBase":"\([^"]*\)".*/\1/p' | head -1)
@@ -136,7 +136,7 @@ do_1password() {
       || gpg --keyserver keyserver.ubuntu.com --recv-keys "$KEY" >/dev/null 2>&1 \
       || gpg --keyserver keys.openpgp.org --recv-keys "$KEY" >/dev/null 2>&1
     if gpg --verify "$WORK/1p/1p.tar.gz.sig" "$WORK/1p/1p.tar.gz" >/dev/null 2>&1; then
-      ok "firma GPG de AgileBits verificada"
+      ok "AgileBits GPG signature verified"
     else
       fail "SIGNATURE DOES NOT VERIFY - install aborted"; return 1
     fi
@@ -182,7 +182,7 @@ MimeType=x-scheme-handler/obsidian;
 DESK
   [ -f /opt/obsidian/resources/app.asar ] && sudo find /opt/obsidian -name 'icon.png' -exec \
     sudo install -Dm644 {} /usr/local/share/icons/hicolor/512x512/apps/obsidian.png \; 2>/dev/null
-  ok "Obsidian instalado en /opt/obsidian ($(basename "$url"))"
+  ok "Obsidian installed in /opt/obsidian ($(basename "$url"))"
 }
 
 do_typora() {
@@ -363,7 +363,7 @@ for k in "${SELECTED[@]}"; do
 done
 
 title "Resumen"
-[ ${#OK_LIST[@]} -gt 0 ] && ok "instalado: ${OK_LIST[*]}"
+[ ${#OK_LIST[@]} -gt 0 ] && ok "installed: ${OK_LIST[*]}"
 if [ ${#KO_LIST[@]} -gt 0 ]; then
   fail "failed: ${KO_LIST[*]}"
   # The working directory is not deleted: the build.log files are in there,

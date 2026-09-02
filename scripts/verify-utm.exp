@@ -38,7 +38,7 @@ expect -re {TOK_SH_[0-9]+}
 
 puts "\n\n============== VERIFICATION =============="
 go "echo; echo '### sistema'; uname -srm; grep PRETTY /etc/os-release" T1_
-go "echo '### almacenamiento'; findmnt -no SOURCE,FSTYPE,OPTIONS / ; findmnt -no SOURCE,FSTYPE /home; findmnt -no SOURCE,FSTYPE /boot; df -h / | tail -1" T2_
+go "echo '### storage'; findmnt -no SOURCE,FSTYPE,OPTIONS / ; findmnt -no SOURCE,FSTYPE /home; findmnt -no SOURCE,FSTYPE /boot; df -h / | tail -1" T2_
 go "echo '### services'; systemctl is-active sddm NetworkManager systemd-logind; echo '--- failed:'; systemctl --failed --no-pager --no-legend" T3_
 go "echo '### packages'; pacman -Q hyprland waybar uwsm sddm mesa walker elephant xdg-terminal-exec 2>&1" T4_
 go "echo '### dotfiles'; ls ~/.config | tr '\\n' ' '; echo; echo -n 'tema: '; readlink -f ~/.config/omarchy/current/theme" T5_

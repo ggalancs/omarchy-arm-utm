@@ -40,7 +40,7 @@ CATALOG=(
   "localsend|LocalSend|Enviar ficheros entre dispositivos. Build arm64 oficial"
   "chrome|Google Chrome|Trae Widevine para arm64: habilita Spotify y Netflix web"
   "spotify-web|Spotify (webapp)|Lanzador de open.spotify.com + reasigna SUPER+SHIFT+M"
-  "pinta|Pinta|Editor de imagenes. Compilado con el .NET arm64 de Microsoft"
+  "pinta|Pinta|Image editor. Built with Microsoft's arm64 .NET"
   "obs|OBS Studio|Captura y streaming. Compilado sin el plugin de navegador"
 )
 
@@ -84,7 +84,7 @@ aur_build() {
   # not exist yet when building $dir, and under set -u the script aborts.
   local pkg="$1" want="${2:-$1}"
   local dir="$WORK/$pkg" base
-  pacman -Q "$want" >/dev/null 2>&1 && { ok "$want ya instalado"; return 0; }
+  pacman -Q "$want" >/dev/null 2>&1 && { ok "$want already installed"; return 0; }
 
   base=$(curl -fsSL --max-time 20 "https://aur.archlinux.org/rpc/v5/info?arg[]=$pkg" \
          | sed -n 's/.*"PackageBase":"\([^"]*\)".*/\1/p' | head -1)
@@ -134,7 +134,7 @@ do_1password() {
       || gpg --keyserver keyserver.ubuntu.com --recv-keys "$KEY" >/dev/null 2>&1 \
       || gpg --keyserver keys.openpgp.org --recv-keys "$KEY" >/dev/null 2>&1
     if gpg --verify "$WORK/1p/1p.tar.gz.sig" "$WORK/1p/1p.tar.gz" >/dev/null 2>&1; then
-      ok "firma GPG de AgileBits verificada"
+      ok "AgileBits GPG signature verified"
     else
       fail "THE SIGNATURE DOES NOT VERIFY -- aborting the installation"; return 1
     fi
@@ -179,7 +179,7 @@ MimeType=x-scheme-handler/obsidian;
 DESK
   [ -f /opt/obsidian/resources/app.asar ] && sudo find /opt/obsidian -name 'icon.png' -exec \
     sudo install -Dm644 {} /usr/local/share/icons/hicolor/512x512/apps/obsidian.png \; 2>/dev/null
-  ok "Obsidian instalado en /opt/obsidian ($(basename "$url"))"
+  ok "Obsidian installed in /opt/obsidian ($(basename "$url"))"
 }
 
 do_typora() {
@@ -210,7 +210,7 @@ do_spotify_web() {
     omarchy-webapp-install "Spotify" "https://open.spotify.com" \
       "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/spotify.png" \
       "$(have google-chrome-stable && echo 'google-chrome-stable --app=https://open.spotify.com')" \
-      >/dev/null 2>&1 && ok "lanzador creado en el menú de aplicaciones"
+      >/dev/null 2>&1 && ok "launcher created in the application menu"
   else
     warn "omarchy-webapp-install is not available"
   fi
@@ -223,7 +223,7 @@ do_spotify_web() {
 -- Necesita Google Chrome, que es quien trae Widevine en arm64.
 o.bind("SUPER + SHIFT + M", "Spotify", o.launch("google-chrome-stable --app=https://open.spotify.com"))
 LUA
-    ok "SUPER+SHIFT+M reasignado (reinicia la sesión para aplicarlo)"
+    ok "SUPER+SHIFT+M reassigned (restart the session to apply it)"
   fi
   info "${c_dim}Terminal alternative, already installed: spotify-player${c_off}"
 }
@@ -287,7 +287,7 @@ run_item() {
   local k="$1"
   if [ "${FORCE:-0}" != "1" ] && is_installed "$k"; then
     title "$(catalog_title "$k")"
-    ok "ya viene instalada en esta imagen (--force para reinstalar)"
+    ok "already ships in this image (--force to reinstall)"
     return 0
   fi
   case "$k" in
@@ -357,7 +357,7 @@ for k in "${SELECTED[@]}"; do
 done
 
 title "Resumen"
-[ ${#OK_LIST[@]} -gt 0 ] && ok "instalado: ${OK_LIST[*]}"
+[ ${#OK_LIST[@]} -gt 0 ] && ok "installed: ${OK_LIST[*]}"
 if [ ${#KO_LIST[@]} -gt 0 ]; then
   fail "failed: ${KO_LIST[*]}"
   # The working directory is not deleted: the build.log files are in there,

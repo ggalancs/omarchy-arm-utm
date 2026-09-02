@@ -32,8 +32,8 @@ cat > ~/.config/hypr/input.lua <<'LUA'
 --     Cmd (⌘) del Mac     ->  ALT en la VM
 --
 -- Si prefieres el comportamiento original, borra "altwin:swap_lalt_lwin" y en su
--- lugar activa la captura de entrada de UTM (necesita permisos de Accesibilidad
--- y Monitorizacion de entrada para UTM en Ajustes del Sistema > Privacidad).
+-- instead turns on UTM's input capture (it needs Accessibility permission
+-- and Input Monitoring for UTM in System Settings > Privacy).
 hl.config({
   input = {
     kb_layout  = "es",

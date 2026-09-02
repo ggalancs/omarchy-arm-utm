@@ -51,7 +51,7 @@ from_env() { case " $SET_BY_ENV " in *" $1 "*) return 0 ;; *) return 1 ;; esac; 
 
 : "${W:=$HOME/omarchy-arm-build}"        # directorio de trabajo
 : "${VM_NAME:=Omarchy ARM}"              # nombre de la VM en UTM
-: "${VM_USER:=builder}"                  # usuario durante la construccion
+: "${VM_USER:=builder}"                  # account used while building
 : "${VM_PASSWORD:=builder}"              # se pregunta; la imagen distribuible lo renombra
 : "${VM_FULLNAME:=Omarchy ARM}"
 : "${VM_EMAIL:=user@example.com}"
@@ -67,7 +67,7 @@ from_env() { case " $SET_BY_ENV " in *" $1 "*) return 0 ;; *) return 1 ;; esac; 
 : "${UTM_CPUS:=6}"                       # vCPU de la VM final
 : "${UTM_MEM:=6144}"                     # MiB de la VM final
 : "${OMARCHY_REF:=quattro}"              # rama de Omarchy (¡NO master!)
-: "${DIST_NEW_USER:=omarchy}"            # usuario en la imagen distribuible
+: "${DIST_NEW_USER:=omarchy}"            # account in the distributable image
 # CAREFUL with this name: `omarchy-arm-utm.zip` belongs to the FIRST release on
 # archive.org, and it stays frozen there so the links and sha256 sums published
 # in August still resolve to the exact bytes they were written for. It used to
@@ -282,7 +282,7 @@ ph_fetch() {
     [[ ${FETCH_RETRY:-0} -ge 1 ]] && die "the ALARM rootfs still does not match after retrying"
     FETCH_RETRY=1 ph_fetch; return
   else
-    ok "rootfs ALARM $(du -h "$tgz" | cut -f1), MD5 verificado"
+    ok "rootfs ALARM $(du -h "$tgz" | cut -f1), MD5 verified"
   fi
 }
 
@@ -1033,7 +1033,7 @@ log "wiring Omarchy into the system paths (stands in for the pacman package)"
 sudo ln -sfn "$OMARCHY_PATH" /usr/share/omarchy
 # The commands go to /usr/bin, which is where upstream's package() puts them.
 # Putting them in /usr/local/bin looked cleaner (no clash with pacman) but
-# rompe cosas: el arbol lleva 13 rutas /usr/bin/omarchy-* cableadas, cinco de
+# breaks things: the tree has 13 hardcoded /usr/bin/omarchy-* paths, five of
 # them in .service files. enable-user-units.sh failed for that reason, and
 # since first-run is only marked done when NO step fails, it repeated on every
 # login, re-sending the "Update System" notice forever.
@@ -1129,8 +1129,8 @@ cat > ~/.config/hypr/monitors.lua <<'LUA'
 --  2. Resolucion fija 1920x1200 en vez de "preferred", que da 1280x800.
 --
 -- IMPORTANTE: cambiar el modo EN CALIENTE (hyprctl / recarga de config) rompe
--- el renderizado bajo virgl: el escritorio se queda en blanco hasta reiniciar.
--- Aplicado desde el arranque funciona bien. Si tocas esto, reinicia la VM.
+-- rendering under virgl: the desktop stays blank until you restart.
+-- Applied from boot it works fine. If you change this, restart the VM.
 --
 -- Para que la resolucion siga al tamano de la ventana de UTM:
 --   hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
@@ -1141,7 +1141,7 @@ rm -f ~/.config/hypr/monitors.conf ~/.config/hypr/autostart.conf
 
 # Clipboard shared with the UTM host
 cat > ~/.config/hypr/autostart.lua <<'LUA'
--- Procesos extra al iniciar la sesion.
+-- Extra processes started with the session.
 hl.on("hyprland.start", function()
   -- spice-vdagent NO se lanza: su portapapeles es X11 y bajo Hyprland muere
   -- con "cannot open display". Peor aun, si arranca, vdagentd ve dos agentes
@@ -2078,24 +2078,24 @@ fstrim -av 2>&1 | head -2 || true
 # 0, the host saw TOK_REPAIR_0 and called the image clean. If usermod failed,
 # an image went out carrying the builder's username and password.
 log "invariants of the distributable image"
-FALLOS=0
-mal() { echo "  ✗ $*"; FALLOS=$((FALLOS+1)); }
-bien() { echo "  ✓ $*"; }
+FAILURES=0
+bad() { echo "  ✗ $*"; FAILURES=$((FAILURES+1)); }
+ok_() { echo "  ✓ $*"; }
 
-getent passwd "$NEW" >/dev/null && bien "existe el usuario $NEW" || mal "no existe el usuario $NEW"
+getent passwd "$NEW" >/dev/null && ok_ "user $NEW exists" || bad "no user $NEW exists"
 if [ "$OLD" != "$NEW" ]; then
-  getent passwd "$OLD" >/dev/null && mal "el usuario del constructor ($OLD) sigue existiendo" \
-                                  || bien "the build account no longer exists"
+  getent passwd "$OLD" >/dev/null && bad "the build account ($OLD) is still there" \
+                                  || ok_ "the build account no longer exists"
 fi
 [ -d /usr/share/omarchy ] && [ ! -L /usr/share/omarchy ] \
-  && bien "/usr/share/omarchy es un directorio real" \
-  || mal "/usr/share/omarchy no es un directorio real"
+  && ok_ "/usr/share/omarchy is a real directory" \
+  || bad "/usr/share/omarchy is not a real directory"
 
 N_CMD=$(find /usr/bin -maxdepth 1 -name 'omarchy-*' | wc -l)
-[ "$N_CMD" -ge 400 ] && bien "$N_CMD comandos omarchy-*" || mal "only $N_CMD omarchy-* commands (expected >=400)"
+[ "$N_CMD" -ge 400 ] && ok_ "$N_CMD comandos omarchy-*" || bad "only $N_CMD omarchy-* commands (expected >=400)"
 
-N_ROTO=$(find /usr/bin /usr/local/bin /home/"$NEW" -xdev -xtype l 2>/dev/null | wc -l)
-[ "$N_ROTO" -le 5 ] && bien "$N_ROTO enlaces colgando" || mal "$N_ROTO enlaces colgando"
+N_DANGLING=$(find /usr/bin /usr/local/bin /home/"$NEW" -xdev -xtype l 2>/dev/null | wc -l)
+[ "$N_DANGLING" -le 5 ] && ok_ "$N_DANGLING dangling links" || bad "$N_DANGLING dangling links"
 
 # Filenames, not just content: the sweep above uses grep -rl, which looks
 # inside files. A file that CARRIES the builder's name in its own path (mise
@@ -2116,28 +2116,28 @@ if [ "$OLD" != "$NEW" ]; then
   fi
   RESTAN=$(find /home/"$NEW" /etc /usr/local /opt -xdev -mindepth 1 \
       -regextype posix-extended -regex "$RX_OLD" 2>/dev/null | wc -l)
-  [ "$RESTAN" -eq 0 ] && bien "no filename mentions $OLD" || mal "$RESTAN names still mention $OLD"
+  [ "$RESTAN" -eq 0 ] && ok_ "no filename mentions $OLD" || bad "$RESTAN names still mention $OLD"
 fi
 
 # The clipboard: the five pieces that can break it.
-[ -x /usr/local/bin/omarchy-arm-vdagent ] && bien "clipboard agent installed" || mal "/usr/local/bin/omarchy-arm-vdagent is missing"
+[ -x /usr/local/bin/omarchy-arm-vdagent ] && ok_ "clipboard agent installed" || bad "/usr/local/bin/omarchy-arm-vdagent is missing"
 # We are in a chroot here and the daemon is not running, so this checks the
 # file that passes it the flag. On the booted image the process itself is
 # checked, which is stronger (scripts/guest-check.sh).
 grep -qs -- '-X' /etc/conf.d/spice-vdagentd \
-  && bien "spice-vdagentd recibira -X" || mal "spice-vdagentd without -X: the clipboard will not work"
+  && ok_ "spice-vdagentd recibira -X" || bad "spice-vdagentd without -X: the clipboard will not work"
 [ -e /etc/systemd/system/spice-vdagentd.service.d/override.conf ] \
-  && mal "the old spice-vdagentd override is still there" || bien "no old override left"
+  && bad "the old spice-vdagentd override is still there" || ok_ "no old override left"
 [ -e "/home/$NEW/.config/systemd/user/graphical-session.target.wants/omarchy-arm-vdagent.service" ] \
-  && bien "agente habilitado en la sesion grafica" \
-  || mal "the agent was not enabled for $NEW"
+  && ok_ "agent enabled in the graphical session" \
+  || bad "the agent was not enabled for $NEW"
 if grep -vs -- '^[[:space:]]*--' "/home/$NEW/.config/hypr/autostart.lua" 2>/dev/null | grep -qs spice-vdagent; then
-  mal "autostart.lua launches the stock agent: vdagentd will disconnect both"
+  bad "autostart.lua launches the stock agent: vdagentd will disconnect both"
 else
-  bien "autostart.lua no lanza el agente oficial"
+  ok_ "autostart.lua no lanza el agente oficial"
 fi
 
-[ "$(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l)" -eq 0 ] && bien "no ssh host keys" || mal "ssh host keys left behind"
+[ "$(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l)" -eq 0 ] && ok_ "no ssh host keys" || bad "ssh host keys left behind"
 # The layout that ships. Not a cosmetic detail: with the builder's layout, a
 # user could not type ':' in nvim to fix it, and another could not type his own
 # password. Both cost hours and both were silent.
@@ -2171,20 +2171,20 @@ if [ "$OLD" != "$NEW" ]; then
       [ -f "$b" ] || continue
       strings "$b" 2>/dev/null | grep -q "/home/$OLD" && SUCIOS="$SUCIOS $b"
     done
-    [ -z "$SUCIOS" ] && bien "no /usr/local/bin binary mentions the build account" \
-                     || mal "binaries carrying the build path inside:$SUCIOS (see RUSTFLAGS/CARGO_HOME in stage3)"
+    [ -z "$SUCIOS" ] && ok_ "no /usr/local/bin binary mentions the build account" \
+                     || bad "binaries carrying the build path inside:$SUCIOS (see RUSTFLAGS/CARGO_HOME in stage3)"
   fi
 fi
-[ -f /root/failed-packages.txt ] && mal "/root/failed-packages.txt left behind" \
-                                 || bien "no build-account leftovers in /root"
+[ -f /root/failed-packages.txt ] && bad "/root/failed-packages.txt left behind" \
+                                 || ok_ "no build-account leftovers in /root"
 
 N_HUERF=$(pacman -Qtdq 2>/dev/null | wc -l)
-[ "$N_HUERF" -eq 0 ] && bien "no orphan packages" \
-                     || mal "$N_HUERF orphan packages: the first update will prompt about them"
+[ "$N_HUERF" -eq 0 ] && ok_ "no orphan packages" \
+                     || bad "$N_HUERF orphan packages: the first update will prompt about them"
 
 echo ""
-if [ "$FALLOS" -ne 0 ]; then
-  echo "==> SANITIZE_FAILED: $FALLOS broken invariant(s); this image must NOT be distributed"
+if [ "$FAILURES" -ne 0 ]; then
+  echo "==> SANITIZE_FAILED: $FAILURES broken invariant(s); this image must NOT be distributed"
   exit 1
 fi
 echo ""
@@ -2282,7 +2282,7 @@ aur_build() {
   # exist while $dir is built, and with set -u the script aborts.
   local pkg="$1" want="${2:-$1}"
   local dir="$WORK/$pkg" base
-  pacman -Q "$want" >/dev/null 2>&1 && { ok "$want ya instalado"; return 0; }
+  pacman -Q "$want" >/dev/null 2>&1 && { ok "$want already installed"; return 0; }
 
   base=$(curl -fsSL --max-time 20 "https://aur.archlinux.org/rpc/v5/info?arg[]=$pkg" \
          | sed -n 's/.*"PackageBase":"\([^"]*\)".*/\1/p' | head -1)
@@ -2332,7 +2332,7 @@ do_1password() {
       || gpg --keyserver keyserver.ubuntu.com --recv-keys "$KEY" >/dev/null 2>&1 \
       || gpg --keyserver keys.openpgp.org --recv-keys "$KEY" >/dev/null 2>&1
     if gpg --verify "$WORK/1p/1p.tar.gz.sig" "$WORK/1p/1p.tar.gz" >/dev/null 2>&1; then
-      ok "firma GPG de AgileBits verificada"
+      ok "AgileBits GPG signature verified"
     else
       fail "SIGNATURE DOES NOT VERIFY - install aborted"; return 1
     fi
@@ -2378,7 +2378,7 @@ MimeType=x-scheme-handler/obsidian;
 DESK
   [ -f /opt/obsidian/resources/app.asar ] && sudo find /opt/obsidian -name 'icon.png' -exec \
     sudo install -Dm644 {} /usr/local/share/icons/hicolor/512x512/apps/obsidian.png \; 2>/dev/null
-  ok "Obsidian instalado en /opt/obsidian ($(basename "$url"))"
+  ok "Obsidian installed in /opt/obsidian ($(basename "$url"))"
 }
 
 do_typora() {
@@ -2559,7 +2559,7 @@ for k in "${SELECTED[@]}"; do
 done
 
 title "Resumen"
-[ ${#OK_LIST[@]} -gt 0 ] && ok "instalado: ${OK_LIST[*]}"
+[ ${#OK_LIST[@]} -gt 0 ] && ok "installed: ${OK_LIST[*]}"
 if [ ${#KO_LIST[@]} -gt 0 ]; then
   fail "failed: ${KO_LIST[*]}"
   # The working directory is not deleted: the build.log files are in there,
@@ -2685,7 +2685,7 @@ host_script() {
 #!/bin/bash
 # Run this ON THE MAC. Syncs the clipboard with the VM through whichever
 # folder you have shared in the VM's UTM settings.
-#   ./clipboard-mac.sh ~/ruta/de/la/carpeta/compartida
+#   ./clipboard-mac.sh ~/path/to/the/shared/folder
 set -uo pipefail
 DIR="${1:?usage: $0 <folder shared with the VM>}"
 F="$DIR/.clipboard"
@@ -2712,7 +2712,7 @@ vigilar() {
     echo "In UTM: VM Settings -> Sharing -> pick a folder, then restart." >&2
     exit 1
   fi
-  touch "$FILE" 2>/dev/null || { echo "no puedo escribir en $FILE" >&2; exit 1; }
+  touch "$FILE" 2>/dev/null || { echo "cannot write to $FILE" >&2; exit 1; }
   local ultimo_local ultimo_remoto actual remoto
   ultimo_local="$(wl-paste --no-newline 2>/dev/null || true)"
   ultimo_remoto="$(cat "$FILE" 2>/dev/null || true)"
@@ -3206,7 +3206,7 @@ wait_for "localhost:~#" 11 "no root shell in Alpine" 120
 send "export PS1='RDY> '; echo TOK_SH_\$?\r"
 wait_for "TOK_SH_0" 12 "no se pudo fijar el prompt" 60
 
-# --- localizar y montar el ISO de aprovisionamiento
+# --- locate and mount the provisioning ISO
 send "mkdir -p /media/prov; for d in /dev/vd? /dev/sr?; do mount -t iso9660 -o ro \$d /media/prov 2>/dev/null && \[ -f /media/prov/stage1.sh \] && break; umount /media/prov 2>/dev/null; done; ls /media/prov; echo TOK_PROV_\$?\r"
 wait_for "TOK_PROV_0" 13 "no se encontró el ISO de aprovisionamiento" 120
 
@@ -3335,7 +3335,7 @@ wait_for "TOK_PROV_0" 13 "ISO de aprovisionamiento" 120
 set timeout -1
 send "export FIXSCRIPT=$FIX; sh /media/prov/repair.sh 2>&1 | tee /tmp/repair.log\r"
 expect {
-    -ex "TOK_REPAIR_0" { puts "\n\n===== REPARACION COMPLETADA =====\n" }
+    -ex "TOK_REPAIR_0" { puts "\n\n===== REPAIR COMPLETED =====\n" }
     -re {TOK_REPAIR_[1-9][0-9]*} { puts "\n\n!!!!! LA REPARACION FALLO !!!!!\n"; exit 20 }
     eof { puts "\n!! EOF"; exit 16 }
 }
@@ -3645,7 +3645,7 @@ fi
 echo ""
 echo "Bundle:  $BUNDLE"
 echo "UUID:    $VM_UUID"
-echo "Arrancar: /Applications/UTM.app/Contents/MacOS/utmctl start \"$NAME\""
+echo "Start it: /Applications/UTM.app/Contents/MacOS/utmctl start \"$NAME\""
 __PAYLOAD_SCRIPTS_MAKE-UTM_SH__
 chmod +x "$W/scripts/make-utm.sh"
   # Every value is quoted: config.env is consumed with "source" and any of
@@ -3715,7 +3715,7 @@ ph_build() {
   rm -f "$W/provision/provision.iso"
   hdiutil makehybrid -iso -joliet -default-volume-name PROVISION -o "$W/provision/provision.iso" "$d" >/dev/null
   rm -rf "$d"
-  ok "ISO de aprovisionamiento $(du -h "$W/provision/provision.iso" | cut -f1)"
+  ok "provisioning ISO $(du -h "$W/provision/provision.iso" | cut -f1)"
 
   # Rebuilding discards the previous disk, which is ~40 min of work. If there
   # one and the session is interactive, ask; otherwise a copy is kept.
@@ -3786,7 +3786,7 @@ ph_verify() {
   # This used to be "warn + return 0": with no serial port there is no
   # verification possible, and going on to sanitize/package packaged an image
   # nobody has
-  # mirado. Si de verdad quieres saltartelo: --from sanitize.
+  # looked at. If you really want to skip it: --from sanitize.
   [[ -n $pty ]] || die "could not open the serial port for '$VM_NAME'; without it no verification is possible (to carry on anyway: --from sanitize)"
   # This phase used to collect metrics and compare them with nothing, so it
   # ended in "ok" no matter what. Now the guest emits a verdict and the host
@@ -3876,7 +3876,7 @@ ph_sanitize() {
   [[ -s $src ]] || src="$W/vm/omarchy-arm.qcow2"
   rm -f "$W/dist/dist.qcow2"
   cp -c "$src" "$W/dist/dist.qcow2" 2>/dev/null || cp "$src" "$W/dist/dist.qcow2"
-  ok "copia de trabajo hecha (la VM original no se toca)"
+  ok "working copy made (the original VM is untouched)"
 
   make_iso "$W/provision/repair.iso" "$W/provision/repair.sh" "$W/provision/sanitize.sh" \
            "$W/provision/config.env" "$W/provision/extras.sh" "$W/provision/armsync.sh"
@@ -3905,7 +3905,7 @@ ph_sanitize() {
 
 # ────────────────────────────── fase: package ──────────────────────────────
 ph_package() {
-  phase "package · compactar y comprimir"
+  phase "package - compact and compress"
   [[ -s $W/dist/dist.qcow2 ]] || die "there is no sanitized image; run the sanitize phase"
   info "compacting and compressing the qcow2's clusters..."
   rm -f "$W/dist/slim.qcow2"
@@ -4304,7 +4304,7 @@ cuestionario() {
     [[ -f "$W/answers.env" ]] || save_answers
     return
   fi
-  phase "configuracion"
+  phase "configuration"
   info "Enter accepts the value in brackets. Detected from your Mac."
   echo
 

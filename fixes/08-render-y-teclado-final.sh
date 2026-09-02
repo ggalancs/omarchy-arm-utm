@@ -22,4 +22,4 @@ pkill -x alacritty 2>/dev/null; sleep 1
 env LIBGL_ALWAYS_SOFTWARE=1 setsid alacritty >/dev/null 2>&1 &
 sleep 8
 hyprctl clients 2>/dev/null | grep -E "class:|mapped:|title:" | head -6
-grim /tmp/listo.png && ls -l /tmp/listo.png
+grim /tmp/ready.png && ls -l /tmp/ready.png

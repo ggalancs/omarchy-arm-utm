@@ -37,7 +37,7 @@ sudo systemctl enable spice-vdagentd.socket 2>&1 | tail -1 || true
 # On Wayland spice-vdagent provides the clipboard (resolution is virtio-gpu's job).
 # Started with the session from the user's autostart.
 cat > ~/.config/hypr/autostart.lua <<'LUA'
--- Procesos extra al iniciar la sesion.
+-- Extra processes started with the session.
 hl.on("hyprland.start", function()
   -- Portapapeles compartido con el host de UTM
   hl.exec_cmd("uwsm-app -- spice-vdagent")

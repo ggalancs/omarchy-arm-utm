@@ -31,7 +31,7 @@ wait_for "localhost:~#" 11 "no root shell in Alpine" 120
 send "export PS1='RDY> '; echo TOK_SH_\$?\r"
 wait_for "TOK_SH_0" 12 "no se pudo fijar el prompt" 60
 
-# --- localizar y montar el ISO de aprovisionamiento
+# --- locate and mount the provisioning ISO
 send "mkdir -p /media/prov; for d in /dev/vd? /dev/sr?; do mount -t iso9660 -o ro \$d /media/prov 2>/dev/null && \[ -f /media/prov/stage1.sh \] && break; umount /media/prov 2>/dev/null; done; ls /media/prov; echo TOK_PROV_\$?\r"
 wait_for "TOK_PROV_0" 13 "no se encontró el ISO de aprovisionamiento" 120
 

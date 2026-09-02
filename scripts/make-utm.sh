@@ -247,4 +247,4 @@ fi
 echo ""
 echo "Bundle:  $BUNDLE"
 echo "UUID:    $VM_UUID"
-echo "Arrancar: /Applications/UTM.app/Contents/MacOS/utmctl start \"$NAME\""
+echo "Start it: /Applications/UTM.app/Contents/MacOS/utmctl start \"$NAME\""

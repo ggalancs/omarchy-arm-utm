@@ -185,7 +185,7 @@ log "final sweep for references to $OLD"
 echo "  /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null || echo "    none"
 echo "  /home:"; grep -rl "\b$OLD\b" /home/$NEW/.config /home/$NEW/.bashrc 2>/dev/null | head -5 || echo "    none"
 echo "  /usr/local/bin:"; grep -rl "\b$OLD\b" /usr/local/bin 2>/dev/null | head -5 || echo "    none"
-echo "  /usr/share/omarchy (no debe apuntar a /home):"; ls -ld /usr/share/omarchy
+echo "  /usr/share/omarchy (must not point at /home):"; ls -ld /usr/share/omarchy
 
 log "system coherence"
 echo "  passwd: $(getent passwd $NEW)"

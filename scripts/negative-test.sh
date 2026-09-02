@@ -32,7 +32,7 @@ count_failures() {
   case "$1" in
     *VERDICT_CLEAN*) echo 0 ;;
     *VERDICT_WITH_*)   echo "$1" | grep -o "VERDICT_WITH_[0-9]*" | tail -1 | sed "s/.*_//" ;;
-    *)                  echo -1 ;;   # ni una cosa ni la otra: la lista no llego a terminar
+    *)                  echo -1 ;;   # neither one nor the other: the list never got a terminar
   esac
 }
 

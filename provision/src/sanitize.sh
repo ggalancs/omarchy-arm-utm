@@ -420,24 +420,24 @@ fstrim -av 2>&1 | head -2 || true
 # 0, the host saw TOK_REPAIR_0 and called the image clean. If usermod failed,
 # an image went out carrying the builder's username and password.
 log "invariants of the distributable image"
-FALLOS=0
-mal() { echo "  ✗ $*"; FALLOS=$((FALLOS+1)); }
-bien() { echo "  ✓ $*"; }
+FAILURES=0
+bad() { echo "  ✗ $*"; FAILURES=$((FAILURES+1)); }
+ok_() { echo "  ✓ $*"; }
 
-getent passwd "$NEW" >/dev/null && bien "existe el usuario $NEW" || mal "no existe el usuario $NEW"
+getent passwd "$NEW" >/dev/null && ok_ "user $NEW exists" || bad "no user $NEW exists"
 if [ "$OLD" != "$NEW" ]; then
-  getent passwd "$OLD" >/dev/null && mal "el usuario del constructor ($OLD) sigue existiendo" \
-                                  || bien "the build account no longer exists"
+  getent passwd "$OLD" >/dev/null && bad "the build account ($OLD) is still there" \
+                                  || ok_ "the build account no longer exists"
 fi
 [ -d /usr/share/omarchy ] && [ ! -L /usr/share/omarchy ] \
-  && bien "/usr/share/omarchy es un directorio real" \
-  || mal "/usr/share/omarchy no es un directorio real"
+  && ok_ "/usr/share/omarchy is a real directory" \
+  || bad "/usr/share/omarchy is not a real directory"
 
 N_CMD=$(find /usr/bin -maxdepth 1 -name 'omarchy-*' | wc -l)
-[ "$N_CMD" -ge 400 ] && bien "$N_CMD comandos omarchy-*" || mal "only $N_CMD omarchy-* commands (expected >=400)"
+[ "$N_CMD" -ge 400 ] && ok_ "$N_CMD comandos omarchy-*" || bad "only $N_CMD omarchy-* commands (expected >=400)"
 
-N_ROTO=$(find /usr/bin /usr/local/bin /home/"$NEW" -xdev -xtype l 2>/dev/null | wc -l)
-[ "$N_ROTO" -le 5 ] && bien "$N_ROTO enlaces colgando" || mal "$N_ROTO enlaces colgando"
+N_DANGLING=$(find /usr/bin /usr/local/bin /home/"$NEW" -xdev -xtype l 2>/dev/null | wc -l)
+[ "$N_DANGLING" -le 5 ] && ok_ "$N_DANGLING dangling links" || bad "$N_DANGLING dangling links"
 
 # Filenames, not just content: the sweep above uses grep -rl, which looks
 # inside files. A file that CARRIES the builder's name in its own path (mise
@@ -458,28 +458,28 @@ if [ "$OLD" != "$NEW" ]; then
   fi
   RESTAN=$(find /home/"$NEW" /etc /usr/local /opt -xdev -mindepth 1 \
       -regextype posix-extended -regex "$RX_OLD" 2>/dev/null | wc -l)
-  [ "$RESTAN" -eq 0 ] && bien "no filename mentions $OLD" || mal "$RESTAN names still mention $OLD"
+  [ "$RESTAN" -eq 0 ] && ok_ "no filename mentions $OLD" || bad "$RESTAN names still mention $OLD"
 fi
 
 # The clipboard: the five pieces that can break it.
-[ -x /usr/local/bin/omarchy-arm-vdagent ] && bien "clipboard agent installed" || mal "/usr/local/bin/omarchy-arm-vdagent is missing"
+[ -x /usr/local/bin/omarchy-arm-vdagent ] && ok_ "clipboard agent installed" || bad "/usr/local/bin/omarchy-arm-vdagent is missing"
 # We are in a chroot here and the daemon is not running, so this checks the
 # file that passes it the flag. On the booted image the process itself is
 # checked, which is stronger (scripts/guest-check.sh).
 grep -qs -- '-X' /etc/conf.d/spice-vdagentd \
-  && bien "spice-vdagentd recibira -X" || mal "spice-vdagentd without -X: the clipboard will not work"
+  && ok_ "spice-vdagentd recibira -X" || bad "spice-vdagentd without -X: the clipboard will not work"
 [ -e /etc/systemd/system/spice-vdagentd.service.d/override.conf ] \
-  && mal "the old spice-vdagentd override is still there" || bien "no old override left"
+  && bad "the old spice-vdagentd override is still there" || ok_ "no old override left"
 [ -e "/home/$NEW/.config/systemd/user/graphical-session.target.wants/omarchy-arm-vdagent.service" ] \
-  && bien "agente habilitado en la sesion grafica" \
-  || mal "the agent was not enabled for $NEW"
+  && ok_ "agent enabled in the graphical session" \
+  || bad "the agent was not enabled for $NEW"
 if grep -vs -- '^[[:space:]]*--' "/home/$NEW/.config/hypr/autostart.lua" 2>/dev/null | grep -qs spice-vdagent; then
-  mal "autostart.lua launches the stock agent: vdagentd will disconnect both"
+  bad "autostart.lua launches the stock agent: vdagentd will disconnect both"
 else
-  bien "autostart.lua no lanza el agente oficial"
+  ok_ "autostart.lua no lanza el agente oficial"
 fi
 
-[ "$(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l)" -eq 0 ] && bien "no ssh host keys" || mal "ssh host keys left behind"
+[ "$(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l)" -eq 0 ] && ok_ "no ssh host keys" || bad "ssh host keys left behind"
 # The layout that ships. Not a cosmetic detail: with the builder's layout, a
 # user could not type ':' in nvim to fix it, and another could not type his own
 # password. Both cost hours and both were silent.
@@ -513,20 +513,20 @@ if [ "$OLD" != "$NEW" ]; then
       [ -f "$b" ] || continue
       strings "$b" 2>/dev/null | grep -q "/home/$OLD" && SUCIOS="$SUCIOS $b"
     done
-    [ -z "$SUCIOS" ] && bien "no /usr/local/bin binary mentions the build account" \
-                     || mal "binaries carrying the build path inside:$SUCIOS (see RUSTFLAGS/CARGO_HOME in stage3)"
+    [ -z "$SUCIOS" ] && ok_ "no /usr/local/bin binary mentions the build account" \
+                     || bad "binaries carrying the build path inside:$SUCIOS (see RUSTFLAGS/CARGO_HOME in stage3)"
   fi
 fi
-[ -f /root/failed-packages.txt ] && mal "/root/failed-packages.txt left behind" \
-                                 || bien "no build-account leftovers in /root"
+[ -f /root/failed-packages.txt ] && bad "/root/failed-packages.txt left behind" \
+                                 || ok_ "no build-account leftovers in /root"
 
 N_HUERF=$(pacman -Qtdq 2>/dev/null | wc -l)
-[ "$N_HUERF" -eq 0 ] && bien "no orphan packages" \
-                     || mal "$N_HUERF orphan packages: the first update will prompt about them"
+[ "$N_HUERF" -eq 0 ] && ok_ "no orphan packages" \
+                     || bad "$N_HUERF orphan packages: the first update will prompt about them"
 
 echo ""
-if [ "$FALLOS" -ne 0 ]; then
-  echo "==> SANITIZE_FAILED: $FALLOS broken invariant(s); this image must NOT be distributed"
+if [ "$FAILURES" -ne 0 ]; then
+  echo "==> SANITIZE_FAILED: $FAILURES broken invariant(s); this image must NOT be distributed"
   exit 1
 fi
 echo ""

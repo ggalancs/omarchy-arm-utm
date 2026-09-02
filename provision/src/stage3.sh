@@ -99,7 +99,7 @@ log "wiring Omarchy into the system paths (stands in for the pacman package)"
 sudo ln -sfn "$OMARCHY_PATH" /usr/share/omarchy
 # The commands go to /usr/bin, which is where upstream's package() puts them.
 # Putting them in /usr/local/bin looked cleaner (no clash with pacman) but
-# rompe cosas: el arbol lleva 13 rutas /usr/bin/omarchy-* cableadas, cinco de
+# breaks things: the tree has 13 hardcoded /usr/bin/omarchy-* paths, five of
 # them in .service files. enable-user-units.sh failed for that reason, and
 # since first-run is only marked done when NO step fails, it repeated on every
 # login, re-sending the "Update System" notice forever.
@@ -195,8 +195,8 @@ cat > ~/.config/hypr/monitors.lua <<'LUA'
 --  2. Resolucion fija 1920x1200 en vez de "preferred", que da 1280x800.
 --
 -- IMPORTANTE: cambiar el modo EN CALIENTE (hyprctl / recarga de config) rompe
--- el renderizado bajo virgl: el escritorio se queda en blanco hasta reiniciar.
--- Aplicado desde el arranque funciona bien. Si tocas esto, reinicia la VM.
+-- rendering under virgl: the desktop stays blank until you restart.
+-- Applied from boot it works fine. If you change this, restart the VM.
 --
 -- Para que la resolucion siga al tamano de la ventana de UTM:
 --   hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
@@ -207,7 +207,7 @@ rm -f ~/.config/hypr/monitors.conf ~/.config/hypr/autostart.conf
 
 # Clipboard shared with the UTM host
 cat > ~/.config/hypr/autostart.lua <<'LUA'
--- Procesos extra al iniciar la sesion.
+-- Extra processes started with the session.
 hl.on("hyprland.start", function()
   -- spice-vdagent NO se lanza: su portapapeles es X11 y bajo Hyprland muere
   -- con "cannot open display". Peor aun, si arranca, vdagentd ve dos agentes

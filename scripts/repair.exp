@@ -31,7 +31,7 @@ wait_for "TOK_PROV_0" 13 "ISO de aprovisionamiento" 120
 set timeout -1
 send "export FIXSCRIPT=$FIX; sh /media/prov/repair.sh 2>&1 | tee /tmp/repair.log\r"
 expect {
-    -ex "TOK_REPAIR_0" { puts "\n\n===== REPARACION COMPLETADA =====\n" }
+    -ex "TOK_REPAIR_0" { puts "\n\n===== REPAIR COMPLETED =====\n" }
     -re {TOK_REPAIR_[1-9][0-9]*} { puts "\n\n!!!!! LA REPARACION FALLO !!!!!\n"; exit 20 }
     eof { puts "\n!! EOF"; exit 16 }
 }

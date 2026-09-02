@@ -62,7 +62,7 @@ host_script() {
 #!/bin/bash
 # Run this ON THE MAC. Syncs the clipboard with the VM through whichever
 # folder you have shared in the VM's UTM settings.
-#   ./clipboard-mac.sh ~/ruta/de/la/carpeta/compartida
+#   ./clipboard-mac.sh ~/path/to/the/shared/folder
 set -uo pipefail
 DIR="${1:?usage: $0 <folder shared with the VM>}"
 F="$DIR/.clipboard"
@@ -89,7 +89,7 @@ vigilar() {
     echo "In UTM: VM Settings -> Sharing -> pick a folder, then restart." >&2
     exit 1
   fi
-  touch "$FILE" 2>/dev/null || { echo "no puedo escribir en $FILE" >&2; exit 1; }
+  touch "$FILE" 2>/dev/null || { echo "cannot write to $FILE" >&2; exit 1; }
   local ultimo_local ultimo_remoto actual remoto
   ultimo_local="$(wl-paste --no-newline 2>/dev/null || true)"
   ultimo_remoto="$(cat "$FILE" 2>/dev/null || true)"

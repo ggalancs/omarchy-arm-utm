@@ -72,7 +72,12 @@ def audit(paths):
             t = p.read_text()
         except Exception:
             continue
-        n = sum(1 for _, l in comment_lines(p, t) if ES.search(FILEISH.sub(' ', l)))
+        # The morphological test, same as for strings. The word list below was
+        # what this used, and it let "# usuario durante la construccion" past.
+        n = sum(1 for _, l in comment_lines(p, t)
+                if p.name != 'i18n-audit.py'
+                and (ES.search(FILEISH.sub(' ', l))
+                     or len(spanish_words(FILEISH.sub(' ', l))) >= 2))
         if n:
             rows.append((str(p), n)); total += n
     w = max((len(r[0]) for r in rows), default=10)
@@ -125,7 +130,11 @@ def lint_continuations(paths):
 # `print` is on this list because leaving it off made the audit blind to every
 # Python script in the repo: sync-payloads.py was printing "266 lineas" at the
 # maintainer through a run that reported zero.
-OUTPUT_LINE = re.compile(r'\b(echo|log|warn|die|fail|info|printf|print|note)\b')
+# Every function this codebase prints through, not only the obvious ones. `ok`
+# and `phase` were missing, which is why "working copy made" and a phase
+# title in Spanish came out of a build the audit had cleared.
+OUTPUT_LINE = re.compile(r'\b(echo|log|warn|die|fail|failed|info|printf|print|'
+                         r'note|ok|ok_|okk|bad|title|phase|step|hdr|say)\b')
 QUOTED = re.compile(r'"([^"\\]*(?:\\.[^"\\]*)*)"')
 SUBST = re.compile(r'\$\([^)]*\)|\$\{[^}]*\}|\$\w+|-\w+')
 
@@ -174,8 +183,16 @@ ES_CHARS = re.compile(r'[áéíóúüñ¿¡ÁÉÍÓÚÜÑ]')
 # on English and loud on Spanish.
 MORPH = re.compile(r'(cion|sion|ado|ada|ados|adas|ido|ida|idos|idas|ando|endo|'
                    r'mente|ncia|dad|aje|ajes|oso|osa|iones|ones|encia|ancia|'
-                   r'able|ables|ible|ibles|enes|amos|aron|aban|arse|irse)$',
+                   r'able|ables|ible|ibles|enes|amos|aron|aban|arse|irse|'
+                   r'iento|imiento|amiento|ento)$',
                    re.IGNORECASE)
+# Infinitives, kept apart because -ar and -ir also end a lot of Unix command
+# names: bsdtar, waybar, mkdir. Those are 5 and 6 letters; Spanish infinitives
+# worth catching (compactar, comprimir, arrancar) are 8 or more, so the length
+# bound separates them without a list of tool names that would never be
+# complete.
+INFINITIVE = re.compile(r'(ar|ir)$', re.IGNORECASE)
+INFINITIVE_MIN = 7
 # Words with no distinctive Spanish shape, which morphology cannot reach and
 # the dictionary alone would not flag without also flagging half of English.
 # Kept deliberately short: anything that can be caught by shape is not here.
@@ -211,7 +228,8 @@ def spanish_words(text):
         # not English words either.
         if lw.endswith('s') and (lw[:-1] in ENGLISH or lw[:-2:] in ENGLISH):
             continue
-        if MORPH.search(lw) or lw in PLAIN_ES:
+        if (MORPH.search(lw) or lw in PLAIN_ES
+                or (len(lw) >= INFINITIVE_MIN and INFINITIVE.search(lw))):
             out.append(w)
     return out
 
@@ -261,6 +279,10 @@ def audit_strings(paths):
     total = 0
     rows = []
     for p in paths:
+        # This file carries lists of Spanish words on purpose; scanning it
+        # reports the vocabulary as untranslated text for ever.
+        if getattr(p, 'name', '') == 'i18n-audit.py':
+            continue
         try:
             hits = spanish_strings(p) + spanish_config(p)
         except (OSError, UnicodeDecodeError):
