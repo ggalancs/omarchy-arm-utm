@@ -1684,6 +1684,12 @@ else
 fi
 printf 'KEYMAP=us\nXKBLAYOUT=us\n' > /etc/vconsole.conf
 
+# La zona horaria del constructor (VM_TIMEZONE) tampoco debe viajar en la
+# imagen distribuida. Se deja UTC neutro; cada usuario la fija con
+# 'sudo timedatectl set-timezone <zona>'.
+ln -sf /usr/share/zoneinfo/UTC /etc/localtime
+echo "  zona horaria -> UTC (era la del constructor)"
+
 log "3/10 SDDM: autologin al usuario generico"
 cat > /etc/sddm.conf.d/20-autologin.conf <<EOF
 [Autologin]

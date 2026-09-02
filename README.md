@@ -256,6 +256,9 @@ builder's own layout into the zip). For another layout:
 `hyprctl keyword input:kb_layout es` for the session, or edit
 `~/.config/hypr/input.lua` to persist it.
 
+The image likewise ships UTC as its timezone; set yours with
+`sudo timedatectl set-timezone <zone>`.
+
 ## Proprietary apps
 
 1Password, Obsidian, Typora, LocalSend and Google Chrome are **not** in the
