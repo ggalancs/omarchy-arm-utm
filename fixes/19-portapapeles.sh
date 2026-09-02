@@ -140,6 +140,10 @@ Description=Portapapeles compartido con el anfitrion (SPICE sobre Wayland)
 After=graphical-session.target
 PartOf=graphical-session.target
 ConditionEnvironment=WAYLAND_DISPLAY
+# Sin canal SPICE del anfitrion (p.ej. UTM con el portapapeles compartido
+# desactivado, u otro hipervisor), el agente no tiene con quien hablar:
+# mejor saltarse limpiamente que fallar y reintentar cada pocos segundos.
+ConditionPathExists=/dev/virtio-ports/com.redhat.spice.0
 
 [Service]
 Type=simple
