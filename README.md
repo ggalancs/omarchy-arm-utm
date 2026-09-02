@@ -253,6 +253,9 @@ via `altwin:swap_lalt_lwin`:
 
 ⌥+Space opens the Omarchy menu, ⌥+Return a terminal, ⌥+K the full keybinding list.
 
+The image ships UTC as its timezone; set yours with
+`sudo timedatectl set-timezone <zone>`.
+
 ## Graphics: `omarchy-arm-gpu`
 
 The image ships with software rendering forced on (`LIBGL_ALWAYS_SOFTWARE=1`),

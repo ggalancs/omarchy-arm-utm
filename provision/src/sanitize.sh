@@ -279,6 +279,12 @@ else
   echo "  !! $INPUT not found: the image would ship the builder's layout"
 fi
 printf 'KEYMAP=us\n' > /etc/vconsole.conf
+
+# La zona horaria del constructor (VM_TIMEZONE) no debe viajar en la imagen
+# distribuida. Se deja UTC neutro; cada usuario la fija con
+# 'sudo timedatectl set-timezone <zona>'.
+ln -sf /usr/share/zoneinfo/UTC /etc/localtime
+echo "  zona horaria -> UTC (era la del constructor)"
 echo "  /etc/vconsole.conf: KEYMAP=us"
 
 log "9/10 checking nothing is still tied to $OLD"
