@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Re-embeds provision/src/* into build-omarchy-arm.sh's __PAYLOAD_*__ heredocs."""
 import sys, os
-RAIZ="/Users/gabriel/Development/2026/omarchy_ai"
+# Derived from this file's own location, not hardcoded: the absolute path
+# that used to be here made the script work on exactly one machine, and
+# would have failed on the first CI run.
+RAIZ=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MAPA={
  "__PAYLOAD_PROVISION_STAGE1_SH__":"provision/src/stage1.sh",
  "__PAYLOAD_PROVISION_STAGE2_SH__":"provision/src/stage2.sh",
@@ -34,8 +37,16 @@ for marca,rel in MAPA.items():
     lineas[ini+1:fin]=nuevo
     cambios+=1
     print(f"  re-embedded {os.path.basename(rel)} ({len(nuevo)} lines)")
-open(p,"w").write("\n".join(lineas))
+# --check does not write: it reports drift and exits non-zero, which is what
+# CI needs. Without it a pipeline that ran the sync would "pass" by silently
+# fixing the tree it was meant to be judging.
+CHECK = "--check" in sys.argv
+if not CHECK:
+    open(p,"w").write("\n".join(lineas))
 print(f"  {cambios} payload(s) updated" if cambios else "  everything was already in sync")
+if CHECK and cambios:
+    print(f"  !! {cambios} payload(s) differ from their source; run scripts/sync-payloads.py")
+    sys.exit(1)
 
 # A payload with no entry in MAPA is a file nobody re-syncs: you edit the
 # source, nothing happens, and the builder keeps deploying the old one.

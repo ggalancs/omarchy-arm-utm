@@ -1,0 +1,72 @@
+# Runs the checks that can run without building a 3.6 GB image. Everything
+# here has caught a real defect in this repository at least once, which is the
+# bar for being in it: a check that has never failed is a check nobody has
+# tested. Adapted from the workflow proposed by Fail-Safe in PR #6.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax
+        run: |
+          set -euo pipefail
+          fail=0
+          while IFS= read -r f; do
+            bash -n "$f" || { echo "::error file=$f::bash -n failed"; fail=1; }
+          done < <(git ls-files '*.sh')
+          exit $fail
+
+      - name: Python syntax
+        run: |
+          set -euo pipefail
+          while IFS= read -r f; do python3 -m py_compile "$f"; done < <(git ls-files '*.py')
+
+      # A comment between two backslash-continued lines is accepted by `bash -n`
+      # and silently truncates the command. It cost a 40-minute build: the QEMU
+      # invocation lost networking, the RNG and -nographic.
+      - name: No comments inside continued commands
+        run: python3 scripts/i18n-audit.py lint-cont $(git ls-files '*.sh')
+
+      # The generated copies inside build-omarchy-arm.sh must match their
+      # sources. When they drifted, the script shipped a README asserting things
+      # that were no longer true.
+      - name: Payloads match their sources
+        run: python3 scripts/sync-payloads.py --check
+
+      # Everything the code says and prints has to be in English. The word-list
+      # version of this check reported zero while the build script printed 34
+      # Spanish messages at whoever ran it.
+      - name: No Spanish in code, comments or output
+        run: |
+          set -euo pipefail
+          python3 scripts/i18n-audit.py audit   $(git ls-files)
+          python3 scripts/i18n-audit.py strings $(git ls-files)
+
+      # Three commands have been documented that did not exist: two renamed
+      # flags left stale in the README, and one invented while writing the
+      # paragraph that introduced it.
+      - name: Documented flags exist
+        run: python3 scripts/check-documented-flags.py
+
+      - name: ShellCheck (errors only)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          set -euo pipefail
+          fail=0
+          while IFS= read -r f; do
+            shellcheck -S error -e SC1090,SC1091 "$f" || fail=1
+          done < <(git ls-files '*.sh')
+          exit $fail

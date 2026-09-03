@@ -1,3 +1,7 @@
+#!/bin/bash
+# Meant to be run inside a live Hyprland session on the guest. It had no
+# shebang, so `./08-...` ran under whatever shell the caller happened to
+# have, and its raw URL is already published for people to fetch.
 export XDG_RUNTIME_DIR=/run/user/1000 PATH=/usr/local/bin:$PATH
 export HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr | head -1)
 export WAYLAND_DISPLAY=$(ls /run/user/1000 | grep -m1 '^wayland-[0-9]')
