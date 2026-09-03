@@ -211,6 +211,7 @@ changes
 check_pin
 cmd
 confirm
+contract
 count_failures
 cur
 current
@@ -262,6 +263,7 @@ lit
 load_answers
 log
 make_iso
+missing
 mode
 ncpu
 need_sudo
@@ -309,6 +311,7 @@ tgz
 title
 tmp
 try_n
+ttfx
 ulog
 unverified_gate
 url
