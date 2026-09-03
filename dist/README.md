@@ -260,6 +260,18 @@ rebuilds most of them for aarch64. It is a community repository: unofficial and
 unsigned, the same trust model as Omarchy's own. If you add it, packaging bugs
 belong to them, not here.
 
+### Verification
+
+1Password is installed only if its GPG signature verifies: it is a password
+manager, and an unverified one is worse than none. Obsidian and Pinta are
+fetched over TLS from their vendor, who publishes no signature or checksum,
+so the installer stops and says so. TLS proves who served the bytes, not who
+built them. To accept that:
+
+```bash
+ALLOW_UNVERIFIED=yes omarchy-arm-extras obsidian
+```
+
 ## Your own apps
 
 `omarchy-arm-extras` covers a fixed list. For anything else, grab

@@ -11,6 +11,7 @@
 # reported, which forces a decision on every new identifier rather than hoping
 # a heuristic notices. Adding one is a line in a diff somebody reads.
 AFTER
+ALLOW_UNVERIFIED
 ALPINE_NAME
 ALREADY
 ANSWER_VARS
@@ -306,6 +307,7 @@ title
 tmp
 try_n
 ulog
+unverified_gate
 url
 usage
 val
@@ -314,6 +316,7 @@ vlog
 want
 warn
 watch_folder
+what
 write_payloads
 write_readme
 wsha

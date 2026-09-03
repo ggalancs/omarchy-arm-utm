@@ -2298,7 +2298,7 @@ fail()  { echo "  ${c_err}✗${c_off} $*" >&2; }
 WORK="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy-arm-extras"
 OK_LIST=(); KO_LIST=()
 
-# ── catalogo ────────────────────────────────────────────────────────────────
+# ── catalogue ───────────────────────────────────────────────────────────────
 #  key|title|description
 CATALOG=(
   "1password|1Password|Password manager. Official arm64 tarball from AgileBits"
@@ -2316,7 +2316,7 @@ catalog_keys()  { printf '%s\n' "${CATALOG[@]}" | cut -d'|' -f1; }
 catalog_title() { printf '%s\n' "${CATALOG[@]}" | awk -F'|' -v k="$1" '$1==k{print $2}'; }
 catalog_desc()  { printf '%s\n' "${CATALOG[@]}" | awk -F'|' -v k="$1" '$1==k{print $3}'; }
 
-# ── utilidades ──────────────────────────────────────────────────────────────
+# ── helpers ─────────────────────────────────────────────────────────────────
 have() { command -v "$1" >/dev/null 2>&1; }
 
 # Pinta and OBS Studio are free software and travel inside the image; the rest
@@ -2388,7 +2388,27 @@ aur_build() {
   return 1
 }
 
-# ── instaladores ────────────────────────────────────────────────────────────
+# Downloads that upstream publishes no signature or checksum for. Obsidian,
+# Pinta and the .NET runtime are fetched over TLS from their vendor and then
+# installed, and nothing proves the bytes are the ones the vendor built.
+#
+# The options are to pin a hash -- which breaks on every upstream release, for
+# an installer whose whole job is fetching the latest -- or to say so and let
+# the person decide. This says so. Fail-closed behaviour proposed by Fail-Safe
+# in PR #6.
+unverified_gate() {
+  local what="$1"
+  if [ "${ALLOW_UNVERIFIED:-no}" = yes ]; then
+    warn "$what: installing UNVERIFIED (ALLOW_UNVERIFIED=yes)"
+    return 0
+  fi
+  fail "$what: upstream publishes no signature or checksum for this artifact"
+  info "TLS proves who served it, not what they built. To install it anyway:"
+  info "    ALLOW_UNVERIFIED=yes omarchy-arm-extras $what"
+  return 1
+}
+
+# ── installers ──────────────────────────────────────────────────────────────
 
 do_1password() {
   title "1Password"
@@ -2407,8 +2427,15 @@ do_1password() {
     else
       fail "SIGNATURE DOES NOT VERIFY - install aborted"; return 1
     fi
+  elif [ "${ALLOW_UNVERIFIED:-no}" = yes ]; then
+    warn "no .sig available, and ALLOW_UNVERIFIED=yes: installing UNVERIFIED"
   else
-    warn "no .sig available; installing without verifying the signature"
+    # This used to warn and install anyway. For a password manager that is not
+    # a warning, it is a decision taken on the user's behalf. If AgileBits is
+    # not serving the signature, the right answer is to stop.
+    fail "no .sig available: refusing to install a password manager unverified"
+    info "to install it anyway: ALLOW_UNVERIFIED=yes omarchy-arm-extras 1password"
+    return 1
   fi
   tar -xzf "$WORK/1p/1p.tar.gz" -C "$WORK/1p" || { fail "could not extract"; return 1; }
   local src; src=$(find "$WORK/1p" -maxdepth 1 -type d -name '1password-*' | head -1)
@@ -2434,6 +2461,7 @@ do_obsidian() {
         | head -1 | sed 's/.*"\(https[^"]*\)"/\1/')
   [ -n "$url" ] || { fail "no arm64 tarball found in the recent releases"; return 1; }
   info "$(basename "$url")"
+  unverified_gate obsidian || return 1
   mkdir -p "$WORK"; curl -fL --progress-bar "$url" -o "$WORK/obsidian.tar.gz" || { fail "download failed"; return 1; }
   sudo rm -rf /opt/obsidian; sudo mkdir -p /opt/obsidian
   sudo tar -xzf "$WORK/obsidian.tar.gz" -C /opt/obsidian --strip-components=1 || { fail "could not extract"; return 1; }
@@ -2508,6 +2536,7 @@ do_pinta() {
   local file; file=$(curl -fsSL --max-time 30 "$url" | grep -o 'pinta-[0-9][^"]*-any\.pkg\.tar\.zst' | sort -V | tail -1)
   [ -n "$file" ] || { fail "could not find the Pinta package"; return 1; }
   info "$file  ${c_dim}(the path says x86_64 but the package is arch=any)${c_off}"
+  unverified_gate pinta || return 1
   mkdir -p "$WORK"; curl -fL --progress-bar "$url$file" -o "$WORK/$file" || return 1
   sudo pacman -U --noconfirm "$WORK/$file" >/dev/null 2>&1 && ok "$(pacman -Q pinta)" || { fail "pacman -U failed"; return 1; }
   warn "outside the update manager: every new version has to be repeated by hand"
@@ -4408,6 +4437,18 @@ repository, which publishes x86_64 only, so on ARM there is nothing to install.
 rebuilds most of them for aarch64. It is a community repository: unofficial and
 unsigned, the same trust model as Omarchy's own. If you add it, packaging bugs
 belong to them, not here.
+
+### Verification
+
+1Password is installed only if its GPG signature verifies: it is a password
+manager, and an unverified one is worse than none. Obsidian and Pinta are
+fetched over TLS from their vendor, who publishes no signature or checksum,
+so the installer stops and says so. TLS proves who served the bytes, not who
+built them. To accept that:
+
+```bash
+ALLOW_UNVERIFIED=yes omarchy-arm-extras obsidian
+```
 
 ## Your own apps
 
