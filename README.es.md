@@ -272,7 +272,7 @@ build-omarchy-arm.sh   script autónomo con las piezas embebidas
 EMPEZAR.md             guía para ejecutarlo: requisitos y resolución de problemas
 ARTICULO.md            explicación paso a paso de cómo se llegó hasta aquí
 articulo.html          la misma, como página
-dist/                  omarchy-arm-utm.zip + sha256 + LEEME para el destinatario
+dist/                  omarchy-arm-utm.zip + sha256 + README para el destinatario
 dl/                    Alpine virt ISO (sha256) + rootfs de ALARM (MD5)
 provision/src/         stage1..3.sh repair.sh sanitize.sh omarchy-arm-extras hooks/
 scripts/               qemu-build.sh build.exp repair.exp make-utm.sh qemu-shot.sh omssh

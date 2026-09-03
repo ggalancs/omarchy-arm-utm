@@ -3642,9 +3642,9 @@ cat > "$BUNDLE/config.plist" <<PLIST
 		<key>Icon</key>
 		<string>arch-linux</string>
 		<key>Notes</key>
-		<string>Arch Linux ARM (aarch64) + Hyprland + dotfiles de Omarchy 4.
+		<string>Arch Linux ARM (aarch64) + Hyprland + Omarchy 4 dotfiles.
 User: ${NOTES_USER} · Password: ${NOTES_PASS} (root too). Change it with passwd.
-La tecla Option (⌥) actúa como SUPER. Lee LEEME.md.</string>
+The Option key (⌥) acts as SUPER. Read README.md.</string>
 	</dict>
 	<key>System</key>
 	<dict>
@@ -4146,7 +4146,7 @@ write_readme() {
   # script's fell behind and travelled inside the zip asserting false things --
   # 432 commands when there were 439, "the zip is 7 GB" when it was 3.6 -- and
   # even carried an internal note to the maintainer.
-  cat > "$1" <<'__PAYLOAD_LEEME_MD__'
+  cat > "$1" <<'__PAYLOAD_README_MD__'
 # Omarchy on Arch Linux ARM — a UTM image for Apple Silicon
 
 Built with
@@ -4428,7 +4428,7 @@ virtio-gpu.
 
 Unofficial image, unaffiliated with Basecamp or the Omarchy project. Omarchy
 supports x86_64 only; this is an equivalent rebuild on Arch Linux ARM.
-__PAYLOAD_LEEME_MD__
+__PAYLOAD_README_MD__
 }
 
 # ──────────────────────────────────── preguntas ────────────────────────────

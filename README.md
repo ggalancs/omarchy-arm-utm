@@ -403,7 +403,7 @@ ARTICULO.md            how it was figured out (ES)
 provision/src/         stage1..3.sh, repair.sh, sanitize.sh, omarchy-arm-extras, hooks/
 scripts/               qemu, expect harnesses, .utm bundle writer
 fixes/                 the 19 corrections found along the way, as a record
-dist/LEEME.md          the README that ships inside the image (ES)
+dist/README.md         the README that ships inside the image
 ```
 
 ## Status

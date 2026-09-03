@@ -352,6 +352,12 @@ def spanish_strings(path):
 # image the project has published. (No sample is quoted: a Spanish one here
 # would make this file report itself for ever.)
 CONFIG_FIELD = re.compile(r'^\s*(Description|Name|GenericName|Comment|Keywords)=(.+)$')
+# Text inside a plist <string>. The UTM bundle's Notes field is written this
+# way, and it read "La tecla Option actua como SUPER. Lee LEEME.md" -- Spanish,
+# and pointing at a file that had been renamed away. It is the first thing
+# somebody sees when they import the VM, and no scan here was reading it:
+# there is no output function on the line and no Key=Value either.
+PLIST_STRING = re.compile(r'<string>([^<]{8,})</string>')
 
 def spanish_config(path):
     hits = []
@@ -359,10 +365,13 @@ def spanish_config(path):
         return hits
     for n, line in enumerate(open(path, errors='replace'), 1):
         m = CONFIG_FIELD.match(line)
-        if not m:
-            continue
-        if looks_spanish(m.group(2)):
+        if m and looks_spanish(m.group(2)):
             hits.append((n, line.strip()[:78]))
+            continue
+        for text in PLIST_STRING.findall(line):
+            if looks_spanish(text):
+                hits.append((n, line.strip()[:78]))
+                break
     return hits
 
 # Function and variable names. Neither the comment scan nor the string scan

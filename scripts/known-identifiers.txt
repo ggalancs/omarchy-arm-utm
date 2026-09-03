@@ -298,6 +298,7 @@ spec
 src
 started
 state
+text
 tgt
 tgz
 title

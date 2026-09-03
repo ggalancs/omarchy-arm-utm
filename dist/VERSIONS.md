@@ -87,7 +87,7 @@ Everything here came from people who used the image and reported what broke.
   session was configured.
 - **A note where you will actually find it.** `/mnt/share` exists even when nothing
   is shared, so an empty or erroring directory looked like a broken feature.
-  `/mnt/LEEME-carpeta-compartida.txt` explains what to do. It sits in `/mnt`, not
+  `/mnt/README-no-shared-folder.txt` explains what to do. It sits in `/mnt`, not
   inside `/mnt/share`, because with autofs active and nothing behind it that
   directory cannot even be listed.
 - **A build that fails is a build that fails.** Tools that did not compile were

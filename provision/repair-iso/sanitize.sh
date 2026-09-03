@@ -124,8 +124,8 @@ cat > /etc/motd <<'EOF'
 
 EOF
 install -d -o "$NEW" -g "$NEW" "/home/$NEW/Desktop"
-cp /etc/motd "/home/$NEW/Desktop/LEEME.txt"
-chown "$NEW:$NEW" "/home/$NEW/Desktop/LEEME.txt"
+cp /etc/motd "/home/$NEW/Desktop/README.txt"
+chown "$NEW:$NEW" "/home/$NEW/Desktop/README.txt"
 
 log "8a/10 update hook for ARM"
 # omarchy-update-dev does not update the tree when OMARCHY_PATH is

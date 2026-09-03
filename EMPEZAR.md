@@ -42,7 +42,7 @@ quince ficheros que necesita —las tres etapas de instalación, el sanitizador,
 reparador, el instalador de apps opcionales, el hook de actualización, el agente
 del portapapeles y su puente, el montador de la carpeta compartida, la
 configuración de la VM, los dos arneses de `expect`, el lanzador de QEMU, el
-generador del bundle `.utm` y el LEEME que viaja dentro del zip—, y los escribe
+generador del bundle `.utm` y el README que viaja dentro del zip—, y los escribe
 en disco al arrancar. Puedes copiarlo solo a él a otro Mac y funcionará
 igual.
 
@@ -214,7 +214,7 @@ open *.utm
 ```
 
 Usuario `omarchy`, contraseña `omarchy` (también para root). **Cámbiala nada más
-entrar con `passwd`.** El resto está en el `LEEME.md` que viene dentro del zip.
+entrar con `passwd`.** El resto está en el `README.md` que viene dentro del zip.
 
 Su `sha256` es `a301f6a8e0806a35…`. Al lado hay un `omarchy-arm-utm.zip` de
 6,5 GB: es la primera entrega, y conserva el nombre corto para que los enlaces y

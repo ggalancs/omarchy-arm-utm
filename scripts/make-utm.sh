@@ -99,9 +99,9 @@ cat > "$BUNDLE/config.plist" <<PLIST
 		<key>Icon</key>
 		<string>arch-linux</string>
 		<key>Notes</key>
-		<string>Arch Linux ARM (aarch64) + Hyprland + dotfiles de Omarchy 4.
+		<string>Arch Linux ARM (aarch64) + Hyprland + Omarchy 4 dotfiles.
 User: ${NOTES_USER} · Password: ${NOTES_PASS} (root too). Change it with passwd.
-La tecla Option (⌥) actúa como SUPER. Lee LEEME.md.</string>
+The Option key (⌥) acts as SUPER. Read README.md.</string>
 	</dict>
 	<key>System</key>
 	<dict>

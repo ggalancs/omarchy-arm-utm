@@ -93,8 +93,8 @@ cat > /etc/motd <<'EOF'
 
 EOF
 install -d -o "$NEW" -g "$NEW" "/home/$NEW/Desktop"
-cp /etc/motd "/home/$NEW/Desktop/LEEME.txt"
-chown "$NEW:$NEW" "/home/$NEW/Desktop/LEEME.txt"
+cp /etc/motd "/home/$NEW/Desktop/README.txt"
+chown "$NEW:$NEW" "/home/$NEW/Desktop/README.txt"
 
 log "9/10 checking nothing is still tied to $OLD"
 echo "  referencias en /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null | head -5 || echo "    none"
