@@ -1,0 +1,23 @@
+# Reviewed checksums for the two artifacts the build starts from.
+#
+# The build already checked each download against the checksum the vendor
+# publishes NEXT TO the file. That proves the transfer was not corrupted; it
+# proves nothing about the artifact. If upstream replaces the file, the
+# published checksum is replaced with it and the check still passes.
+#
+# These values are pinned here instead: reviewed once, committed, and compared
+# on every build. They are the exact bytes that produced the image published
+# on 2026-09-03 (sha256 a301f6a8...), which is the strongest provenance this
+# project can offer -- not "what the server served today" but "what the image
+# people downloaded was actually built from".
+#
+# Arch Linux ARM rebuilds its rootfs every few weeks, so this WILL stop
+# matching. That is the point: the build stops and a person looks, instead of
+# silently absorbing a new artifact. Refresh with:
+#
+#   scripts/update-base-image-pins.sh
+#
+# Proposed by Fail-Safe in PR #6. The two values below were computed
+# independently here and match that PR exactly.
+c81699152db11d2a6dbb7d75348d632fcf5811eff414d7e71876a8bb6d48bc02  alpine-virt-3.24.1-aarch64.iso
+42a4eeaa038994ffd31fa173256ef2f0ef511358eeb41b9ea1f8626391b9b319  ArchLinuxARM-aarch64-latest.tar.gz

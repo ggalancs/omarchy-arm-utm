@@ -202,7 +202,7 @@ detect_from_host() {
   return 0
 }
 
-# ─────────────────────────────── fase: deps ────────────────────────────────
+# ─────────────────────────────── phase: deps ───────────────────────────────
 ph_deps() {
   phase "deps - host dependencies"
   [[ $(uname -s) == Darwin ]] || die "this only runs on macOS"
@@ -230,7 +230,29 @@ ph_deps() {
 # depend on deps having run.
 ensure_dirs() { mkdir -p "$W"/{dl,vm,provision,scripts,logs,dist,shots}; }
 
-# ─────────────────────────────── fase: fetch ───────────────────────────────
+# Compares an artifact against the reviewed pin in checksums/base-images.sha256.
+# The vendor's own published checksum, which the download already checks, only
+# proves the transfer: replace the file upstream and the published checksum is
+# replaced with it. This compares against a value reviewed here and committed,
+# so an upstream change stops the build instead of being absorbed in silence.
+# Proposed by Fail-Safe in PR #6.
+PINS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/checksums/base-images.sha256"
+check_pin() {
+  local file="$1" name="$2" want got
+  [[ -r $PINS ]] || { warn "no $PINS: base images left unpinned"; return 0; }
+  want=$(awk -v n="$name" '$2 == n {print $1}' "$PINS")
+  [[ -n $want ]] || { warn "$name is not pinned in checksums/base-images.sha256"; return 0; }
+  got=$(shasum -a 256 "$file" | awk '{print $1}')
+  if [[ $want != "$got" ]]; then
+    warn "$name does not match its reviewed pin"
+    warn "  expected $want"
+    warn "  got      $got"
+    die  "upstream changed this artifact. Look at why, then: scripts/update-base-image-pins.sh \"$W\""
+  fi
+  info "$name matches its reviewed pin"
+}
+
+# ─────────────────────────────── phase: fetch ──────────────────────────────
 ph_fetch() {
   phase "fetch · base images"
   local iso="$W/dl/alpine-virt-aarch64.iso"
@@ -261,6 +283,7 @@ ph_fetch() {
     mv "$W/dl/$(basename "$iso").parcial" "$iso"
     [[ -n $wsha ]] && info "sha256 verified" || warn "no published sha256: not verified"
   fi
+  check_pin "$iso" "${latest:-$ALPINE_ISO}"
   ok "Alpine $(du -h "$iso" | cut -f1)"
 
   if [[ ! -s $tgz ]]; then
@@ -282,11 +305,12 @@ ph_fetch() {
     [[ ${FETCH_RETRY:-0} -ge 1 ]] && die "the ALARM rootfs still does not match after retrying"
     FETCH_RETRY=1 ph_fetch; return
   else
+    check_pin "$tgz" "ArchLinuxARM-aarch64-latest.tar.gz"
     ok "rootfs ALARM $(du -h "$tgz" | cut -f1), MD5 verified"
   fi
 }
 
-# ────────────────────────────── fase: prepare ──────────────────────────────
+# ────────────────────────────── phase: prepare ─────────────────────────────
 ph_prepare() {
   phase "prepare - package list"
   # quattro is a pre-release branch: when it gets merged or deleted, everything
@@ -3784,7 +3808,7 @@ make_iso() {  # make_iso <destino.iso> <fichero...>
   rm -rf "$d"
 }
 
-# ─────────────────────────────── fase: build ───────────────────────────────
+# ─────────────────────────────── phase: build ──────────────────────────────
 ph_build() {
   phase "build - disk build (headless, QEMU + HVF)"
   write_payloads
@@ -3840,7 +3864,7 @@ ph_build() {
   ok "disk built: $(du -h "$W/vm/omarchy-arm.qcow2" | cut -f1)"
 }
 
-# ──────────────────────────────── fase: utm ────────────────────────────────
+# ──────────────────────────────── phase: utm ───────────────────────────────
 ph_utm() {
   phase "utm · bundle .utm"
   write_payloads
@@ -3867,7 +3891,7 @@ ph_utm() {
   ok "bundle created in $DOCS/$VM_NAME.utm"
 }
 
-# ─────────────────────────────── fase: verify ──────────────────────────────
+# ─────────────────────────────── phase: verify ─────────────────────────────
 ph_verify() {
   phase "verify - boot and check"
   "$UTMCTL" start "$VM_NAME" >/dev/null 2>&1 || true
@@ -3956,7 +3980,7 @@ EXPEOF
   fi
 }
 
-# ────────────────────────────── fase: sanitize ─────────────────────────────
+# ────────────────────────────── phase: sanitize ────────────────────────────
 ph_sanitize() {
   phase "sanitize - a clean copy for distribution"
   write_payloads
@@ -3994,7 +4018,7 @@ ph_sanitize() {
   ok "image sanitized, with the distribution invariants verified"
 }
 
-# ────────────────────────────── fase: package ──────────────────────────────
+# ────────────────────────────── phase: package ─────────────────────────────
 ph_package() {
   phase "package - compact and compress"
   [[ -s $W/dist/dist.qcow2 ]] || die "there is no sanitized image; run the sanitize phase"
