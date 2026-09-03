@@ -89,7 +89,7 @@ rm -f /usr/local/bin/obsidian /usr/local/share/applications/obsidian.desktop 2>/
 # a SUPER+SHIFT+M that points at a binary which is not there.
 BIND="/home/$NEW/.config/hypr/bindings.lua"
 if [ -f "$BIND" ] && grep -q "open.spotify.com" "$BIND"; then
-  sed -i '/^-- Spotify no tiene cliente nativo/,/^o.bind("SUPER + SHIFT + M", "Spotify"/d' "$BIND"
+  sed -i '/^-- Spotify has no native aarch64 client/,/^o.bind("SUPER + SHIFT + M", "Spotify"/d' "$BIND"
   sed -i '/open\.spotify\.com/d' "$BIND"
   echo "  removed the SUPER+SHIFT+M shortcut for the Spotify web app"
 fi
@@ -107,13 +107,13 @@ rm -rf /root/prov /root/.bash_history /root/.cache 2>/dev/null || true
 log "8/10 notice for the recipient"
 cat > /etc/motd <<'EOF'
 
-  Omarchy sobre Arch Linux ARM (aarch64) — imagen para UTM en Apple Silicon
+  Omarchy on Arch Linux ARM (aarch64) - a UTM image for Apple Silicon
 
   User: omarchy   Password: omarchy   (root too)
 
-  >> CAMBIA LA CONTRASENA AHORA:  passwd
+  >> CHANGE THE PASSWORD NOW:  passwd
 
-  Teclas: la tecla Option (⌥) del Mac actua como SUPER.
+  Keys: the Mac's Option key acts as SUPER.
           ⌥+Space  menu de Omarchy      ⌥+Return  terminal
 
   Missing 1Password, Obsidian, Typora, Spotify or LocalSend?

@@ -33,12 +33,12 @@ OK_LIST=(); KO_LIST=()
 # -- catalogue ---------------------------------------------------------------
 #  key|title|description
 CATALOG=(
-  "1password|1Password|Gestor de contrasenas. Tarball arm64 oficial de AgileBits"
+  "1password|1Password|Password manager. Official arm64 tarball from AgileBits"
   "1password-cli|1Password CLI|The op command. Official static arm64 binary"
   "obsidian|Obsidian|Notas en markdown. AppImage arm64 oficial"
   "typora|Typora|WYSIWYG markdown editor. Official arm64 package via AUR"
   "localsend|LocalSend|Send files between devices. Official arm64 build"
-  "chrome|Google Chrome|Trae Widevine para arm64: habilita Spotify y Netflix web"
+  "chrome|Google Chrome|Brings Widevine for arm64: enables Spotify and Netflix on the web"
   "spotify-web|Spotify (webapp)|Lanzador de open.spotify.com + reasigna SUPER+SHIFT+M"
   "pinta|Pinta|Image editor. Built with Microsoft's arm64 .NET"
   "obs|OBS Studio|Capture and streaming. Built without the browser plugin"
@@ -219,8 +219,8 @@ do_spotify_web() {
   if [ -f "$f" ] && ! grep -q "open.spotify.com" "$f"; then
     cat >> "$f" <<'LUA'
 
--- Spotify no tiene cliente nativo para aarch64: SUPER+SHIFT+M abre la webapp.
--- Necesita Google Chrome, que es quien trae Widevine en arm64.
+-- Spotify has no native aarch64 client: SUPER+SHIFT+M opens the web app.
+-- It needs Google Chrome, which is what carries Widevine on arm64.
 o.bind("SUPER + SHIFT + M", "Spotify", o.launch("google-chrome-stable --app=https://open.spotify.com"))
 LUA
     ok "SUPER+SHIFT+M reassigned (restart the session to apply it)"

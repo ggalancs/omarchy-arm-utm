@@ -98,7 +98,7 @@ pkill -f omarchy-arm-vdagent 2>/dev/null || true
 AUTO="$HOME/.config/hypr/autostart.lua"
 if [ -f "$AUTO" ] && grep -q 'spice-vdagent' "$AUTO"; then
   cp -a "$AUTO" "$AUTO.bak.$(date +%Y%m%d%H%M%S)"
-  sed -i 's|^\([[:space:]]*\)\(hl\.exec_cmd(.*spice-vdagent.*\)$|\1-- \2  -- lo lleva omarchy-arm-vdagent|' "$AUTO"
+  sed -i 's|^\([[:space:]]*\)\(hl\.exec_cmd(.*spice-vdagent.*\)$|\1-- \2  -- handled by omarchy-arm-vdagent|' "$AUTO"
   if grep -q '^[[:space:]]*hl\.exec_cmd(.*spice-vdagent' "$AUTO"; then
     echo "  x could not disable it in $AUTO; comment it out by hand:"
     grep -n 'spice-vdagent' "$AUTO"

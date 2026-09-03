@@ -25,7 +25,7 @@ log "VM tweaks in the right .lua files"
 # monitors.lua.
 cat > ~/.config/hypr/monitors.lua <<'LUA'
 -- Adjusted for a VM (UTM/QEMU virtio-gpu).
--- Omarchy asume pantallas retina 2x; en la VM eso deja todo gigante.
+-- Omarchy assumes 2x retina panels; in a VM that makes everything huge.
 -- List the available resolutions:  hyprctl monitors
 o.env("GDK_SCALE", "1")
 o.monitor("", { mode = "preferred", position = "auto", scale = 1 })

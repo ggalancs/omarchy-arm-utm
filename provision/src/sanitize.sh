@@ -124,7 +124,7 @@ done
 # image ships a SUPER+SHIFT+M pointing at a binary that is not there.
 BIND="/home/$NEW/.config/hypr/bindings.lua"
 if [ -f "$BIND" ] && grep -q "open.spotify.com" "$BIND"; then
-  sed -i '/^-- Spotify no tiene cliente nativo/,/^o.bind("SUPER + SHIFT + M", "Spotify"/d' "$BIND"
+  sed -i '/^-- Spotify has no native aarch64 client/,/^o.bind("SUPER + SHIFT + M", "Spotify"/d' "$BIND"
   sed -i '/open\.spotify\.com/d' "$BIND"
   echo "  removed the SUPER+SHIFT+M shortcut for the Spotify web app"
 fi

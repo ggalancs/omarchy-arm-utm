@@ -189,9 +189,9 @@ cat > ~/.config/hypr/monitors.lua <<'LUA'
 -- See https://wiki.hypr.land/Configuring/Basics/Monitors/
 -- Available modes:  hyprctl monitors all
 --
--- VM en UTM/QEMU con virtio-gpu. Dos ajustes respecto a los valores de Omarchy:
+-- VM in UTM/QEMU with virtio-gpu. Two changes from Omarchy's own values:
 --
---  1. Escala 1 (Omarchy asume pantallas retina 2x; en la VM deja todo gigante).
+--  1. Scale 1 (Omarchy assumes 2x retina panels; in a VM that is huge).
 --  2. Fixed 1920x1200 instead of "preferred", which negotiates 1280x800.
 --
 -- IMPORTANT: changing the mode HOT (hyprctl / config reload) breaks
@@ -209,10 +209,10 @@ rm -f ~/.config/hypr/monitors.conf ~/.config/hypr/autostart.conf
 cat > ~/.config/hypr/autostart.lua <<'LUA'
 -- Extra processes started with the session.
 hl.on("hyprland.start", function()
-  -- spice-vdagent NO se lanza: su portapapeles es X11 y bajo Hyprland muere
-  -- con "cannot open display". Peor aun, si arranca, vdagentd ve dos agentes
+  -- spice-vdagent is NOT started: its clipboard is X11 and under Hyprland it
+  -- dies with "cannot open display". Worse, if it starts, vdagentd sees two
   -- in the same session and disconnects both of them ("multiple agents in one
-  -- session"). El portapapeles lo lleva omarchy-arm-vdagent, como servicio
+  -- session"). The clipboard is handled by omarchy-arm-vdagent, as a user
   -- of the user.
 end)
 LUA

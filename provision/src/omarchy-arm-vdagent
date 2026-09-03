@@ -2,27 +2,27 @@
 """
 omarchy-arm-vdagent -- shared clipboard between the host and Hyprland.
 
-CÓMO FUNCIONA EL PORTAPAPELES DE SPICE, Y POR QUÉ ESTO EXISTE
+HOW THE SPICE CLIPBOARD WORKS, AND WHY THIS EXISTS
 
-    El cliente SPICE del anfitrión NO habla con el agente de sesión: habla con
-    el demonio spice-vdagentd por el puerto virtio. El demonio, a su vez,
-    multiplexa hacia los agentes de sesión por un socket Unix
-    (/run/spice-vdagentd/spice-vdagent-sock). Eso es lo que hace que funcione
-    en cualquier otra VM.
+    The host's SPICE client does NOT talk to the session agent: it talks to
+    the spice-vdagentd daemon over the virtio port. The daemon in turn
+    multiplexes out to the session agents over a Unix socket
+    (/run/spice-vdagentd/spice-vdagent-sock). That is what makes it work in
+    every other VM.
 
     The official agent (spice-vdagent) implements that side, but hands the
-    portapapeles a X11: vdagent.c:421 llama a
-    vdagent_clipboards_new(vdagent_display_get_x11(...)) y no hay una sola
+    clipboard to X11: vdagent.c:421 calls
+    vdagent_clipboards_new(vdagent_display_get_x11(...)) and there is not one
     reference to wlr-data-control anywhere in its repository. Under Hyprland it
-    muere con "cannot open display".
+    dies with "cannot open display".
 
     This program fills exactly that gap: it speaks the udscs protocol to
     spice-vdagentd just as the official agent does, and on the other side uses
     wl-copy/wl-paste. The daemon is still the one talking to the host.
 
-    Un detalle que importa: vdagentd solo atiende al agente de la sesión
-    ACTIVE session of seat0 (vdagentd.c:746). In a VM with Hyprland started by
-    SDDM that check usually fails, so the daemon has to be started with -X
+    One detail that matters: vdagentd only serves the agent of the ACTIVE
+    session of seat0 (vdagentd.c:746). In a VM with Hyprland started by SDDM
+    that check usually fails, so the daemon has to be started with -X
     (disable-session-integration, vdagentd.c:1258).
 
     Text only. No images, no files.

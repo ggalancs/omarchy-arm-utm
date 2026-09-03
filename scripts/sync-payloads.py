@@ -28,13 +28,13 @@ PAYLOAD_MAP={
 p=os.path.join(REPO_ROOT,"build-omarchy-arm.sh")
 file_lines=open(p).read().split("\n")
 changes=0
-for marca,rel in PAYLOAD_MAP.items():
-    ini=next((i for i,l in enumerate(file_lines) if l.rstrip().endswith("<<'%s'"%marca)), None)
-    if ini is None: print(f"  !! no opening marker: {marca}"); continue
-    fin=next(j for j in range(ini+1,len(file_lines)) if file_lines[j]==marca)
+for token,rel in PAYLOAD_MAP.items():
+    start_idx=next((i for i,l in enumerate(file_lines) if l.rstrip().endswith("<<'%s'"%token)), None)
+    if start_idx is None: print(f"  !! no opening marker: {token}"); continue
+    end_idx=next(j for j in range(start_idx+1,len(file_lines)) if file_lines[j]==token)
     new_body=open(os.path.join(REPO_ROOT,rel)).read().rstrip("\n").split("\n")
-    if file_lines[ini+1:fin]==new_body: continue
-    file_lines[ini+1:fin]=new_body
+    if file_lines[start_idx+1:end_idx]==new_body: continue
+    file_lines[start_idx+1:end_idx]=new_body
     changes+=1
     print(f"  re-embedded {os.path.basename(rel)} ({len(new_body)} lines)")
 # --check does not write: it reports drift and exits non-zero, which is what

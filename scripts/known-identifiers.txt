@@ -228,6 +228,7 @@ do_pinta
 do_spotify_web
 do_typora
 doc
+end_idx
 ensure_dirs
 example_list
 fail
@@ -296,6 +297,7 @@ show_state
 shq
 spec
 src
+start_idx
 started
 state
 text
@@ -303,6 +305,7 @@ tgt
 tgz
 title
 tmp
+token
 try_n
 ulog
 url

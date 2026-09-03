@@ -1164,9 +1164,9 @@ cat > ~/.config/hypr/monitors.lua <<'LUA'
 -- See https://wiki.hypr.land/Configuring/Basics/Monitors/
 -- Available modes:  hyprctl monitors all
 --
--- VM en UTM/QEMU con virtio-gpu. Dos ajustes respecto a los valores de Omarchy:
+-- VM in UTM/QEMU with virtio-gpu. Two changes from Omarchy's own values:
 --
---  1. Escala 1 (Omarchy asume pantallas retina 2x; en la VM deja todo gigante).
+--  1. Scale 1 (Omarchy assumes 2x retina panels; in a VM that is huge).
 --  2. Fixed 1920x1200 instead of "preferred", which negotiates 1280x800.
 --
 -- IMPORTANT: changing the mode HOT (hyprctl / config reload) breaks
@@ -1184,10 +1184,10 @@ rm -f ~/.config/hypr/monitors.conf ~/.config/hypr/autostart.conf
 cat > ~/.config/hypr/autostart.lua <<'LUA'
 -- Extra processes started with the session.
 hl.on("hyprland.start", function()
-  -- spice-vdagent NO se lanza: su portapapeles es X11 y bajo Hyprland muere
-  -- con "cannot open display". Peor aun, si arranca, vdagentd ve dos agentes
+  -- spice-vdagent is NOT started: its clipboard is X11 and under Hyprland it
+  -- dies with "cannot open display". Worse, if it starts, vdagentd sees two
   -- in the same session and disconnects both of them ("multiple agents in one
-  -- session"). El portapapeles lo lleva omarchy-arm-vdagent, como servicio
+  -- session"). The clipboard is handled by omarchy-arm-vdagent, as a user
   -- of the user.
 end)
 LUA
@@ -1853,7 +1853,7 @@ done
 # image ships a SUPER+SHIFT+M pointing at a binary that is not there.
 BIND="/home/$NEW/.config/hypr/bindings.lua"
 if [ -f "$BIND" ] && grep -q "open.spotify.com" "$BIND"; then
-  sed -i '/^-- Spotify no tiene cliente nativo/,/^o.bind("SUPER + SHIFT + M", "Spotify"/d' "$BIND"
+  sed -i '/^-- Spotify has no native aarch64 client/,/^o.bind("SUPER + SHIFT + M", "Spotify"/d' "$BIND"
   sed -i '/open\.spotify\.com/d' "$BIND"
   echo "  removed the SUPER+SHIFT+M shortcut for the Spotify web app"
 fi
@@ -2301,7 +2301,7 @@ OK_LIST=(); KO_LIST=()
 # ── catalogo ────────────────────────────────────────────────────────────────
 #  key|title|description
 CATALOG=(
-  "1password|1Password|Gestor de contrasenas. Tarball arm64 oficial de AgileBits"
+  "1password|1Password|Password manager. Official arm64 tarball from AgileBits"
   "1password-cli|1Password CLI|The op command. Official static arm64 binary"
   "obsidian|Obsidian|Notas en markdown. AppImage arm64 oficial"
   "typora|Typora|WYSIWYG markdown editor. Official arm64 package via AUR"
@@ -2490,8 +2490,8 @@ do_spotify_web() {
   if [ -f "$f" ] && ! grep -q "open.spotify.com" "$f"; then
     cat >> "$f" <<'LUA'
 
--- Spotify no tiene cliente nativo para aarch64: SUPER+SHIFT+M abre la webapp.
--- Necesita Google Chrome, que es quien trae Widevine en arm64.
+-- Spotify has no native aarch64 client: SUPER+SHIFT+M opens the web app.
+-- It needs Google Chrome, which is what carries Widevine on arm64.
 o.bind("SUPER + SHIFT + M", "Spotify", o.launch("google-chrome-stable --app=https://open.spotify.com"))
 LUA
     ok "SUPER+SHIFT+M rebound (log out and back in to apply)"
@@ -2819,27 +2819,27 @@ cat > "$W/provision/vdagent.py" <<'__PAYLOAD_PROVISION_VDAGENT_PY__'
 """
 omarchy-arm-vdagent -- shared clipboard between the host and Hyprland.
 
-CÓMO FUNCIONA EL PORTAPAPELES DE SPICE, Y POR QUÉ ESTO EXISTE
+HOW THE SPICE CLIPBOARD WORKS, AND WHY THIS EXISTS
 
-    El cliente SPICE del anfitrión NO habla con el agente de sesión: habla con
-    el demonio spice-vdagentd por el puerto virtio. El demonio, a su vez,
-    multiplexa hacia los agentes de sesión por un socket Unix
-    (/run/spice-vdagentd/spice-vdagent-sock). Eso es lo que hace que funcione
-    en cualquier otra VM.
+    The host's SPICE client does NOT talk to the session agent: it talks to
+    the spice-vdagentd daemon over the virtio port. The daemon in turn
+    multiplexes out to the session agents over a Unix socket
+    (/run/spice-vdagentd/spice-vdagent-sock). That is what makes it work in
+    every other VM.
 
     The official agent (spice-vdagent) implements that side, but hands the
-    portapapeles a X11: vdagent.c:421 llama a
-    vdagent_clipboards_new(vdagent_display_get_x11(...)) y no hay una sola
+    clipboard to X11: vdagent.c:421 calls
+    vdagent_clipboards_new(vdagent_display_get_x11(...)) and there is not one
     reference to wlr-data-control anywhere in its repository. Under Hyprland it
-    muere con "cannot open display".
+    dies with "cannot open display".
 
     This program fills exactly that gap: it speaks the udscs protocol to
     spice-vdagentd just as the official agent does, and on the other side uses
     wl-copy/wl-paste. The daemon is still the one talking to the host.
 
-    Un detalle que importa: vdagentd solo atiende al agente de la sesión
-    ACTIVE session of seat0 (vdagentd.c:746). In a VM with Hyprland started by
-    SDDM that check usually fails, so the daemon has to be started with -X
+    One detail that matters: vdagentd only serves the agent of the ACTIVE
+    session of seat0 (vdagentd.c:746). In a VM with Hyprland started by SDDM
+    that check usually fails, so the daemon has to be started with -X
     (disable-session-integration, vdagentd.c:1258).
 
     Text only. No images, no files.
@@ -3349,7 +3349,7 @@ send "root\r"
 wait_for "localhost:~#" 11 "no root shell in Alpine" 120
 
 send "export PS1='RDY> '; echo TOK_SH_\$?\r"
-wait_for "TOK_SH_0" 12 "no se pudo fijar el prompt" 60
+wait_for "TOK_SH_0" 12 "could not set the prompt" 60
 
 # --- locate and mount the provisioning ISO
 send "mkdir -p /media/prov; for d in /dev/vd? /dev/sr?; do mount -t iso9660 -o ro \$d /media/prov 2>/dev/null && \[ -f /media/prov/stage1.sh \] && break; umount /media/prov 2>/dev/null; done; ls /media/prov; echo TOK_PROV_\$?\r"
@@ -3436,7 +3436,7 @@ expect {
 # --- verification of the resulting disk
 set timeout 600
 send "mount -o subvol=@ /dev/vda2 /mnt 2>/dev/null || mount /dev/vda2 /mnt; mount /dev/vda1 /mnt/boot 2>/dev/null; echo '==== VERIFICATION ===='; echo '-- ESP --'; find /mnt/boot -maxdepth 3 | head -40; echo '-- kernel --'; ls -la /mnt/boot/Image* /mnt/boot/initramfs* 2>/dev/null; echo '-- user --'; ls -la /mnt/home/; echo '-- dotfiles --'; for h in /mnt/home/*/; do echo \"  \$h:\"; ls \"\$h/.config\" 2>/dev/null | tr '\\n' ' '; echo; done; echo; echo '-- hyprland --'; ls -la /mnt/usr/bin/Hyprland 2>/dev/null; echo TOK_VERIFY_\$?\r"
-catch { wait_for "TOK_VERIFY_" 17 "verificación" 600 }
+catch { wait_for "TOK_VERIFY_" 17 "verification" 600 }
 
 send "sync; umount -R /mnt 2>/dev/null; poweroff -f\r"
 expect eof
@@ -4500,7 +4500,7 @@ questionnaire() {
     BUILD_DIST=no
     ask VM_USER     "User of the VM"     "$VM_USER"
     ask VM_PASSWORD "Contrasena"           "$VM_PASSWORD"
-    ask VM_FULLNAME "Nombre completo"      "$VM_FULLNAME"
+    ask VM_FULLNAME "Full name"           "$VM_FULLNAME"
   fi
   echo
   info "summary: $VM_KEYMAP/$VM_XKB · $VM_TIMEZONE · ${UTM_CPUS} cores - ${UTM_MEM} MiB - disk $DISK_SIZE"

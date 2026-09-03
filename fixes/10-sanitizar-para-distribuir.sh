@@ -82,13 +82,13 @@ rm -rf /root/prov /root/.bash_history /root/.cache 2>/dev/null || true
 log "8/10 notice for the recipient"
 cat > /etc/motd <<'EOF'
 
-  Omarchy sobre Arch Linux ARM (aarch64) — imagen para UTM en Apple Silicon
+  Omarchy on Arch Linux ARM (aarch64) - a UTM image for Apple Silicon
 
   User: omarchy   Password: omarchy   (root too)
 
-  >> CAMBIA LA CONTRASENA AHORA:  passwd
+  >> CHANGE THE PASSWORD NOW:  passwd
 
-  Teclas: la tecla Option (⌥) del Mac actua como SUPER.
+  Keys: the Mac's Option key acts as SUPER.
           ⌥+Space  menu de Omarchy      ⌥+Return  terminal
 
 EOF

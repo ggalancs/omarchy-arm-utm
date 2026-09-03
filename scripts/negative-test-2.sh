@@ -52,8 +52,8 @@ for c in htop wget rsync; do
 done
 
 # The build path inside a binary in /usr/local/bin.
-printf '#!/bin/sh\n# /home/builder/algo\n' > /usr/local/bin/falso-con-ruta
-chmod +x /usr/local/bin/falso-con-ruta
+printf '#!/bin/sh\n# /home/builder/something\n' > /usr/local/bin/fake-with-path
+chmod +x /usr/local/bin/fake-with-path
 echo "   + binary mentioning /home/builder"
 EXPECTED+=("binaries carrying the build path")
 

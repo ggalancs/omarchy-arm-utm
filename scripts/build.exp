@@ -29,7 +29,7 @@ send "root\r"
 wait_for "localhost:~#" 11 "no root shell in Alpine" 120
 
 send "export PS1='RDY> '; echo TOK_SH_\$?\r"
-wait_for "TOK_SH_0" 12 "no se pudo fijar el prompt" 60
+wait_for "TOK_SH_0" 12 "could not set the prompt" 60
 
 # --- locate and mount the provisioning ISO
 send "mkdir -p /media/prov; for d in /dev/vd? /dev/sr?; do mount -t iso9660 -o ro \$d /media/prov 2>/dev/null && \[ -f /media/prov/stage1.sh \] && break; umount /media/prov 2>/dev/null; done; ls /media/prov; echo TOK_PROV_\$?\r"
@@ -116,7 +116,7 @@ expect {
 # --- verification of the resulting disk
 set timeout 600
 send "mount -o subvol=@ /dev/vda2 /mnt 2>/dev/null || mount /dev/vda2 /mnt; mount /dev/vda1 /mnt/boot 2>/dev/null; echo '==== VERIFICATION ===='; echo '-- ESP --'; find /mnt/boot -maxdepth 3 | head -40; echo '-- kernel --'; ls -la /mnt/boot/Image* /mnt/boot/initramfs* 2>/dev/null; echo '-- user --'; ls -la /mnt/home/; echo '-- dotfiles --'; for h in /mnt/home/*/; do echo \"  \$h:\"; ls \"\$h/.config\" 2>/dev/null | tr '\\n' ' '; echo; done; echo; echo '-- hyprland --'; ls -la /mnt/usr/bin/Hyprland 2>/dev/null; echo TOK_VERIFY_\$?\r"
-catch { wait_for "TOK_VERIFY_" 17 "verificación" 600 }
+catch { wait_for "TOK_VERIFY_" 17 "verification" 600 }
 
 send "sync; umount -R /mnt 2>/dev/null; poweroff -f\r"
 expect eof

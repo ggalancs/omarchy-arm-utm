@@ -67,7 +67,7 @@ ssh-keygen -q -t ed25519 -N "" -f /etc/ssh/ssh_host_ed25519_key >/dev/null 2>&1 
 systemctl enable sshd >/dev/null 2>&1 \
   && { echo "   + sshd enabled"; EXPECTED+=("sshd:"); }
 
-ln -sf /no/existe/en/ningun/sitio /usr/bin/enlace-roto-de-prueba \
+ln -sf /does/not/exist/anywhere /usr/bin/test-broken-link \
   && { echo "   + dangling link with no owner"; EXPECTED+=("dangling link with no owner"); }
 
 # The check looks at this specific file, not at leftovers in general.
