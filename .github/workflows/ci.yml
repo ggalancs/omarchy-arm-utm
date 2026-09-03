@@ -85,6 +85,12 @@ jobs:
           set -euo pipefail
           for t in tests/*.sh; do echo "::group::$t"; bash "$t"; echo "::endgroup::"; done
 
+      # A published sha256 was corrupted by an update that ran a 16-character
+      # substitution before the 64-character one, leaving half the new hash and
+      # half the old. It read as plausible and pointed at nothing.
+      - name: Published hash is coherent
+        run: python3 scripts/check-published-hash.py
+
       - name: Documented flags exist
         run: python3 scripts/check-documented-flags.py
 

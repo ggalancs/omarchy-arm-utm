@@ -50,6 +50,7 @@ step "no Spanish in strings"             python3 scripts/i18n-audit.py strings  
 step "no Spanish in identifiers"         python3 scripts/i18n-audit.py identifiers $(git ls-files)
 step "no Spanish in prose"               python3 scripts/i18n-audit.py prose       $(git ls-files)
 step "unit tests"                        unit_tests
+step "published hash is coherent"        python3 scripts/check-published-hash.py
 step "documented flags exist"            python3 scripts/check-documented-flags.py
 step "shellcheck (errors only)"          shellcheck_errors
 rm -f /tmp/ci-local.out
