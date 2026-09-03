@@ -52,7 +52,7 @@ INLINE_COMMENT = re.compile(r'\s#\s(.*)$')
 
 def inline_comments(path, text):
     """Yield (lineno, comment) for comments that begin part-way down a line."""
-    if path.suffix in ('.md', '.markdown'):
+    if path.suffix in ('.md', '.markdown') or is_binary(path):
         return
     for i, l in enumerate(text.splitlines(), 1):
         st = l.strip()
@@ -66,8 +66,24 @@ def inline_comments(path, text):
             continue          # the '#' is inside a string
         yield i, m.group(1)
 
+# Binary files are not code. A PNG in shots/ contains bytes that look like
+# comment lines, and four of them were being reported as untranslated text.
+BINARY_SUFFIXES = {'.png', '.jpg', '.jpeg', '.gif', '.ico', '.zip', '.gz',
+                   '.tgz', '.qcow2', '.iso', '.pdf', '.pyc', '.woff', '.woff2'}
+
+def is_binary(path):
+    if path.suffix.lower() in BINARY_SUFFIXES:
+        return True
+    try:
+        with open(path, 'rb') as fh:
+            return b'\0' in fh.read(8192)
+    except OSError:
+        return True
+
 def comment_lines(path, text):
     """Yield (lineno, text) for lines that are entirely a comment."""
+    if is_binary(path):
+        return
     # Markdown is not code: '#' starts a heading, not a comment, so every
     # heading of README.es.md and EMPEZAR.md came back as untranslated text.
     # Those two are Spanish on purpose -- they exist so a Spanish reader has
@@ -239,57 +255,51 @@ TECH_OK = {'unattended', 'automounted', 'sandboxed', 'unicode', 'metadata',
            'bootloader', 'namespace', 'hostname', 'filesystem', 'filesystems',
            'checksum', 'checksums', 'runtime', 'toolchain', 'keyring'}
 
-# Without a dictionary the morphological test has nothing to subtract, so
-# every English word looks unknown and the tool reports the whole tree as
-# Spanish. It used to return an empty set and carry on: locally it read zero,
-# and on a CI runner with no wordlist installed the same commit read 15
-# comments and 80 strings. A checker that changes its answer depending on a
-# file it never mentions is worse than no checker, so this refuses to run.
-DICT_PATHS = ('/usr/share/dict/words', '/usr/share/dict/american-english',
-              '/usr/share/dict/web2')
+# English words in this codebase that carry Spanish morphology, committed in
+# scripts/english-exceptions.txt so the answer is identical on every machine.
+#
+# This replaced subtracting /usr/share/dict/words at runtime, which made the
+# result depend on which wordlist the machine happened to have: the same commit
+# read 0 locally (macOS web2, 235,976 entries) and 14 in CI (Ubuntu wamerican,
+# about 100,000). Neither was wrong; they answered different questions, which
+# is the one thing a checker must never do.
+#
+# It also fixes something quieter: web2 carries Spanish words as loanwords --
+# aviso, clave, estado, dado -- so subtracting it was cancelling the explicit
+# Spanish list below without saying so.
+EXCEPTIONS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               'english-exceptions.txt')
+_EXCEPTIONS = None
 
-def _english_words():
-    for path in (os.environ.get('ENGLISH_WORDLIST'), *DICT_PATHS):
-        if not path:
-            continue
+def english_exceptions():
+    global _EXCEPTIONS
+    if _EXCEPTIONS is None:
         try:
-            with open(path, errors='replace') as fh:
-                words = {w.strip().lower() for w in fh}
-            if len(words) > 10000:
-                return words
+            with open(EXCEPTIONS_FILE, errors='replace') as fh:
+                _EXCEPTIONS = {l.strip().lower() for l in fh
+                               if l.strip() and not l.startswith('#')}
         except OSError:
-            continue
-    sys.exit('i18n-audit: no English wordlist found.\n'
-             'Tried: ' + ', '.join(DICT_PATHS) + '\n'
-             'Install one (Debian/Ubuntu: apt-get install wamerican) or point\n'
-             'ENGLISH_WORDLIST at a file. Without it every English word looks\n'
-             'unknown and this tool reports nonsense.')
-
-# Loaded on first use, not on import: `lint-cont` and `guard` do not need a
-# dictionary, and making them die for want of one turned a wordlist into a
-# dependency of checks that have nothing to do with language.
-_ENGLISH = None
-
-def english_words():
-    global _ENGLISH
-    if _ENGLISH is None:
-        _ENGLISH = _english_words()
-    return _ENGLISH
+            sys.exit('i18n-audit: missing ' + EXCEPTIONS_FILE)
+    return _EXCEPTIONS
 
 def spanish_words(text):
     """Words with Spanish shape that English does not claim."""
     out = []
-    english = english_words()
+    allowed = english_exceptions() | TECH_OK
     for w in re.findall(r"[A-Za-z]{4,}", text):
         lw = w.lower()
-        if lw in english or lw in TECH_OK:
+        # The explicit Spanish list wins over the exceptions: these words are
+        # Spanish in this codebase whatever a dictionary says about them.
+        if lw in PLAIN_ES:
+            out.append(w)
+            continue
+        if lw in allowed:
             continue
         # English plurals: the dictionary lists the singular, so "ones" looked
         # Spanish (it ends in -ones) and flagged a sentence that was English
         # throughout. Spanish plurals survive this -- "libre" and "imagene" are
         # not English words either.
-        if lw.endswith('s') and (lw[:-1] in english or lw[:-1] in TECH_OK
-                                 or lw[:-2] in english):
+        if lw.endswith('s') and (lw[:-1] in allowed or lw[:-2] in allowed):
             continue
         if (MORPH.search(lw) or lw in PLAIN_ES
                 or (len(lw) >= INFINITIVE_MIN and INFINITIVE.search(lw))):
@@ -298,6 +308,8 @@ def spanish_words(text):
 
 def spanish_strings(path):
     hits = []
+    if is_binary(pathlib.Path(path)):
+        return hits
     for n, line in enumerate(open(path, errors='replace'), 1):
         if not OUTPUT_LINE.search(line):
             continue
@@ -326,6 +338,8 @@ CONFIG_FIELD = re.compile(r'^\s*(Description|Name|GenericName|Comment|Keywords)=
 
 def spanish_config(path):
     hits = []
+    if is_binary(pathlib.Path(path)):
+        return hits
     for n, line in enumerate(open(path, errors='replace'), 1):
         m = CONFIG_FIELD.match(line)
         if not m:

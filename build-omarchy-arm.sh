@@ -2299,7 +2299,7 @@ WORK="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy-arm-extras"
 OK_LIST=(); KO_LIST=()
 
 # ── catalogo ────────────────────────────────────────────────────────────────
-#  clave|titulo|descripcion
+#  key|title|description
 CATALOG=(
   "1password|1Password|Gestor de contrasenas. Tarball arm64 oficial de AgileBits"
   "1password-cli|1Password CLI|El comando op. Binario estatico arm64 oficial"

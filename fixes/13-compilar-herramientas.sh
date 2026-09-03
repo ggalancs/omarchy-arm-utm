@@ -77,7 +77,7 @@ build omapkgs omacalc
 build omapkgs omacut
 build omapkgs omawrite
 
-log "########## 4. Rust (lento) ##########"
+log "########## 4. Rust (slow) ##########"
 build aur herdr
 build omapkgs tensaku
 build omapkgs hyprland-preview-share-picker

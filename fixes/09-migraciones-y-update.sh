@@ -61,7 +61,7 @@ log "5/5 re-ejecutando omarchy-update"
 OMARCHY_UPDATE_NONINTERACTIVE=1 omarchy-update 2>&1 | tail -25
 echo "  exit code: $?"
 
-log "estado"
+log "state"
 echo "  pendientes: $(omarchy-migrate --pending 2>/dev/null | wc -l)"
 echo "  dust:       $(pacman -Q dust 2>/dev/null || echo NO)"
 echo ""

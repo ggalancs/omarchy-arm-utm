@@ -46,7 +46,7 @@ sleep 8
 echo "  procesos:"; pgrep -a quickshell | head -3; pgrep -a elephant | head -2
 echo "  shell log:"; tail -15 /tmp/shell.log 2>/dev/null
 
-log "estado final"
+log "final state"
 pgrep -a Hyprland | head -1
 hyprctl configerrors 2>&1 | head -5
 echo ""

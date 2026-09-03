@@ -1,0 +1,64 @@
+# English words used in this codebase that carry Spanish morphology.
+#
+# The audit used to subtract /usr/share/dict/words at runtime. That made its
+# answer depend on the machine: macOS ships web2 (235,976 entries, 1913
+# Webster) and Ubuntu ships wamerican (~100,000). The same commit read 0 here
+# and 14 in CI, and neither number was wrong -- they were answers to different
+# questions.
+#
+# Worse, web2 contains Spanish words as loanwords ('aviso', 'clave', 'estado'),
+# so subtracting it was quietly cancelling the explicit Spanish list.
+#
+# This file is committed, reviewed and identical everywhere. Add a word only
+# after checking it is English in the sense this codebase uses it.
+able
+acceptable
+available
+avocado
+commando
+compression
+decision
+disable
+discussion
+distributable
+enable
+executable
+expansion
+extension
+findable
+incapable
+incompatible
+invisible
+liable
+omission
+parse
+particular
+permission
+portable
+possible
+provision
+reachable
+readable
+regular
+reliable
+reproducible
+resumable
+reversible
+session
+settable
+similar
+singular
+sion
+sparse
+stable
+table
+tabular
+unable
+unavailable
+unreachable
+usable
+utilizable
+variable
+version
+visible
+ones

@@ -26,7 +26,7 @@ ls -l "$HOME/.config/omarchy/hooks/post-update.d/"
 log "3/3 verification: run the hook now"
 "$HOME/.config/omarchy/hooks/post-update.d/10-arm-sync"
 
-log "estado"
+log "state"
 echo "  tree commit: $(git -C /usr/share/omarchy log -1 --format='%h %ci' 2>/dev/null)"
 echo "  snapshots:        $(sudo snapper -c root list 2>/dev/null | wc -l) lines"
 echo "  binarios:         $(ls /usr/local/bin | wc -l)"
