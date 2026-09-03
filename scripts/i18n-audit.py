@@ -20,7 +20,7 @@ Usage:
   i18n-audit.py strings [paths...]
   i18n-audit.py guard <before-file> <after-file>
 """
-import re, sys, pathlib
+import re, sys, os, pathlib
 
 # Function words that do not appear in English. Deliberately excludes 'no',
 # 'si', 'en' and 'a', which are English words too and would fake the count.
@@ -239,12 +239,31 @@ TECH_OK = {'unattended', 'automounted', 'sandboxed', 'unicode', 'metadata',
            'bootloader', 'namespace', 'hostname', 'filesystem', 'filesystems',
            'checksum', 'checksums', 'runtime', 'toolchain', 'keyring'}
 
+# Without a dictionary the morphological test has nothing to subtract, so
+# every English word looks unknown and the tool reports the whole tree as
+# Spanish. It used to return an empty set and carry on: locally it read zero,
+# and on a CI runner with no wordlist installed the same commit read 15
+# comments and 80 strings. A checker that changes its answer depending on a
+# file it never mentions is worse than no checker, so this refuses to run.
+DICT_PATHS = ('/usr/share/dict/words', '/usr/share/dict/american-english',
+              '/usr/share/dict/web2')
+
 def _english_words():
-    try:
-        with open('/usr/share/dict/words', errors='replace') as fh:
-            return {w.strip().lower() for w in fh}
-    except OSError:
-        return set()
+    for path in (os.environ.get('ENGLISH_WORDLIST'), *DICT_PATHS):
+        if not path:
+            continue
+        try:
+            with open(path, errors='replace') as fh:
+                words = {w.strip().lower() for w in fh}
+            if len(words) > 10000:
+                return words
+        except OSError:
+            continue
+    sys.exit('i18n-audit: no English wordlist found.\n'
+             'Tried: ' + ', '.join(DICT_PATHS) + '\n'
+             'Install one (Debian/Ubuntu: apt-get install wamerican) or point\n'
+             'ENGLISH_WORDLIST at a file. Without it every English word looks\n'
+             'unknown and this tool reports nonsense.')
 
 ENGLISH = _english_words()
 

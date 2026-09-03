@@ -49,9 +49,15 @@ jobs:
       # Everything the code says and prints has to be in English. The word-list
       # version of this check reported zero while the build script printed 34
       # Spanish messages at whoever ran it.
+      #
+      # wamerican provides /usr/share/dict/words. The audit subtracts English
+      # from its morphological test and refuses to run without a wordlist: this
+      # very workflow, on its first run, reported 15 Spanish comments that a
+      # local run had cleared, purely because the runner had no dictionary.
       - name: No Spanish in code, comments or output
         run: |
           set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq wamerican
           python3 scripts/i18n-audit.py audit   $(git ls-files)
           python3 scripts/i18n-audit.py strings $(git ls-files)
 
