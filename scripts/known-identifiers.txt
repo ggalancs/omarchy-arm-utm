@@ -265,6 +265,7 @@ log
 make_iso
 missing
 mode
+name
 ncpu
 need_sudo
 new_body
@@ -276,6 +277,7 @@ orphan_tokens
 out
 owner
 pac
+pass
 ph_build
 ph_deps
 ph_fetch
@@ -286,6 +288,7 @@ ph_utm
 ph_verify
 phase
 pkg
+python_syntax
 questionnaire
 ram
 red
@@ -296,6 +299,8 @@ run_item
 run_list
 save_answers
 sel
+shell_syntax
+shellcheck_errors
 show
 show_list
 show_state
@@ -305,6 +310,7 @@ src
 start_idx
 started
 state
+step
 text
 tgt
 tgz
@@ -313,6 +319,7 @@ tmp
 try_n
 ttfx
 ulog
+unit_tests
 unverified_gate
 url
 usage

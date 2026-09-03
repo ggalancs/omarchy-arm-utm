@@ -4,11 +4,17 @@
 # tested. Adapted from the workflow proposed by Fail-Safe in PR #6.
 name: CI
 
+# MANUAL ONLY. Never push/pull_request/schedule/tag.
+#
+# This workflow was added with automatic triggers and ran three times on
+# GitHub without the owner asking for it, two of those failing in public. The
+# rule already existed, written down in six other projects of his: CI on
+# GitHub does not run without his explicit confirmation, every job is
+# reproduced locally first, and only then is it triggered by hand.
+#
+# Verify locally with scripts/ci-local.sh, which runs exactly these steps.
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
