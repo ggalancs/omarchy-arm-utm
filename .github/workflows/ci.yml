@@ -59,9 +59,14 @@ jobs:
       - name: No Spanish in code, comments or output
         run: |
           set -euo pipefail
+          # The self-test first: a global rename once walked into the
+          # vocabulary and deleted two words from it, and every total after
+          # that was measured with a detector that could not see them.
+          python3 scripts/i18n-audit.py selftest
           python3 scripts/i18n-audit.py audit       $(git ls-files)
           python3 scripts/i18n-audit.py strings     $(git ls-files)
           python3 scripts/i18n-audit.py identifiers $(git ls-files)
+          python3 scripts/i18n-audit.py prose       $(git ls-files)
 
       # Three commands have been documented that did not exist: two renamed
       # flags left stale in the README, and one invented while writing the

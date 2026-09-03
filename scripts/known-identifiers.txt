@@ -236,7 +236,6 @@ failed_pkg
 failures
 file
 file_lines
-fin
 flag
 from_env
 got
@@ -247,7 +246,6 @@ has_webdav
 have
 host_script
 info
-ini
 input
 install_list
 is_installed
@@ -257,6 +255,7 @@ keys
 last_local
 last_remote
 latest
+line
 lit
 load_answers
 log
@@ -305,7 +304,6 @@ tgt
 tgz
 title
 tmp
-token
 try_n
 ulog
 url

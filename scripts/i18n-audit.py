@@ -19,6 +19,8 @@ Usage:
   i18n-audit.py audit [paths...]
   i18n-audit.py strings [paths...]
   i18n-audit.py identifiers [paths...]
+  i18n-audit.py prose [paths...]
+  i18n-audit.py selftest
   i18n-audit.py guard <before-file> <after-file>
 """
 import re, sys, os, pathlib
@@ -174,7 +176,7 @@ def lint_continuations(paths):
 # flags (-la) and substitutions ($x, $(cmd)) are stripped first: they are not
 # prose, and they used to trip the detector on lines that were already English.
 # `print` is on this list because leaving it off made the audit blind to every
-# Python script in the repo: sync-payloads.py was printing "266 file_lines" at the
+# Python script in the repo: sync-payloads.py was printing "266 lineas" at the
 # maintainer through a run that reported zero.
 # Every function this codebase prints through, not only the obvious ones. `ok`
 # and `phase` were missing, which is why "working copy made" and a phase
@@ -200,12 +202,12 @@ ES_STR = re.compile(r'(?<![-\w])(el|la|los|las|un|una|de|del|al|se|le|lo|es|su|s
                     r'fichero|ficheros|carpeta|usuario|paquete|paquetes|clave|'
                     # 'red' is out for the same reason as 'no': "checks gone
                     # red" is English, and this tool's own output says it.
-                    r'linea|file_lines|arranque|arbol|llavero|ruta|rutas)'
+                    r'linea|lineas|arranque|arbol|llavero|ruta|rutas)'
                     r'(?![-\w])', re.IGNORECASE)
 # Words that are Spanish on their own -- no second opinion needed.
 ES_SURE = re.compile(r'(?<![-\w])(no se pudo|no encuentro|no encontre|montando|'
                      r'aplicando|inicializando|comprobando|reintentando|instalando|'
-                     r'faltaran|desactivada|instalada|instalado|failed_pkg|fallara|'
+                     r'faltaran|desactivada|instalada|instalado|fallo|fallara|'
                      r'compilacion|configuracion|aviso|hecho|listo|borrado|'
                      r'esperado|obtenido|retirado|quitando|limpieza)'
                      r'(?![-\w])', re.IGNORECASE)
@@ -421,6 +423,75 @@ def spanish_identifiers(path):
             hits.append((n, name))
     return hits
 
+# Plain prose inside a heredoc: the Lua blocks a user opens to change their
+# resolution, the motd that is the first screen of the shipped image, the app
+# catalogue, the docstring of the clipboard agent. None of the scans above
+# reads it -- they all look at classified text (a comment, a quoted string, a
+# Key=Value) and this is none of those. Forty-five Spanish lines lived here
+# through three audits that read zero.
+HEREDOC_OPEN = re.compile(r"<<-?\s*'?([A-Za-z_][A-Za-z0-9_]*)'?\s*$")
+PY_DOCSTRING = re.compile(r'^\s*(?:[rbfu]*)"""')
+
+def heredoc_prose(path):
+    """Yield (lineno, line) for prose lines inside heredocs and docstrings."""
+    p = pathlib.Path(path)
+    if is_binary(p) or p.suffix in ('.md', '.markdown', '.html'):
+        return []
+    try:
+        lines = p.read_text(errors='replace').splitlines()
+    except OSError:
+        return []
+    out, token, in_doc = [], None, False
+    for n, l in enumerate(lines, 1):
+        if token is not None:
+            if l.strip() == token:
+                token = None
+                continue
+            st = l.strip()
+            # Comments inside a heredoc belong to the comment audit; '--' is a
+            # Lua comment and those ARE prose the user reads, so they stay.
+            if st and not st.startswith('#'):
+                out.append((n, l))
+            continue
+        if in_doc:
+            if '"""' in l:
+                in_doc = False
+            elif l.strip():
+                out.append((n, l))
+            continue
+        m = HEREDOC_OPEN.search(l)
+        if m:
+            token = m.group(1)
+            continue
+        if PY_DOCSTRING.match(l) and l.count('"""') == 1:
+            in_doc = True
+    return out
+
+# `kb_layout = "es"` and `km=es` are layout and locale CODES, not words. They
+# are the one place a two-letter Spanish token is correct, and the vocabulary
+# has no way to tell them from prose.
+CODE_ASSIGN = re.compile(r'^\s*[\w.\[\]]+\s*=\s*[\'"]?[a-z]{2}(_[A-Z]{2})?[\'"]?,?\s*$')
+
+def audit_prose(paths):
+    total, rows = 0, []
+    for p in paths:
+        try:
+            hits = [(n, l.strip()) for n, l in heredoc_prose(p)
+                    if len(l.split()) >= 3 and not CODE_ASSIGN.match(l)
+                    and looks_spanish(l)]
+        except (OSError, UnicodeDecodeError):
+            continue
+        if hits:
+            rows.append((str(p), hits))
+            total += len(hits)
+    for name, hits in sorted(rows, key=lambda r: -len(r[1])):
+        print("  %-44s %4d" % (name, len(hits)))
+        for n, l in hits[:4]:
+            print("        %d: %s" % (n, l[:74]))
+    print("  %-44s %4s" % ("-" * 44, "-" * 4))
+    print("  %-44s %4d" % ("TOTAL", total))
+    return total
+
 def audit_identifiers(paths):
     total = 0
     rows = []
@@ -460,6 +531,49 @@ def audit_strings(paths):
     print("  %-44s %4d" % ("TOTAL", total))
     return total
 
+# Samples the detector must get right. This exists because a global rename of
+# `lineas` -> `file_lines` across the repository walked straight into the
+# vocabulary below and replaced the word there too, and the same run turned
+# `fallo` into `failed_pkg`. From that commit on, the tool could not see either
+# word, and said zero with total confidence. A checker that can be silently
+# disarmed by an edit elsewhere is worse than none: this refuses to run if any
+# sample regresses.
+# Each sample is ONE word, on purpose. The first version of this used phrases
+# and every one of them passed for the wrong reason: with `lineas` deleted from
+# the vocabulary, "dos lineas mas" was still flagged because of `mas`, so the
+# test went green on a damaged detector. A sample has to fail when the thing it
+# names is broken, and nothing else can be allowed to rescue it.
+SELFTEST_ES = ["lineas", "linea", "fallo", "fichero", "ficheros", "carpeta",
+               "usuario", "paquete", "paquetes", "clave", "arranque", "arbol",
+               "llavero", "huerfanos", "imagenes", "verificado", "libres",
+               "disponibles", "compactar", "comprimir", "aprovisionamiento",
+               "montando", "instalando", "desactivada", "configuracion",
+               "espanol", "tamano", "vacio", "veredicto", "maquina"]
+SELFTEST_EN = ["lines", "failure", "file", "folder", "user", "package",
+               "images", "verified", "available", "compress", "mounting",
+               "installing", "disabled", "configuration", "machine", "empty",
+               "verdict", "size", "clipboard", "timezones", "checksums",
+               "bsdtar", "waybar", "mkdir", "ones", "editable", "portable",
+               "the proprietary ones are deliberately not inside",
+               "timedatectl list-timezones", "checks gone red"]
+
+def selftest():
+    bad = []
+    for t in SELFTEST_ES:
+        if not looks_spanish(t):
+            bad.append("MISSED Spanish: " + t)
+    for t in SELFTEST_EN:
+        if looks_spanish(t):
+            bad.append("FALSE alarm on English: " + t)
+    for line in bad:
+        print("  " + line)
+    if bad:
+        print("  %d sample(s) regressed -- the vocabulary is damaged" % len(bad))
+        return 1
+    print("  ok  %d Spanish and %d English samples classified correctly"
+          % (len(SELFTEST_ES), len(SELFTEST_EN)))
+    return 0
+
 if __name__ == "__main__":
     if len(sys.argv) < 2: sys.exit(__doc__)
     if sys.argv[1] == "lint-cont":
@@ -482,6 +596,15 @@ if __name__ == "__main__":
         p = pathlib.Path(a)
         ps += [p] if p.is_file() else [q for q in p.rglob("*")
                if q.suffix in (".sh", ".py", ".exp", ".lua") or q.parent.name == "src"]
+    if sys.argv[1] == "selftest":
+        sys.exit(selftest())
+    # Every scanning mode runs the self-test first: a damaged vocabulary must
+    # stop the run, not quietly lower the total.
+    if sys.argv[1] in ("audit", "strings", "identifiers", "prose"):
+        if selftest():
+            sys.exit(2)
+    if sys.argv[1] == "prose":
+        sys.exit(0 if audit_prose(ps) == 0 else 1)
     if sys.argv[1] == "identifiers":
         sys.exit(0 if audit_identifiers(ps) == 0 else 1)
     if sys.argv[1] == "strings":
