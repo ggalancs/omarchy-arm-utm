@@ -306,12 +306,12 @@ log "orphan packages"
 # what was installed as a dependency and is no longer required by anything:
 # removing it cannot break anything installed on purpose.
 # The loop is because removing one can orphan the next.
-for _vuelta in 1 2 3 4; do
-  mapfile -t HUERFANOS < <(pacman -Qtdq 2>/dev/null || true)
-  [ "${#HUERFANOS[@]}" -gt 0 ] && [ -n "${HUERFANOS[0]:-}" ] || break
-  echo "  vuelta $_vuelta: ${HUERFANOS[*]}"
-  pacman -Rns --noconfirm "${HUERFANOS[@]}" >/dev/null 2>&1 \
-    || { warn "could not remove: ${HUERFANOS[*]}"; break; }
+for _round in 1 2 3 4; do
+  mapfile -t ORPHANS < <(pacman -Qtdq 2>/dev/null || true)
+  [ "${#ORPHANS[@]}" -gt 0 ] && [ -n "${ORPHANS[0]:-}" ] || break
+  echo "  vuelta $_round: ${ORPHANS[*]}"
+  pacman -Rns --noconfirm "${ORPHANS[@]}" >/dev/null 2>&1 \
+    || { warn "could not remove: ${ORPHANS[*]}"; break; }
 done
 echo "  orphans left:       $(pacman -Qtdq 2>/dev/null | wc -l)"
 
@@ -347,7 +347,7 @@ for f in /home/$NEW/.config/gtk-3.0/bookmarks /home/$NEW/.config/gtk-4.0/bookmar
   [ -f "$f" ] && { sed -i "s#/home/$OLD#/home/$NEW#g" "$f"; echo "  $f:"; cat "$f"; }
 done
 
-log "nombre real en passwd (aparece en el greeter)"
+log "real name in passwd (it shows in the greeter)"
 chfn -f "Omarchy" "$NEW" 2>/dev/null || usermod -c "Omarchy" "$NEW"
 getent passwd "$NEW"
 
@@ -403,7 +403,7 @@ echo "  autologin:  $(grep -h User= /etc/sddm.conf.d/*.conf 2>/dev/null | sort -
 echo "  sshd:       $(systemctl is-enabled sshd 2>&1)"
 echo "  optional installer:  $(test -x /usr/local/bin/omarchy-arm-extras && echo yes || echo MISSING)"
 echo "  menu entry:          $(test -f /usr/local/share/applications/omarchy-arm-extras.desktop && echo yes || echo MISSING)"
-echo "  machine-id: $(wc -c < /etc/machine-id) bytes (vacio = se regenera)"
+echo "  machine-id: $(wc -c < /etc/machine-id) bytes (empty = regenerated)"
 echo ""
 echo "  WARNING: from here on the image must not be booted again. The first"
 echo "  boot regenerates machine-id, the random seed and the logs, and those"
@@ -456,9 +456,9 @@ if [ "$OLD" != "$NEW" ]; then
     echo "  removing ${#PORNOMBRE[@]} file(s) whose NAME carries '$OLD':"
     for f in "${PORNOMBRE[@]}"; do echo "    $f"; rm -rf "$f"; done
   fi
-  RESTAN=$(find /home/"$NEW" /etc /usr/local /opt -xdev -mindepth 1 \
+  REMAINING=$(find /home/"$NEW" /etc /usr/local /opt -xdev -mindepth 1 \
       -regextype posix-extended -regex "$RX_OLD" 2>/dev/null | wc -l)
-  [ "$RESTAN" -eq 0 ] && ok_ "no filename mentions $OLD" || bad "$RESTAN names still mention $OLD"
+  [ "$REMAINING" -eq 0 ] && ok_ "no filename mentions $OLD" || bad "$REMAINING names still mention $OLD"
 fi
 
 # The clipboard: the five pieces that can break it.
@@ -504,25 +504,25 @@ esac
 # grep -rl does not see them because it looks at text, not symbols.
 if [ "$OLD" != "$NEW" ]; then
   # strings may be absent (it ships in binutils); if it is, say so and do not
-  # inventa un veredicto.
+  # invents a verdict.
   if ! command -v strings >/dev/null 2>&1; then
     echo "  ? /usr/local/bin binaries: without 'strings' this cannot be checked"
   else
-    SUCIOS=""
+    DIRTY=""
     for b in /usr/local/bin/*; do
       [ -f "$b" ] || continue
-      strings "$b" 2>/dev/null | grep -q "/home/$OLD" && SUCIOS="$SUCIOS $b"
+      strings "$b" 2>/dev/null | grep -q "/home/$OLD" && DIRTY="$DIRTY $b"
     done
-    [ -z "$SUCIOS" ] && ok_ "no /usr/local/bin binary mentions the build account" \
-                     || bad "binaries carrying the build path inside:$SUCIOS (see RUSTFLAGS/CARGO_HOME in stage3)"
+    [ -z "$DIRTY" ] && ok_ "no /usr/local/bin binary mentions the build account" \
+                     || bad "binaries carrying the build path inside:$DIRTY (see RUSTFLAGS/CARGO_HOME in stage3)"
   fi
 fi
 [ -f /root/failed-packages.txt ] && bad "/root/failed-packages.txt left behind" \
                                  || ok_ "no build-account leftovers in /root"
 
-N_HUERF=$(pacman -Qtdq 2>/dev/null | wc -l)
-[ "$N_HUERF" -eq 0 ] && ok_ "no orphan packages" \
-                     || bad "$N_HUERF orphan packages: the first update will prompt about them"
+N_ORPHANS=$(pacman -Qtdq 2>/dev/null | wc -l)
+[ "$N_ORPHANS" -eq 0 ] && ok_ "no orphan packages" \
+                     || bad "$N_ORPHANS orphan packages: the first update will prompt about them"
 
 echo ""
 if [ "$FAILURES" -ne 0 ]; then

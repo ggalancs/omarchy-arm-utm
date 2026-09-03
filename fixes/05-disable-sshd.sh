@@ -16,7 +16,7 @@ ls -l /etc/sudoers.d/
 visudo -c -q && echo "  sudoers valid"
 
 log "the host public key is kept"
-# Reactivar el acceso: sudo systemctl enable --now sshd
+# To turn access back on: sudo systemctl enable --now sshd
 ls -l /home/$USR/.ssh/authorized_keys 2>&1
 
 log "cleaning up provisioning leftovers"

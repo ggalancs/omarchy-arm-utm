@@ -44,7 +44,7 @@ for p in "$@"; do
   fi
 done
 if ((${#skip[@]})); then
-  printf '\033[33mOmitido, no existe en Arch Linux ARM: %s\033[0m\n' "${skip[*]}" >&2
+  printf '\033[33mSkipped, does not exist in Arch Linux ARM: %s\033[0m\n' "${skip[*]}" >&2
 fi
 ((${#avail[@]})) || exit 0
 exec "$REAL" "${avail[@]}"

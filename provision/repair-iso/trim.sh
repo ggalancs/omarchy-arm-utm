@@ -4,7 +4,7 @@ set -uo pipefail
 NEW=omarchy
 log(){ echo; echo "==> $*"; }
 
-log "tamano antes"
+log "size before"
 df -h / | tail -1
 
 log "largest packages"

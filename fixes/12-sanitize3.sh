@@ -9,7 +9,7 @@ for f in /home/$NEW/.config/gtk-3.0/bookmarks /home/$NEW/.config/gtk-4.0/bookmar
   [ -f "$f" ] && { sed -i "s#/home/gabriel#/home/$NEW#g" "$f"; echo "  $f:"; cat "$f"; }
 done
 
-log "nombre real en passwd (aparece en el greeter)"
+log "real name in passwd (it shows in the greeter)"
 chfn -f "Omarchy" "$NEW" 2>/dev/null || usermod -c "Omarchy" "$NEW"
 getent passwd "$NEW"
 
@@ -28,7 +28,7 @@ log "final state for distribution"
 echo "  user:       $(getent passwd $NEW | cut -d: -f1,5,6)"
 echo "  autologin:  $(grep -h User= /etc/sddm.conf.d/*.conf 2>/dev/null | sort -u | tr '\n' ' ')"
 echo "  sshd:       $(systemctl is-enabled sshd 2>&1)"
-echo "  machine-id: $(wc -c < /etc/machine-id) bytes (vacio = se regenera)"
+echo "  machine-id: $(wc -c < /etc/machine-id) bytes (empty = regenerated)"
 echo "  host ssh keys:   $(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l) (0 = regenerated)"
 echo "  hostname:   $(cat /etc/hostname)"
 sync

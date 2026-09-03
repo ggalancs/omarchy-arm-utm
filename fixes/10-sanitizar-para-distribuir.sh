@@ -10,7 +10,7 @@ log "1/10 detaching /usr/share/omarchy from the user's home"
 # It was a symlink to /home/<user>/.local/share/omarchy, which ties the system
 # to that account. It becomes a real directory (as the pacman package would)
 # and
-# el home pasa a apuntar ahi.
+# the home is repointed there.
 if [ -L /usr/share/omarchy ]; then
   TARGET=$(readlink -f /usr/share/omarchy)
   rm -f /usr/share/omarchy
@@ -70,7 +70,7 @@ rm -f "/home/$NEW/.bash_history" "/home/$NEW/.zsh_history" "/home/$NEW/.local/sh
 rm -rf "/home/$NEW/.cache" "/home/$NEW/.local/state/omarchy/first-run.log"
 rm -rf "/home/$NEW/.local/share/omarchy-"* 2>/dev/null || true
 rm -rf "/home/$NEW/shots" "/home/$NEW"/*.sh "/home/$NEW/config.env" 2>/dev/null || true
-# NetworkManager: quita redes wifi guardadas
+# NetworkManager: drop saved wifi networks
 rm -f /etc/NetworkManager/system-connections/* 2>/dev/null || true
 
 log "7/10 system logs and caches"
@@ -84,7 +84,7 @@ cat > /etc/motd <<'EOF'
 
   Omarchy sobre Arch Linux ARM (aarch64) — imagen para UTM en Apple Silicon
 
-  Usuario: omarchy   Contrasena: omarchy   (tambien para root)
+  User: omarchy   Password: omarchy   (root too)
 
   >> CAMBIA LA CONTRASENA AHORA:  passwd
 

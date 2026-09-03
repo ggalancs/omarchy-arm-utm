@@ -18,6 +18,7 @@ Two jobs:
 Usage:
   i18n-audit.py audit [paths...]
   i18n-audit.py strings [paths...]
+  i18n-audit.py identifiers [paths...]
   i18n-audit.py guard <before-file> <after-file>
 """
 import re, sys, os, pathlib
@@ -113,14 +114,16 @@ def audit(paths):
             continue
         # The morphological test, same as for strings. The word list below was
         # what this used, and it let "# usuario durante la construccion" past.
-        if p.name == 'i18n-audit.py':
+        # These two carry Spanish on purpose: one holds the vocabulary, the
+        # other explains which Spanish words a dictionary wrongly claims.
+        # Counting them makes a total nobody can drive to zero.
+        if p.name in ('i18n-audit.py', 'english-exceptions.txt',
+                      'known-identifiers.txt'):
             continue
         n = sum(1 for _, l in comment_lines(p, t)
-                if ES.search(FILEISH.sub(' ', l))
-                or len(spanish_words(FILEISH.sub(' ', l))) >= 2)
+                if looks_spanish(FILEISH.sub(' ', l)))
         n += sum(1 for _, c in inline_comments(p, t)
-                 if ES.search(FILEISH.sub(' ', c))
-                 or spanish_words(FILEISH.sub(' ', c)))
+                 if looks_spanish(FILEISH.sub(' ', c)))
         if n:
             rows.append((str(p), n)); total += n
     w = max((len(r[0]) for r in rows), default=10)
@@ -171,7 +174,7 @@ def lint_continuations(paths):
 # flags (-la) and substitutions ($x, $(cmd)) are stripped first: they are not
 # prose, and they used to trip the detector on lines that were already English.
 # `print` is on this list because leaving it off made the audit blind to every
-# Python script in the repo: sync-payloads.py was printing "266 lineas" at the
+# Python script in the repo: sync-payloads.py was printing "266 file_lines" at the
 # maintainer through a run that reported zero.
 # Every function this codebase prints through, not only the obvious ones. `ok`
 # and `phase` were missing, which is why "working copy made" and a phase
@@ -197,12 +200,12 @@ ES_STR = re.compile(r'(?<![-\w])(el|la|los|las|un|una|de|del|al|se|le|lo|es|su|s
                     r'fichero|ficheros|carpeta|usuario|paquete|paquetes|clave|'
                     # 'red' is out for the same reason as 'no': "checks gone
                     # red" is English, and this tool's own output says it.
-                    r'linea|lineas|arranque|arbol|llavero|ruta|rutas)'
+                    r'linea|file_lines|arranque|arbol|llavero|ruta|rutas)'
                     r'(?![-\w])', re.IGNORECASE)
 # Words that are Spanish on their own -- no second opinion needed.
 ES_SURE = re.compile(r'(?<![-\w])(no se pudo|no encuentro|no encontre|montando|'
                      r'aplicando|inicializando|comprobando|reintentando|instalando|'
-                     r'faltaran|desactivada|instalada|instalado|fallo|fallara|'
+                     r'faltaran|desactivada|instalada|instalado|failed_pkg|fallara|'
                      r'compilacion|configuracion|aviso|hecho|listo|borrado|'
                      r'esperado|obtenido|retirado|quitando|limpieza)'
                      r'(?![-\w])', re.IGNORECASE)
@@ -244,9 +247,11 @@ PLAIN_ES = {'libre', 'libres', 'fichero', 'ficheros', 'carpeta', 'carpetas',
             'arbol', 'arranque', 'llavero', 'ruta', 'rutas', 'ninguno',
             'ninguna', 'anfitrion', 'aviso', 'avisos', 'hecho', 'listo',
             'huerfanos', 'huerfano', 'correcto', 'correcta', 'falta', 'faltan',
-            'sobra', 'sobran', 'queda', 'quedan', 'error de', 'tanda'}
-# Technical English the 1913 dictionary behind /usr/share/dict/words predates.
-# Technical English the 1913 dictionary behind /usr/share/dict/words predates.
+            'sobra', 'sobran', 'queda', 'quedan', 'tanda', 'linea', 'lineas',
+            'comentario', 'castellano', 'espanol', 'tamano', 'vacio',
+            'veredicto', 'maquina', 'trabajo', 'nombre', 'consola', 'rama'}
+# Technical English that a general wordlist tends not to carry, and that would
+# otherwise trip the morphology.
 # 'timezone' is the reason this list exists: it is not in the dictionary, and
 # 'timezones' ends in -ones, so the pair that is normally quiet said Spanish
 # about a line reading `timedatectl list-timezones`.
@@ -306,6 +311,22 @@ def spanish_words(text):
             out.append(w)
     return out
 
+# One decision function for every surface. Comments, inline comments, output
+# strings and config fields each used to carry their own combination of the
+# signals below, and each combination had a hole the others did not: `linea`
+# was in the string vocabulary but not the comment one, so the same word was
+# caught in an echo and missed two lines above it in a comment. Anything that
+# has to judge a piece of text asks this now, so a gap closed here closes
+# everywhere.
+def looks_spanish(text):
+    body = SUBST.sub(' ', text)
+    if ES_CHARS.search(body) or ES_SURE.search(body):
+        return True
+    if spanish_words(body):
+        return True
+    need = 1 if len(body.split()) <= 4 else 2
+    return len(ES_STR.findall(body)) >= need or bool(ES.search(body))
+
 def spanish_strings(path):
     hits = []
     if is_binary(pathlib.Path(path)):
@@ -319,11 +340,7 @@ def spanish_strings(path):
             # for a label. `log "orphan packages"` has exactly one word on
             # the list and sailed through a run that reported zero, and so did
             # `echo "all correct"`. Short strings get judged on one word.
-            words = len(body.split())
-            need = 1 if words <= 4 else 2
-            if (ES_CHARS.search(body) or ES_SURE.search(body)
-                    or spanish_words(body)
-                    or len(ES_STR.findall(body)) >= need):
+            if looks_spanish(lit):
                 hits.append((n, lit[:78]))
     return hits
 
@@ -344,13 +361,73 @@ def spanish_config(path):
         m = CONFIG_FIELD.match(line)
         if not m:
             continue
-        body = SUBST.sub(' ', m.group(2))
-        words = len(body.split())
-        need = 1 if words <= 4 else 2
-        if (ES_CHARS.search(body) or ES_SURE.search(body)
-                or len(ES_STR.findall(body)) >= need):
+        if looks_spanish(m.group(2)):
             hits.append((n, line.strip()[:78]))
     return hits
+
+# Function and variable names. Neither the comment scan nor the string scan
+# ever looked at them, so `cargar_respuestas`, `cuestionario`, `montar`,
+# `vigilar`, `PUNTO`, `RAIZ` and fifteen more survived every pass that reported
+# zero. An identifier is code in the most literal sense, and the rule covers it.
+DEF_FUNC = re.compile(r'^\s*(?:function\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(\)\s*\{')
+DEF_VAR  = re.compile(r'^\s*(?:local\s+|export\s+|declare\s+-\w+\s+)?'
+                      r'([A-Za-z_][A-Za-z0-9_]{2,})=')
+DEF_FOR  = re.compile(r'\bfor\s+([A-Za-z_][A-Za-z0-9_]{2,})\s+in\b')
+
+LEDGER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           'known-identifiers.txt')
+_LEDGER = None
+
+def known_identifiers():
+    global _LEDGER
+    if _LEDGER is None:
+        try:
+            with open(LEDGER_FILE, errors='replace') as fh:
+                _LEDGER = {l.strip() for l in fh
+                           if l.strip() and not l.startswith('#')}
+        except OSError:
+            sys.exit('i18n-audit: missing ' + LEDGER_FILE)
+    return _LEDGER
+
+def spanish_identifiers(path):
+    """Yield (lineno, identifier) for declarations not in the reviewed ledger."""
+    p = pathlib.Path(path)
+    if is_binary(p) or p.suffix in ('.md', '.markdown', '.html'):
+        return []
+    ledger = known_identifiers()
+    hits, seen = [], set()
+    try:
+        lines = p.read_text(errors='replace').splitlines()
+    except OSError:
+        return hits
+    for n, l in enumerate(lines, 1):
+        for rx in (DEF_FUNC, DEF_VAR, DEF_FOR):
+            m = rx.search(l)
+            if not m:
+                continue
+            name = m.group(1)
+            if name in ledger or name in seen:
+                continue
+            seen.add(name)
+            hits.append((n, name))
+    return hits
+
+def audit_identifiers(paths):
+    total = 0
+    rows = []
+    for p in paths:
+        try:
+            hits = spanish_identifiers(p)
+        except (OSError, UnicodeDecodeError):
+            continue
+        if hits:
+            rows.append((str(p), len(hits), hits))
+            total += len(hits)
+    for name, n, hits in sorted(rows, key=lambda r: -r[1]):
+        print("  %-44s %4d   %s" % (name, n, ', '.join(h[1] for h in hits[:6])))
+    print("  %-44s %4s" % ("-" * 44, "-" * 4))
+    print("  %-44s %4d" % ("TOTAL", total))
+    return total
 
 def audit_strings(paths):
     total = 0
@@ -358,7 +435,8 @@ def audit_strings(paths):
     for p in paths:
         # This file carries lists of Spanish words on purpose; scanning it
         # reports the vocabulary as untranslated text for ever.
-        if getattr(p, 'name', '') == 'i18n-audit.py':
+        if getattr(p, 'name', '') in ('i18n-audit.py', 'english-exceptions.txt',
+                                      'known-identifiers.txt'):
             continue
         try:
             hits = spanish_strings(p) + spanish_config(p)
@@ -377,8 +455,8 @@ if __name__ == "__main__":
     if len(sys.argv) < 2: sys.exit(__doc__)
     if sys.argv[1] == "lint-cont":
         sys.exit(1 if lint_continuations(sys.argv[2:]) else 0)
-    if sys.argv[1] == "strings":
-        MODE_STRINGS = True
+    if sys.argv[1] == "identifiers":
+        MODE_IDENTIFIERS = True
     if sys.argv[1] == "guard":
         sys.exit(guard(sys.argv[2], sys.argv[3]))
     args = sys.argv[2:] or ["."]
@@ -395,6 +473,11 @@ if __name__ == "__main__":
         p = pathlib.Path(a)
         ps += [p] if p.is_file() else [q for q in p.rglob("*")
                if q.suffix in (".sh", ".py", ".exp", ".lua") or q.parent.name == "src"]
+    if sys.argv[1] == "identifiers":
+        sys.exit(0 if audit_identifiers(ps) == 0 else 1)
     if sys.argv[1] == "strings":
         sys.exit(0 if audit_strings(ps) == 0 else 1)
-    sys.exit(0 if audit(ps) == 0 else 0)
+    # This used to be `else 0`: the comment audit reported its findings and
+    # then exited successfully, so the CI step could never turn red. A check
+    # that cannot fail is the exact defect this whole file exists to catch.
+    sys.exit(0 if audit(ps) == 0 else 1)

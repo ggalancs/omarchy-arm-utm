@@ -26,13 +26,13 @@ wait_for "localhost:~#" 11 "shell de root" 120
 send "export PS1='RDY> '; echo TOK_SH_\$?\r"
 wait_for "TOK_SH_0" 12 "prompt" 60
 send "mkdir -p /media/prov; for d in /dev/vd? /dev/sr?; do mount -t iso9660 -o ro \$d /media/prov 2>/dev/null && \[ -f /media/prov/repair.sh \] && break; umount /media/prov 2>/dev/null; done; ls /media/prov; echo TOK_PROV_\$?\r"
-wait_for "TOK_PROV_0" 13 "ISO de aprovisionamiento" 120
+wait_for "TOK_PROV_0" 13 "provisioning ISO" 120
 
 set timeout -1
 send "export FIXSCRIPT=$FIX; sh /media/prov/repair.sh 2>&1 | tee /tmp/repair.log\r"
 expect {
     -ex "TOK_REPAIR_0" { puts "\n\n===== REPAIR COMPLETED =====\n" }
-    -re {TOK_REPAIR_[1-9][0-9]*} { puts "\n\n!!!!! LA REPARACION FALLO !!!!!\n"; exit 20 }
+    -re {TOK_REPAIR_[1-9][0-9]*} { puts "\n\n!!!!! THE REPAIR FAILED !!!!!\n"; exit 20 }
     eof { puts "\n!! EOF"; exit 16 }
 }
 set timeout 300

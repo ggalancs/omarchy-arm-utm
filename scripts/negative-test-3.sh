@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#  negative-test-3.sh — tercera y ultima tanda
+#  negative-test-3.sh -- third and last batch
 #  ────────────────────────────────────────────────────────────────────────────
 #  Closes out the checks the first two rounds had never seen fail. They are
 #  mostly "X exists" or "X is running", whose logic looks obvious -- but "looks
@@ -29,10 +29,10 @@ echo
 echo "== 2. third-round sabotages =="
 declare -a EXPECTED=()
 
-mv /usr/bin/herdr /usr/bin/herdr.guardado 2>/dev/null \
+mv /usr/bin/herdr /usr/bin/herdr.saved 2>/dev/null \
   && { echo "   + herdr removed"; EXPECTED+=("herdr missing"); }
 
-mv /usr/local/bin/omarchy-arm-vdagent /usr/local/bin/vdagent.guardado 2>/dev/null \
+mv /usr/local/bin/omarchy-arm-vdagent /usr/local/bin/vdagent.saved 2>/dev/null \
   && { echo "   + clipboard agent removed"; EXPECTED+=("agent missing"); }
 
 mv /usr/local/bin/omarchy-arm-gpu /usr/local/bin/gpu.saved 2>/dev/null \
@@ -42,10 +42,10 @@ echo "3.8.5" > /usr/share/omarchy/version 2>/dev/null \
   && { echo "   + version forged to 3.8.5"; EXPECTED+=("version 3"); }
 
 # Drop below 400 commands: 60 are moved aside.
-mkdir -p /tmp/apartados
+mkdir -p /tmp/set-aside
 n=0; for c in /usr/bin/omarchy-*; do
   [ "$n" -ge 60 ] && break
-  mv "$c" /tmp/apartados/ 2>/dev/null && n=$((n+1))
+  mv "$c" /tmp/set-aside/ 2>/dev/null && n=$((n+1))
 done
 [ "$n" -gt 0 ] && { echo "   + $n omarchy-* commands moved aside"; EXPECTED+=("only"); }
 

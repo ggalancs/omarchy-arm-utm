@@ -22,16 +22,16 @@ cat /etc/vconsole.conf
 
 log "input.lua: chosen layout + Option as SUPER"
 cat > ~/.config/hypr/input.lua <<'LUA'
--- Ajustes de teclado para esta VM sobre macOS.
+-- Keyboard settings for this VM on macOS.
 --
 -- altwin:swap_lalt_lwin intercambia Alt y Super. Motivo: macOS intercepta la
 -- tecla Cmd antes de que UTM la reciba (Cmd+Space abre Spotlight), asi que los
--- atajos SUPER de Omarchy serian inalcanzables. Con el intercambio:
+-- Omarchy's SUPER shortcuts would be unreachable. With the swap:
 --
 --     Option (⌥) del Mac  ->  SUPER en la VM   (Option+Space = menu de Omarchy)
 --     Cmd (⌘) del Mac     ->  ALT en la VM
 --
--- Si prefieres el comportamiento original, borra "altwin:swap_lalt_lwin" y en su
+-- If you prefer the original behaviour, delete "altwin:swap_lalt_lwin" and su
 -- instead turns on UTM's input capture (it needs Accessibility permission
 -- and Input Monitoring for UTM in System Settings > Privacy).
 hl.config({

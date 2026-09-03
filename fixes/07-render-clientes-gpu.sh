@@ -3,7 +3,7 @@
 # under virtio-gpu/virgl: only clients using shared-memory buffers (foot)
 # render at all. Confirmed NOT to fix it:
 #   - AQ_NO_MODIFIERS=1            (already active)
-#   - render:explicit_sync         (eliminado en Hyprland 0.56)
+#   - render:explicit_sync         (removed in Hyprland 0.56)
 #   - render:cm_enabled = false    (tried, no change)
 # What does work: LIBGL_ALWAYS_SOFTWARE=1, which makes Mesa use llvmpipe and
 # the clients hand over wl_shm buffers. GL acceleration inside the VM is lost,
@@ -26,8 +26,8 @@ cat /etc/environment.d/90-vm-graphics.conf
 
 log "looknfeel: no blur (expensive with software rendering)"
 cat > ~/.config/hypr/looknfeel.lua <<'LUA'
--- Ajustes para VM: el renderizado va por llvmpipe (ver 90-vm-graphics.conf),
--- asi que el blur sale caro. Sin el, el escritorio va fluido.
+-- VM settings: rendering goes through llvmpipe (see 90-vm-graphics.conf),
+-- so blur is expensive. Without it the desktop is smooth.
 hl.config({
   decoration = {
     blur = { enabled = false },

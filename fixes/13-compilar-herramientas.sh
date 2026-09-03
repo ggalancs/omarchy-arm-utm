@@ -26,7 +26,7 @@ build() {                      # build <source> <package>
              | sed -n 's/.*"PackageBase":"\([^"]*\)".*/\1/p' | head -1)
       [ -n "$base" ] || base="$pkg"
       git clone -q "https://aur.archlinux.org/$base.git" "$dir" 2>/dev/null
-      [ -f "$dir/PKGBUILD" ] || { KO+=("$pkg:clon vacio"); note "FAILED: the AUR clone ($base) has no PKGBUILD"; return 1; } ;;
+      [ -f "$dir/PKGBUILD" ] || { KO+=("$pkg:empty clone"); note "FAILED: the AUR clone ($base) has no PKGBUILD"; return 1; } ;;
     omapkgs)
       # Only the package's subdirectory, with a sparse checkout
       git clone --depth 1 --filter=blob:none --sparse -q \

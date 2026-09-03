@@ -29,20 +29,20 @@ RAW=https://raw.githubusercontent.com/ggalancs/omarchy-arm-utm/main/provision/sr
 SOCK=/run/spice-vdagentd/spice-vdagent-sock
 
 echo "==> requisitos"
-fallo=0
+failed_pkg=0
 for c in python3 wl-copy wl-paste; do
-  command -v "$c" >/dev/null 2>&1 && echo "  ✓ $c" || { echo "  ✗ missing $c"; fallo=1; }
+  command -v "$c" >/dev/null 2>&1 && echo "  ✓ $c" || { echo "  ✗ missing $c"; failed_pkg=1; }
 done
 if [ ! -e /dev/virtio-ports/com.redhat.spice.0 ]; then
   echo "  ✗ no existe /dev/virtio-ports/com.redhat.spice.0"
   echo "    Enable 'Share clipboard' in UTM, then power the VM off and on."
-  fallo=1
+  failed_pkg=1
 else
   echo "  ✓ canal SPICE presente"
 fi
 pacman -Q spice-vdagent >/dev/null 2>&1 && echo "  ✓ spice-vdagent installed" \
-  || { echo "  x spice-vdagent missing: sudo pacman -S spice-vdagent"; fallo=1; }
-[ "$fallo" -ne 0 ] && { echo; echo "Corrige lo anterior y repite."; exit 1; }
+  || { echo "  x spice-vdagent missing: sudo pacman -S spice-vdagent"; failed_pkg=1; }
+[ "$failed_pkg" -ne 0 ] && { echo; echo "Fix the above and try again."; exit 1; }
 
 echo
 echo "==> agente"

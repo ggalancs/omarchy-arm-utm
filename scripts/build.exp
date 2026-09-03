@@ -33,7 +33,7 @@ wait_for "TOK_SH_0" 12 "no se pudo fijar el prompt" 60
 
 # --- locate and mount the provisioning ISO
 send "mkdir -p /media/prov; for d in /dev/vd? /dev/sr?; do mount -t iso9660 -o ro \$d /media/prov 2>/dev/null && \[ -f /media/prov/stage1.sh \] && break; umount /media/prov 2>/dev/null; done; ls /media/prov; echo TOK_PROV_\$?\r"
-wait_for "TOK_PROV_0" 13 "no se encontró el ISO de aprovisionamiento" 120
+wait_for "TOK_PROV_0" 13 "the provisioning ISO was not found" 120
 
 send "test -s /media/prov/alarm-rootfs.tgz; echo TOK_TGZ_\$?\r"
 wait_for "TOK_TGZ_0" 14 "the Arch Linux ARM rootfs is missing from the ISO" 60
@@ -106,7 +106,7 @@ expect {
     -re {TOK_BUILD_[1-9][0-9]*} {
         puts "\n\n!!!!!! THE BUILD FAILED !!!!!!\n"
         set timeout 300
-        send "echo; echo ---- ultimas 80 lineas ----; tail -n 80 /tmp/build.log; echo TOK_TAIL_\$?\r"
+        send "echo; echo ---- ultimas 80 file_lines ----; tail -n 80 /tmp/build.log; echo TOK_TAIL_\$?\r"
         catch { wait_for "TOK_TAIL_" 15 "tail" 300 }
         exit 20
     }

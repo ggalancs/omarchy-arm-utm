@@ -22,10 +22,11 @@ SOFTWARE.
 
 ---
 
-Este trabajo NO es oficial y no tiene relacion con Basecamp ni con el proyecto
-Omarchy. Omarchy (https://omarchy.org) tiene su propia licencia. Arch Linux ARM,
-Hyprland y el resto de componentes conservan las suyas.
+This work is NOT official and has no connection with Basecamp or with the
+Omarchy project. Omarchy (https://omarchy.org) has its own licence. Arch Linux
+ARM, Hyprland and the other components keep theirs.
 
-La imagen distribuible NO incluye software propietario: 1Password, Obsidian,
-Typora, LocalSend y Google Chrome se descargan de su fuente oficial, en la
-maquina del usuario final, con el instalador omarchy-arm-extras.
+The distributable image does NOT include proprietary software: 1Password,
+Obsidian, Typora, LocalSend and Google Chrome are downloaded from their
+official source, on the end user's machine, by the omarchy-arm-extras
+installer.

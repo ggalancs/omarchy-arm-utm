@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #  omarchy-arm-clipboard - clipboard shared with the Mac, through the shared
-#  compartida de UTM.
+#  UTM shared folder.
 #
 #  WHY IT IS NEEDED
 #  UTM offers "Share clipboard", but that only works if the guest runs
@@ -25,11 +25,11 @@ set -uo pipefail
 
 SHARE="${OMARCHY_CLIPBOARD_DIR:-/mnt/share}"
 FILE="$SHARE/.clipboard"
-INTERVALO="${OMARCHY_CLIPBOARD_INTERVAL:-1}"
+INTERVAL="${OMARCHY_CLIPBOARD_INTERVAL:-1}"
 
-uso() { sed -n '3,26p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; }
+usage() { sed -n '3,26p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; }
 
-instalar() {
+do_install() {
   mkdir -p ~/.config/systemd/user
   cat > ~/.config/systemd/user/omarchy-arm-clipboard.service <<'UNIT'
 [Unit]
@@ -67,22 +67,22 @@ set -uo pipefail
 DIR="${1:?usage: $0 <folder shared with the VM>}"
 F="$DIR/.clipboard"
 mkdir -p "$DIR"; touch "$F"
-ultimo_local=""; ultimo_remoto="$(cat "$F" 2>/dev/null || true)"
+last_local=""; last_remote="$(cat "$F" 2>/dev/null || true)"
 while :; do
   actual="$(pbpaste 2>/dev/null || true)"
-  if [ "$actual" != "$ultimo_local" ] && [ -n "$actual" ]; then
-    printf '%s' "$actual" > "$F"; ultimo_local="$actual"; ultimo_remoto="$actual"
+  if [ "$actual" != "$last_local" ] && [ -n "$actual" ]; then
+    printf '%s' "$actual" > "$F"; last_local="$actual"; last_remote="$actual"
   fi
-  remoto="$(cat "$F" 2>/dev/null || true)"
-  if [ "$remoto" != "$ultimo_remoto" ] && [ -n "$remoto" ]; then
-    printf '%s' "$remoto" | pbcopy; ultimo_remoto="$remoto"; ultimo_local="$remoto"
+  remote_sum="$(cat "$F" 2>/dev/null || true)"
+  if [ "$remote_sum" != "$last_remote" ] && [ -n "$remote_sum" ]; then
+    printf '%s' "$remote_sum" | pbcopy; last_remote="$remote_sum"; last_local="$remote_sum"
   fi
   sleep 1
 done
 MACEOF
 }
 
-vigilar() {
+watch_folder() {
   command -v wl-paste >/dev/null || { echo "wl-clipboard is missing" >&2; exit 1; }
   if [ ! -d "$SHARE" ]; then
     echo "there is no shared folder at $SHARE." >&2
@@ -90,30 +90,30 @@ vigilar() {
     exit 1
   fi
   touch "$FILE" 2>/dev/null || { echo "cannot write to $FILE" >&2; exit 1; }
-  local ultimo_local ultimo_remoto actual remoto
-  ultimo_local="$(wl-paste --no-newline 2>/dev/null || true)"
-  ultimo_remoto="$(cat "$FILE" 2>/dev/null || true)"
+  local last_local last_remote actual remote_sum
+  last_local="$(wl-paste --no-newline 2>/dev/null || true)"
+  last_remote="$(cat "$FILE" 2>/dev/null || true)"
   while :; do
     # guest -> file
     actual="$(wl-paste --no-newline 2>/dev/null || true)"
-    if [ "$actual" != "$ultimo_local" ] && [ -n "$actual" ]; then
+    if [ "$actual" != "$last_local" ] && [ -n "$actual" ]; then
       printf '%s' "$actual" > "$FILE"
-      ultimo_local="$actual"; ultimo_remoto="$actual"
+      last_local="$actual"; last_remote="$actual"
     fi
     # file -> guest
-    remoto="$(cat "$FILE" 2>/dev/null || true)"
-    if [ "$remoto" != "$ultimo_remoto" ] && [ -n "$remoto" ]; then
-      printf '%s' "$remoto" | wl-copy
-      ultimo_remoto="$remoto"; ultimo_local="$remoto"
+    remote_sum="$(cat "$FILE" 2>/dev/null || true)"
+    if [ "$remote_sum" != "$last_remote" ] && [ -n "$remote_sum" ]; then
+      printf '%s' "$remote_sum" | wl-copy
+      last_remote="$remote_sum"; last_local="$remote_sum"
     fi
-    sleep "$INTERVALO"
+    sleep "$INTERVAL"
   done
 }
 
 case "${1:-}" in
-  --install) instalar ;;
+  --install) do_install ;;
   --host)    host_script ;;
-  -h|--help) uso ;;
-  "")        vigilar ;;
-  *)         echo "unknown option: $1" >&2; uso >&2; exit 1 ;;
+  -h|--help) usage ;;
+  "")        watch_folder ;;
+  *)         echo "unknown option: $1" >&2; usage >&2; exit 1 ;;
 esac

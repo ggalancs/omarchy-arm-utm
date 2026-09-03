@@ -59,8 +59,9 @@ jobs:
       - name: No Spanish in code, comments or output
         run: |
           set -euo pipefail
-          python3 scripts/i18n-audit.py audit   $(git ls-files)
-          python3 scripts/i18n-audit.py strings $(git ls-files)
+          python3 scripts/i18n-audit.py audit       $(git ls-files)
+          python3 scripts/i18n-audit.py strings     $(git ls-files)
+          python3 scripts/i18n-audit.py identifiers $(git ls-files)
 
       # Three commands have been documented that did not exist: two renamed
       # flags left stale in the README, and one invented while writing the

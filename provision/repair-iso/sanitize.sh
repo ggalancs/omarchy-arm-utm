@@ -109,17 +109,17 @@ cat > /etc/motd <<'EOF'
 
   Omarchy sobre Arch Linux ARM (aarch64) — imagen para UTM en Apple Silicon
 
-  Usuario: omarchy   Contrasena: omarchy   (tambien para root)
+  User: omarchy   Password: omarchy   (root too)
 
   >> CAMBIA LA CONTRASENA AHORA:  passwd
 
   Teclas: la tecla Option (⌥) del Mac actua como SUPER.
           ⌥+Space  menu de Omarchy      ⌥+Return  terminal
 
-  ¿Echas en falta 1Password, Obsidian, Typora, Spotify o LocalSend?
-  No vienen dentro por licencia, pero todas tienen build ARM64 oficial:
+  Missing 1Password, Obsidian, Typora, Spotify or LocalSend?
+  They are not included for licensing reasons, but all have official ARM64 builds:
 
-      omarchy-arm-extras --list     ver que puede instalar
+      omarchy-arm-extras --list     see what it can install
       omarchy-arm-extras            menu interactivo
 
 EOF
@@ -245,7 +245,7 @@ echo "  autologin:  $(grep -h User= /etc/sddm.conf.d/*.conf 2>/dev/null | sort -
 echo "  sshd:       $(systemctl is-enabled sshd 2>&1)"
 echo "  optional installer: $(test -x /usr/local/bin/omarchy-arm-extras && echo yes || echo MISSING)"
 echo "  menu entry:         $(test -f /usr/local/share/applications/omarchy-arm-extras.desktop && echo yes || echo MISSING)"
-echo "  machine-id: $(wc -c < /etc/machine-id) bytes (vacio = se regenera)"
+echo "  machine-id: $(wc -c < /etc/machine-id) bytes (empty = regenerated)"
 echo ""
 echo "  WARNING: from here on the image must not be booted again. The first"
 echo "  boot regenerates machine-id, the random seed and the logs, and those"

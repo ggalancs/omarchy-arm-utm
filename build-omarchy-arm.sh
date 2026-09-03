@@ -49,24 +49,24 @@ done
 unset _v
 from_env() { case " $SET_BY_ENV " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
-: "${W:=$HOME/omarchy-arm-build}"        # directorio de trabajo
-: "${VM_NAME:=Omarchy ARM}"              # nombre de la VM en UTM
+: "${W:=$HOME/omarchy-arm-build}"        # working directory
+: "${VM_NAME:=Omarchy ARM}"              # name of the VM in UTM
 : "${VM_USER:=builder}"                  # account used while building
 : "${VM_PASSWORD:=builder}"              # asked for; the distributable image renames it
 : "${VM_FULLNAME:=Omarchy ARM}"
 : "${VM_EMAIL:=user@example.com}"
 : "${VM_HOSTNAME:=omarchy}"
 : "${VM_TIMEZONE:=Europe/Madrid}"
-: "${VM_KEYMAP:=es}"                     # consola de texto
+: "${VM_KEYMAP:=es}"                     # text console
 : "${VM_XKB:=es}"                        # Hyprland/Wayland
 : "${VM_LOCALE:=en_US.UTF-8}"
 : "${VM_LOCALE_EXTRA:=es_ES.UTF-8}"
 : "${DISK_SIZE:=80G}"
 : "${BUILD_SMP:=8}"                      # vCPUs while building
 : "${BUILD_MEM:=8192}"                   # MiB while building
-: "${UTM_CPUS:=6}"                       # vCPU de la VM final
-: "${UTM_MEM:=6144}"                     # MiB de la VM final
-: "${OMARCHY_REF:=quattro}"              # rama de Omarchy (¡NO master!)
+: "${UTM_CPUS:=6}"                       # vCPUs of the final VM
+: "${UTM_MEM:=6144}"                     # MiB of the final VM
+: "${OMARCHY_REF:=quattro}"              # Omarchy branch (NOT master!)
 : "${DIST_NEW_USER:=omarchy}"            # account in the distributable image
 # CAREFUL with this name: `omarchy-arm-utm.zip` belongs to the FIRST release on
 # archive.org, and it stays frozen there so the links and sha256 sums published
@@ -82,7 +82,7 @@ UTMCTL=/Applications/UTM.app/Contents/MacOS/utmctl
 DOCS="$HOME/Library/Containers/com.utmapp.UTM/Data/Documents"
 PHASES=(deps fetch prepare build utm verify sanitize package)
 
-# ─────────────────────────────────── salida ────────────────────────────────
+# ─────────────────────────────────── output ────────────────────────────────
 c_ok=$'\033[32m'; c_warn=$'\033[33m'; c_err=$'\033[31m'; c_hi=$'\033[1;36m'; c_off=$'\033[0m'
 phase() { echo; echo "${c_hi}━━━ $* ━━━${c_off}"; }
 info()  { echo "  $*"; }
@@ -90,7 +90,7 @@ ok()    { echo "  ${c_ok}✓${c_off} $*"; }
 warn()  { echo "  ${c_warn}!${c_off} $*" >&2; }
 die()   { echo "  ${c_err}✗ $*${c_off}" >&2; exit 1; }
 
-# ── interaccion ─────────────────────────────────────────────────────────────
+# ── interaction ─────────────────────────────────────────────────────────────
 # The script was born unattended and must stay that way: with no terminal, or
 # with --yes, nothing is asked and the defaults apply. With a terminal it asks
 # about what is genuinely a decision, and nothing else.
@@ -117,7 +117,7 @@ save_answers() {
   done > "$W/answers.env"
 }
 
-cargar_respuestas() {
+load_answers() {
   [[ -f "$W/answers.env" ]] || return 0
   # What was saved must NOT overwrite what the user has just put in the
   # environment: `UTM_MEM=16384 ./build-omarchy-arm.sh --from utm` has to
@@ -376,7 +376,7 @@ print("  not available:", " ".join(sorted(set(miss))))
 PYEOF
   rm -rf "$d" "$base" "$core" "$extra" /tmp/alarm-pkgs.$$
   # Without this a write failure would go unnoticed and the build would die
-  # tarde, lejos de la causa.
+  # late, far from the cause.
   [ -s "$W/provision/packages-core.txt" ] || die "the package lists could not be written"
   ok "lists generated against branch '$OMARCHY_REF': $(grep -cvE '^#|^$' "$W/provision/packages-core.txt") in core, $(grep -cvE '^#|^$' "$W/provision/packages-extra.txt") extras"
 }
@@ -574,11 +574,11 @@ grep -q '^DisableDownloadTimeout' /etc/pacman.conf \
 
 # A retrying wrapper: mirrors fail in bursts, not steadily.
 pac() {
-  local intento
-  for intento in 1 2 3; do
+  local try_n
+  for try_n in 1 2 3; do
     if pacman -S --noconfirm --needed --disable-download-timeout "$@"; then return 0; fi
-    warn "pacman failed (attempt $intento/3); retrying in ${intento}0 s"
-    sleep "${intento}0"
+    warn "pacman failed (attempt $try_n/3); retrying in ${try_n}0 s"
+    sleep "${try_n}0"
     pacman -Sy --noconfirm --disable-download-timeout >/dev/null 2>&1 || true
   done
   return 1
@@ -691,7 +691,7 @@ initrd   $INITRD
 options  root=LABEL=OMROOT $KERNEL_ROOTFLAGS rw quiet loglevel=3
 EOF
 cat > /boot/loader/entries/omarchy-verbose.conf <<EOF
-title    Arch Linux ARM — Omarchy (verboso)
+title    Arch Linux ARM — Omarchy (verbose)
 linux    $KERNEL_IMG
 initrd   $INITRD
 options  root=LABEL=OMROOT $KERNEL_ROOTFLAGS rw
@@ -787,7 +787,7 @@ echo "  spice-vdagentd with -X (required under Hyprland)"
 # UTM's shared folder has TWO modes and the user picks one:
 #   VirtFS -> a 9p device with mount_tag "share"
 #   SPICE WebDAV -> the org.spice-space.webdav.0 virtio port, served by
-#     spice-webdavd (paquete phodav) en http://localhost:9843/
+#     spice-webdavd (phodav package) at http://localhost:9843/
 # Both are prepared: each only activates if its device exists.
 systemctl enable spice-webdavd.service 2>/dev/null || true
 echo "  spice-webdavd enabled (UTM SPICE WebDAV mode)"
@@ -871,7 +871,7 @@ echo "  available to stage3: $(ls "$PROVDIR" | tr '\n' ' ')"
 # assignment, so the TOK_STAGE3_<rc> token was only emitted in the zero case
 # and the host never got to see stage3's specific failure. With `|| RC=$?` the
 # command is
-# en contexto probado y set -e no interviene.
+# in a tested context and set -e does not step in.
 STAGE3_RC=0
 su - "$VM_USER" -c "bash ~/stage3.sh" || STAGE3_RC=$?
 [ $STAGE3_RC -eq 0 ] || warn "stage3 finished with errors (rc=$STAGE3_RC)"
@@ -934,7 +934,7 @@ echo "  session=$SESSION"
 ls /usr/local/share/wayland-sessions /usr/share/wayland-sessions 2>/dev/null
 
 # ---------------------------------------------------------------- ajustes VM
-log "ajustes propios de maquina virtual"
+log "virtual-machine specific settings"
 # Hardware cursors and DRM modifiers misbehave on virtio-gpu
 mkdir -p /etc/environment.d
 cat > /etc/environment.d/90-vm-graphics.conf <<'EOF'
@@ -946,7 +946,7 @@ WLR_RENDERER_ALLOW_SOFTWARE=1
 # paint: virgl does not hand over buffers Hyprland can compose. Only clients
 # using wl_shm (foot) render at all. With llvmpipe they all work.
 # Confirmed NOT to fix it: AQ_NO_MODIFIERS, render:cm_enabled=false,
-# render:explicit_sync (eliminado en Hyprland 0.56).
+# render:explicit_sync (removed in Hyprland 0.56).
 LIBGL_ALWAYS_SOFTWARE=1
 EOF
 # serial console, handy for debugging from the host
@@ -1162,18 +1162,18 @@ log "virtual machine tweaks"
 # quattro uses Lua configuration: writing monitors.conf would do nothing.
 cat > ~/.config/hypr/monitors.lua <<'LUA'
 -- See https://wiki.hypr.land/Configuring/Basics/Monitors/
--- Modos disponibles:  hyprctl monitors all
+-- Available modes:  hyprctl monitors all
 --
 -- VM en UTM/QEMU con virtio-gpu. Dos ajustes respecto a los valores de Omarchy:
 --
 --  1. Escala 1 (Omarchy asume pantallas retina 2x; en la VM deja todo gigante).
---  2. Resolucion fija 1920x1200 en vez de "preferred", que da 1280x800.
+--  2. Fixed 1920x1200 instead of "preferred", which negotiates 1280x800.
 --
--- IMPORTANTE: cambiar el modo EN CALIENTE (hyprctl / recarga de config) rompe
+-- IMPORTANT: changing the mode HOT (hyprctl / config reload) breaks
 -- rendering under virgl: the desktop stays blank until you restart.
 -- Applied from boot it works fine. If you change this, restart the VM.
 --
--- Para que la resolucion siga al tamano de la ventana de UTM:
+-- To make the resolution follow the size of the UTM window:
 --   hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
 hl.env("GDK_SCALE", "1")
 hl.monitor({ output = "Virtual-1", mode = "1920x1200@60", position = "0x0", scale = 1 })
@@ -1186,9 +1186,9 @@ cat > ~/.config/hypr/autostart.lua <<'LUA'
 hl.on("hyprland.start", function()
   -- spice-vdagent NO se lanza: su portapapeles es X11 y bajo Hyprland muere
   -- con "cannot open display". Peor aun, si arranca, vdagentd ve dos agentes
-  -- en la misma sesion y desconecta a los dos ("multiple agents in one
+  -- in the same session and disconnects both of them ("multiple agents in one
   -- session"). El portapapeles lo lleva omarchy-arm-vdagent, como servicio
-  -- de usuario.
+  -- of the user.
 end)
 LUA
 
@@ -1228,7 +1228,7 @@ for p in "$@"; do
     skip+=("$p")
   fi
 done
-((${#skip[@]})) && printf '\033[33mOmitido, no existe en Arch Linux ARM: %s\033[0m\n' "${skip[*]}" >&2
+((${#skip[@]})) && printf '\033[33mSkipped, does not exist in Arch Linux ARM: %s\033[0m\n' "${skip[*]}" >&2
 ((${#avail[@]})) || exit 0
 exec "$REAL" "${avail[@]}"
 WRAP
@@ -1251,7 +1251,7 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
   case "$src" in
     aur)
       # AUR URLs use the PackageBase, which is not always the name of the
-      # paquete (yaru-icon-theme vive en el repo "yaru").
+      # package (yaru-icon-theme lives in the "yaru" repo).
       local base
       base=$(curl -fsSL --max-time 20 "https://aur.archlinux.org/rpc/v5/info?arg[]=$pkg" \
              | sed -n 's/.*"PackageBase":"\([^"]*\)".*/\1/p' | head -1)
@@ -1404,7 +1404,7 @@ sudo bash "$OMARCHY_PATH/install/config/theme-system.sh" >/dev/null 2>&1 || true
 # /opt/zig0.15/zig and depends on a zig0.15 package that does not exist on ARM
 # (the AUR one is arch=(x86_64) and compiles LLVM from source). Omarchy's
 # declares arch=('x86_64' 'aarch64') and downloads the official tarball
-# zig-aarch64-linux-0.15.2.tar.xz de ziglang.org -sha256 958ed7d1e00d0ea7...-,
+# zig-aarch64-linux-0.15.2.tar.xz from ziglang.org -sha256 958ed7d1e00d0ea7...-,
 # which is the only version libghostty-vt accepts.
 
 # --- the kernel reboot prompt, which on ARM never goes away ---------------
@@ -2035,12 +2035,12 @@ log "orphan packages"
 # what was installed as a dependency and is no longer required by anything:
 # removing it cannot break anything installed on purpose.
 # The loop is because removing one can orphan the next.
-for _vuelta in 1 2 3 4; do
-  mapfile -t HUERFANOS < <(pacman -Qtdq 2>/dev/null || true)
-  [ "${#HUERFANOS[@]}" -gt 0 ] && [ -n "${HUERFANOS[0]:-}" ] || break
-  echo "  vuelta $_vuelta: ${HUERFANOS[*]}"
-  pacman -Rns --noconfirm "${HUERFANOS[@]}" >/dev/null 2>&1 \
-    || { warn "could not remove: ${HUERFANOS[*]}"; break; }
+for _round in 1 2 3 4; do
+  mapfile -t ORPHANS < <(pacman -Qtdq 2>/dev/null || true)
+  [ "${#ORPHANS[@]}" -gt 0 ] && [ -n "${ORPHANS[0]:-}" ] || break
+  echo "  vuelta $_round: ${ORPHANS[*]}"
+  pacman -Rns --noconfirm "${ORPHANS[@]}" >/dev/null 2>&1 \
+    || { warn "could not remove: ${ORPHANS[*]}"; break; }
 done
 echo "  orphans left:       $(pacman -Qtdq 2>/dev/null | wc -l)"
 
@@ -2076,7 +2076,7 @@ for f in /home/$NEW/.config/gtk-3.0/bookmarks /home/$NEW/.config/gtk-4.0/bookmar
   [ -f "$f" ] && { sed -i "s#/home/$OLD#/home/$NEW#g" "$f"; echo "  $f:"; cat "$f"; }
 done
 
-log "nombre real en passwd (aparece en el greeter)"
+log "real name in passwd (it shows in the greeter)"
 chfn -f "Omarchy" "$NEW" 2>/dev/null || usermod -c "Omarchy" "$NEW"
 getent passwd "$NEW"
 
@@ -2132,7 +2132,7 @@ echo "  autologin:  $(grep -h User= /etc/sddm.conf.d/*.conf 2>/dev/null | sort -
 echo "  sshd:       $(systemctl is-enabled sshd 2>&1)"
 echo "  optional installer:  $(test -x /usr/local/bin/omarchy-arm-extras && echo yes || echo MISSING)"
 echo "  menu entry:          $(test -f /usr/local/share/applications/omarchy-arm-extras.desktop && echo yes || echo MISSING)"
-echo "  machine-id: $(wc -c < /etc/machine-id) bytes (vacio = se regenera)"
+echo "  machine-id: $(wc -c < /etc/machine-id) bytes (empty = regenerated)"
 echo ""
 echo "  WARNING: from here on the image must not be booted again. The first"
 echo "  boot regenerates machine-id, the random seed and the logs, and those"
@@ -2185,9 +2185,9 @@ if [ "$OLD" != "$NEW" ]; then
     echo "  removing ${#PORNOMBRE[@]} file(s) whose NAME carries '$OLD':"
     for f in "${PORNOMBRE[@]}"; do echo "    $f"; rm -rf "$f"; done
   fi
-  RESTAN=$(find /home/"$NEW" /etc /usr/local /opt -xdev -mindepth 1 \
+  REMAINING=$(find /home/"$NEW" /etc /usr/local /opt -xdev -mindepth 1 \
       -regextype posix-extended -regex "$RX_OLD" 2>/dev/null | wc -l)
-  [ "$RESTAN" -eq 0 ] && ok_ "no filename mentions $OLD" || bad "$RESTAN names still mention $OLD"
+  [ "$REMAINING" -eq 0 ] && ok_ "no filename mentions $OLD" || bad "$REMAINING names still mention $OLD"
 fi
 
 # The clipboard: the five pieces that can break it.
@@ -2233,25 +2233,25 @@ esac
 # grep -rl does not see them because it looks at text, not symbols.
 if [ "$OLD" != "$NEW" ]; then
   # strings may be absent (it ships in binutils); if it is, say so and do not
-  # inventa un veredicto.
+  # invents a verdict.
   if ! command -v strings >/dev/null 2>&1; then
     echo "  ? /usr/local/bin binaries: without 'strings' this cannot be checked"
   else
-    SUCIOS=""
+    DIRTY=""
     for b in /usr/local/bin/*; do
       [ -f "$b" ] || continue
-      strings "$b" 2>/dev/null | grep -q "/home/$OLD" && SUCIOS="$SUCIOS $b"
+      strings "$b" 2>/dev/null | grep -q "/home/$OLD" && DIRTY="$DIRTY $b"
     done
-    [ -z "$SUCIOS" ] && ok_ "no /usr/local/bin binary mentions the build account" \
-                     || bad "binaries carrying the build path inside:$SUCIOS (see RUSTFLAGS/CARGO_HOME in stage3)"
+    [ -z "$DIRTY" ] && ok_ "no /usr/local/bin binary mentions the build account" \
+                     || bad "binaries carrying the build path inside:$DIRTY (see RUSTFLAGS/CARGO_HOME in stage3)"
   fi
 fi
 [ -f /root/failed-packages.txt ] && bad "/root/failed-packages.txt left behind" \
                                  || ok_ "no build-account leftovers in /root"
 
-N_HUERF=$(pacman -Qtdq 2>/dev/null | wc -l)
-[ "$N_HUERF" -eq 0 ] && ok_ "no orphan packages" \
-                     || bad "$N_HUERF orphan packages: the first update will prompt about them"
+N_ORPHANS=$(pacman -Qtdq 2>/dev/null | wc -l)
+[ "$N_ORPHANS" -eq 0 ] && ok_ "no orphan packages" \
+                     || bad "$N_ORPHANS orphan packages: the first update will prompt about them"
 
 echo ""
 if [ "$FAILURES" -ne 0 ]; then
@@ -2272,7 +2272,7 @@ cat > "$W/provision/extras.sh" <<'__PAYLOAD_PROVISION_EXTRAS_SH__'
 #  The proprietary ones are deliberately NOT shipped inside: packing them into
 #  a .zip that gets redistributed would mean redistributing third-party
 #  binaries. This script
-#  descarga de su fuente OFICIAL, en tu maquina y bajo tu criterio.
+#  fetches them from their OFFICIAL source, on your machine, at your call.
 #
 #  Almost all of them have an official arm64 build. The ones already inside the
 #  image (free software) are marked as installed and skipped.
@@ -2302,9 +2302,9 @@ OK_LIST=(); KO_LIST=()
 #  key|title|description
 CATALOG=(
   "1password|1Password|Gestor de contrasenas. Tarball arm64 oficial de AgileBits"
-  "1password-cli|1Password CLI|El comando op. Binario estatico arm64 oficial"
+  "1password-cli|1Password CLI|The op command. Official static arm64 binary"
   "obsidian|Obsidian|Notas en markdown. AppImage arm64 oficial"
-  "typora|Typora|Editor markdown WYSIWYG. Paquete arm64 oficial via AUR"
+  "typora|Typora|WYSIWYG markdown editor. Official arm64 package via AUR"
   "localsend|LocalSend|Send files between devices. Official arm64 build"
   "chrome|Google Chrome|Brings Widevine for arm64: enables Spotify and Netflix on the web"
   "spotify-web|Spotify (webapp)|Lanzador de open.spotify.com + reasigna SUPER+SHIFT+M"
@@ -2695,7 +2695,7 @@ cat > "$W/provision/clipbrd.sh" <<'__PAYLOAD_PROVISION_CLIPBRD_SH__'
 #!/bin/bash
 #
 #  omarchy-arm-clipboard - clipboard shared with the Mac, through the shared
-#  compartida de UTM.
+#  UTM shared folder.
 #
 #  WHY IT IS NEEDED
 #  UTM offers "Share clipboard", but that only works if the guest runs
@@ -2719,11 +2719,11 @@ set -uo pipefail
 
 SHARE="${OMARCHY_CLIPBOARD_DIR:-/mnt/share}"
 FILE="$SHARE/.clipboard"
-INTERVALO="${OMARCHY_CLIPBOARD_INTERVAL:-1}"
+INTERVAL="${OMARCHY_CLIPBOARD_INTERVAL:-1}"
 
-uso() { sed -n '3,26p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; }
+usage() { sed -n '3,26p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; }
 
-instalar() {
+do_install() {
   mkdir -p ~/.config/systemd/user
   cat > ~/.config/systemd/user/omarchy-arm-clipboard.service <<'UNIT'
 [Unit]
@@ -2761,22 +2761,22 @@ set -uo pipefail
 DIR="${1:?usage: $0 <folder shared with the VM>}"
 F="$DIR/.clipboard"
 mkdir -p "$DIR"; touch "$F"
-ultimo_local=""; ultimo_remoto="$(cat "$F" 2>/dev/null || true)"
+last_local=""; last_remote="$(cat "$F" 2>/dev/null || true)"
 while :; do
   actual="$(pbpaste 2>/dev/null || true)"
-  if [ "$actual" != "$ultimo_local" ] && [ -n "$actual" ]; then
-    printf '%s' "$actual" > "$F"; ultimo_local="$actual"; ultimo_remoto="$actual"
+  if [ "$actual" != "$last_local" ] && [ -n "$actual" ]; then
+    printf '%s' "$actual" > "$F"; last_local="$actual"; last_remote="$actual"
   fi
-  remoto="$(cat "$F" 2>/dev/null || true)"
-  if [ "$remoto" != "$ultimo_remoto" ] && [ -n "$remoto" ]; then
-    printf '%s' "$remoto" | pbcopy; ultimo_remoto="$remoto"; ultimo_local="$remoto"
+  remote_sum="$(cat "$F" 2>/dev/null || true)"
+  if [ "$remote_sum" != "$last_remote" ] && [ -n "$remote_sum" ]; then
+    printf '%s' "$remote_sum" | pbcopy; last_remote="$remote_sum"; last_local="$remote_sum"
   fi
   sleep 1
 done
 MACEOF
 }
 
-vigilar() {
+watch_folder() {
   command -v wl-paste >/dev/null || { echo "wl-clipboard is missing" >&2; exit 1; }
   if [ ! -d "$SHARE" ]; then
     echo "there is no shared folder at $SHARE." >&2
@@ -2784,32 +2784,32 @@ vigilar() {
     exit 1
   fi
   touch "$FILE" 2>/dev/null || { echo "cannot write to $FILE" >&2; exit 1; }
-  local ultimo_local ultimo_remoto actual remoto
-  ultimo_local="$(wl-paste --no-newline 2>/dev/null || true)"
-  ultimo_remoto="$(cat "$FILE" 2>/dev/null || true)"
+  local last_local last_remote actual remote_sum
+  last_local="$(wl-paste --no-newline 2>/dev/null || true)"
+  last_remote="$(cat "$FILE" 2>/dev/null || true)"
   while :; do
     # guest -> file
     actual="$(wl-paste --no-newline 2>/dev/null || true)"
-    if [ "$actual" != "$ultimo_local" ] && [ -n "$actual" ]; then
+    if [ "$actual" != "$last_local" ] && [ -n "$actual" ]; then
       printf '%s' "$actual" > "$FILE"
-      ultimo_local="$actual"; ultimo_remoto="$actual"
+      last_local="$actual"; last_remote="$actual"
     fi
     # file -> guest
-    remoto="$(cat "$FILE" 2>/dev/null || true)"
-    if [ "$remoto" != "$ultimo_remoto" ] && [ -n "$remoto" ]; then
-      printf '%s' "$remoto" | wl-copy
-      ultimo_remoto="$remoto"; ultimo_local="$remoto"
+    remote_sum="$(cat "$FILE" 2>/dev/null || true)"
+    if [ "$remote_sum" != "$last_remote" ] && [ -n "$remote_sum" ]; then
+      printf '%s' "$remote_sum" | wl-copy
+      last_remote="$remote_sum"; last_local="$remote_sum"
     fi
-    sleep "$INTERVALO"
+    sleep "$INTERVAL"
   done
 }
 
 case "${1:-}" in
-  --install) instalar ;;
+  --install) do_install ;;
   --host)    host_script ;;
-  -h|--help) uso ;;
-  "")        vigilar ;;
-  *)         echo "unknown option: $1" >&2; uso >&2; exit 1 ;;
+  -h|--help) usage ;;
+  "")        watch_folder ;;
+  *)         echo "unknown option: $1" >&2; usage >&2; exit 1 ;;
 esac
 __PAYLOAD_PROVISION_CLIPBRD_SH__
 chmod +x "$W/provision/clipbrd.sh"
@@ -2817,7 +2817,7 @@ chmod +x "$W/provision/clipbrd.sh"
 cat > "$W/provision/vdagent.py" <<'__PAYLOAD_PROVISION_VDAGENT_PY__'
 #!/usr/bin/env python3
 """
-omarchy-arm-vdagent — portapapeles compartido entre el anfitrión y Hyprland.
+omarchy-arm-vdagent -- shared clipboard between the host and Hyprland.
 
 CÓMO FUNCIONA EL PORTAPAPELES DE SPICE, Y POR QUÉ ESTO EXISTE
 
@@ -2827,22 +2827,22 @@ CÓMO FUNCIONA EL PORTAPAPELES DE SPICE, Y POR QUÉ ESTO EXISTE
     (/run/spice-vdagentd/spice-vdagent-sock). Eso es lo que hace que funcione
     en cualquier otra VM.
 
-    El agente oficial (spice-vdagent) implementa ese lado, pero entrega el
+    The official agent (spice-vdagent) implements that side, but hands the
     portapapeles a X11: vdagent.c:421 llama a
     vdagent_clipboards_new(vdagent_display_get_x11(...)) y no hay una sola
-    referencia a wlr-data-control en su repositorio. Bajo Hyprland arranca y
+    reference to wlr-data-control anywhere in its repository. Under Hyprland it
     muere con "cannot open display".
 
-    Este programa ocupa exactamente ese hueco: habla el protocolo udscs con
-    spice-vdagentd igual que el agente oficial, y al otro lado usa
-    wl-copy/wl-paste. El demonio sigue siendo quien habla con el anfitrión.
+    This program fills exactly that gap: it speaks the udscs protocol to
+    spice-vdagentd just as the official agent does, and on the other side uses
+    wl-copy/wl-paste. The daemon is still the one talking to the host.
 
     Un detalle que importa: vdagentd solo atiende al agente de la sesión
-    ACTIVA de seat0 (vdagentd.c:746). En una VM con Hyprland lanzado por SDDM
-    esa comprobación suele fallar, así que el demonio debe arrancarse con -X
+    ACTIVE session of seat0 (vdagentd.c:746). In a VM with Hyprland started by
+    SDDM that check usually fails, so the daemon has to be started with -X
     (disable-session-integration, vdagentd.c:1258).
 
-    Solo texto. Ni imágenes ni ficheros.
+    Text only. No images, no files.
 """
 import os, sys, socket, struct, subprocess, threading, time, signal
 
@@ -2870,9 +2870,9 @@ class Agente:
     def __init__(self, sock):
         self.s = sock
         self.lock = threading.Lock()
-        self.ultimo_local = None
-        self.esperando = threading.Event()
-        self.recibido = None
+        self.last_local = None
+        self.waiting = threading.Event()
+        self.received = None
 
     def enviar(self, tipo, arg1=0, arg2=0, datos=b""):
         cab = struct.pack("<IIII", tipo, arg1, arg2, len(datos))
@@ -2910,7 +2910,7 @@ class Agente:
                 if a2 == TIPO_UTF8:
                     texto = datos.decode("utf-8", "replace")
                     escribir_portapapeles(texto)
-                    self.ultimo_local = texto
+                    self.last_local = texto
                     log("  received from the host:", len(texto), "bytes")
 
             elif tipo == VERSION:
@@ -2934,8 +2934,8 @@ def escribir_portapapeles(texto):
         log("wl-copy failed:", e)
 
 
-def resolucion():
-    """La resolución real, si hyprctl está disponible; si no, un valor sensato."""
+def resolution():
+    """The real resolution if hyprctl is available; otherwise a sane default."""
     try:
         r = subprocess.run(["hyprctl", "monitors", "-j"], capture_output=True, timeout=4)
         if r.returncode == 0:
@@ -2947,12 +2947,12 @@ def resolucion():
     return 1920, 1200
 
 
-def vigilar(ag):
+def watch(ag):
     """If the user copies inside the VM, offer it to the host."""
     while True:
         t = leer_portapapeles()
-        if t is not None and t != ag.ultimo_local:
-            ag.ultimo_local = t
+        if t is not None and t != ag.last_local:
+            ag.last_local = t
             if t:
                 ag.enviar(CLIPBOARD_GRAB, SEL_CLIPBOARD, 0,
                           struct.pack("<I", TIPO_UTF8))
@@ -2979,12 +2979,12 @@ def main():
     # struct vdagentd_guest_xorg_resolution = 5 ints: width, height, x, y,
     # display_id (vdagentd-proto.h:51). If the size does not match exactly,
     # vdagentd drops the agent without a word (vdagentd.c:1088).
-    ancho, alto = resolucion()
-    ag.enviar(GUEST_XORG_RESOLUTION, ancho, alto,
-              struct.pack("<iiiii", ancho, alto, 0, 0, 0))
+    width, height = resolution()
+    ag.enviar(GUEST_XORG_RESOLUTION, width, height,
+              struct.pack("<iiiii", width, height, 0, 0, 0))
 
-    ag.ultimo_local = leer_portapapeles()
-    threading.Thread(target=vigilar, args=(ag,), daemon=True).start()
+    ag.last_local = leer_portapapeles()
+    threading.Thread(target=watch, args=(ag,), daemon=True).start()
     try:
         ag.bucle()
     except KeyboardInterrupt:
@@ -3015,41 +3015,41 @@ cat > "$W/provision/share.sh" <<'__PAYLOAD_PROVISION_SHARE_SH__'
 #  arguments it mounts; --umount unmounts; --status reports what it sees.
 #
 set -uo pipefail
-PUNTO="${OMARCHY_SHARE_MNT:-/mnt/share}"
+MOUNT_POINT="${OMARCHY_SHARE_MNT:-/mnt/share}"
 TAG=share
-PUERTO_WEBDAV=/dev/virtio-ports/org.spice-space.webdav.0
+WEBDAV_PORT=/dev/virtio-ports/org.spice-space.webdav.0
 URL=http://localhost:9843/
 
-hay_9p()     { grep -qw 9p /proc/filesystems 2>/dev/null && [ -e /sys/bus/virtio/drivers/9pnet_virtio ]; }
-hay_webdav() { [ -e "$PUERTO_WEBDAV" ]; }
+has_9p()     { grep -qw 9p /proc/filesystems 2>/dev/null && [ -e /sys/bus/virtio/drivers/9pnet_virtio ]; }
+has_webdav() { [ -e "$WEBDAV_PORT" ]; }
 # CAREFUL: `mountpoint -q` will NOT do here. The fstab entry carries
 # x-systemd.automount, so /mnt/share is ALWAYS a mount point -- the autofs one
 # -- even with nothing behind it. With mountpoint, this script answered
 # "already mounted" and never mounted anything: in SPICE WebDAV mode it could
 # not work at all, and the user saw "No such device" when listing it.
-montado() {
+is_mounted() {
   local t
-  t=$(findmnt -n -o FSTYPE "$PUNTO" 2>/dev/null | tail -1)
+  t=$(findmnt -n -o FSTYPE "$MOUNT_POINT" 2>/dev/null | tail -1)
   [ -n "$t" ] && [ "$t" != autofs ]
 }
 
-estado() {
-  echo "  mount point:   $PUNTO"
-  echo "  mounted:       $(montado && echo yes || echo no)"
-  echo "  VirtFS (9p):   $(hay_9p && echo available || echo no)"
-  echo "  SPICE WebDAV:  $(hay_webdav && echo available || echo no)"
-  if hay_webdav; then
+show_state() {
+  echo "  mount point:   $MOUNT_POINT"
+  echo "  mounted:       $(is_mounted && echo yes || echo no)"
+  echo "  VirtFS (9p):   $(has_9p && echo available || echo no)"
+  echo "  SPICE WebDAV:  $(has_webdav && echo available || echo no)"
+  if has_webdav; then
     echo "  spice-webdavd:    $(systemctl is-active spice-webdavd 2>&1)"
   fi
-  montado && { echo "  contents:"; ls -la "$PUNTO" 2>/dev/null | head -6 | sed 's/^/    /'; }
+  is_mounted && { echo "  contents:"; ls -la "$MOUNT_POINT" 2>/dev/null | head -6 | sed 's/^/    /'; }
 }
 
-montar() {
-  montado && { echo "already mounted on $PUNTO"; return 0; }
-  sudo mkdir -p "$PUNTO"
+do_mount() {
+  is_mounted && { echo "already mounted on $MOUNT_POINT"; return 0; }
+  sudo mkdir -p "$MOUNT_POINT"
 
   # 1) VirtFS: the simplest one, if the device is there
-  if sudo mount -t 9p -o trans=virtio,version=9p2000.L,rw,msize=512000 "$TAG" "$PUNTO" 2>/dev/null; then
+  if sudo mount -t 9p -o trans=virtio,version=9p2000.L,rw,msize=512000 "$TAG" "$MOUNT_POINT" 2>/dev/null; then
     # 9p passes host ownership straight through (security_model=mapped-xattr),
     # and UTM's default share is the Mac user's home: uid 501, mode 0750. The
     # guest account is uid 1000, so the mount succeeds and every access is
@@ -3059,22 +3059,22 @@ montar() {
     # so it is a one-time fix that survives reboots rather than a per-boot
     # hack. Reported and verified end-to-end by RBeach (@BeachFrontMT) in
     # omacom/omarchy discussion #7956.
-    if ! [ -r "$PUNTO" ] || ! [ -w "$PUNTO" ]; then
+    if ! [ -r "$MOUNT_POINT" ] || ! [ -w "$MOUNT_POINT" ]; then
       echo "  host ownership does not match this account; claiming the mount"
-      sudo chown "$(id -u):$(id -g)" "$PUNTO" 2>/dev/null \
+      sudo chown "$(id -u):$(id -g)" "$MOUNT_POINT" 2>/dev/null \
         && echo "  chown applied (stored as xattrs on the host: it persists)" \
         || echo "  ! chown failed; the share may be read-only for you"
     fi
-    echo "mounted over VirtFS (9p) on $PUNTO"; return 0
+    echo "mounted over VirtFS (9p) on $MOUNT_POINT"; return 0
   fi
 
   # 2) SPICE WebDAV
-  if hay_webdav; then
+  if has_webdav; then
     # The fstab autofs owns the mount point and only knows how to mount 9p.
     # While it sits there, davfs cannot mount on top. Release it; if you later
     # pick VirtFS, it comes back on the next boot.
     sudo systemctl stop mnt-share.automount 2>/dev/null || true
-    sudo mkdir -p "$PUNTO"
+    sudo mkdir -p "$MOUNT_POINT"
     sudo systemctl start spice-webdavd 2>/dev/null || true
     for _ in 1 2 3 4 5 6 7 8 9 10; do
       curl -s -m 2 -o /dev/null "$URL" && break
@@ -3086,8 +3086,8 @@ montar() {
       return 1
     fi
     # davfs2 asks for a username and password: neither is needed here
-    if printf '\n\n' | sudo mount -t davfs -o rw,uid=$(id -u),gid=$(id -g) "$URL" "$PUNTO" 2>/dev/null; then
-      echo "mounted over SPICE WebDAV on $PUNTO"; return 0
+    if printf '\n\n' | sudo mount -t davfs -o rw,uid=$(id -u),gid=$(id -g) "$URL" "$MOUNT_POINT" 2>/dev/null; then
+      echo "mounted over SPICE WebDAV on $MOUNT_POINT"; return 0
     fi
     echo "davfs2 could not mount $URL" >&2
     return 1
@@ -3100,10 +3100,10 @@ montar() {
 }
 
 case "${1:-}" in
-  --umount|-u) sudo umount "$PUNTO" && echo "unmounted" ;;
-  --status|-s) estado ;;
+  --umount|-u) sudo umount "$MOUNT_POINT" && echo "unmounted" ;;
+  --status|-s) show_state ;;
   -h|--help)   sed -n '3,14p' "$0" | sed 's/^#\{0,2\} \{0,1\}//' ;;
-  "")          montar ;;
+  "")          do_mount ;;
   *)           echo "unknown option: $1" >&2; exit 1 ;;
 esac
 __PAYLOAD_PROVISION_SHARE_SH__
@@ -3353,7 +3353,7 @@ wait_for "TOK_SH_0" 12 "no se pudo fijar el prompt" 60
 
 # --- locate and mount the provisioning ISO
 send "mkdir -p /media/prov; for d in /dev/vd? /dev/sr?; do mount -t iso9660 -o ro \$d /media/prov 2>/dev/null && \[ -f /media/prov/stage1.sh \] && break; umount /media/prov 2>/dev/null; done; ls /media/prov; echo TOK_PROV_\$?\r"
-wait_for "TOK_PROV_0" 13 "no se encontró el ISO de aprovisionamiento" 120
+wait_for "TOK_PROV_0" 13 "the provisioning ISO was not found" 120
 
 send "test -s /media/prov/alarm-rootfs.tgz; echo TOK_TGZ_\$?\r"
 wait_for "TOK_TGZ_0" 14 "the Arch Linux ARM rootfs is missing from the ISO" 60
@@ -3426,7 +3426,7 @@ expect {
     -re {TOK_BUILD_[1-9][0-9]*} {
         puts "\n\n!!!!!! THE BUILD FAILED !!!!!!\n"
         set timeout 300
-        send "echo; echo ---- ultimas 80 lineas ----; tail -n 80 /tmp/build.log; echo TOK_TAIL_\$?\r"
+        send "echo; echo ---- ultimas 80 file_lines ----; tail -n 80 /tmp/build.log; echo TOK_TAIL_\$?\r"
         catch { wait_for "TOK_TAIL_" 15 "tail" 300 }
         exit 20
     }
@@ -3475,13 +3475,13 @@ wait_for "localhost:~#" 11 "shell de root" 120
 send "export PS1='RDY> '; echo TOK_SH_\$?\r"
 wait_for "TOK_SH_0" 12 "prompt" 60
 send "mkdir -p /media/prov; for d in /dev/vd? /dev/sr?; do mount -t iso9660 -o ro \$d /media/prov 2>/dev/null && \[ -f /media/prov/repair.sh \] && break; umount /media/prov 2>/dev/null; done; ls /media/prov; echo TOK_PROV_\$?\r"
-wait_for "TOK_PROV_0" 13 "ISO de aprovisionamiento" 120
+wait_for "TOK_PROV_0" 13 "provisioning ISO" 120
 
 set timeout -1
 send "export FIXSCRIPT=$FIX; sh /media/prov/repair.sh 2>&1 | tee /tmp/repair.log\r"
 expect {
     -ex "TOK_REPAIR_0" { puts "\n\n===== REPAIR COMPLETED =====\n" }
-    -re {TOK_REPAIR_[1-9][0-9]*} { puts "\n\n!!!!! LA REPARACION FALLO !!!!!\n"; exit 20 }
+    -re {TOK_REPAIR_[1-9][0-9]*} { puts "\n\n!!!!! THE REPAIR FAILED !!!!!\n"; exit 20 }
     eof { puts "\n!! EOF"; exit 16 }
 }
 set timeout 300
@@ -3587,10 +3587,10 @@ MAC=$(printf '02:%02X:%02X:%02X:%02X:%02X' $((RANDOM%256)) $((RANDOM%256)) $((RA
 # the user has running, so that is checked first.
 if [ "$DEST_DIR" = "$DOCS" ] && pgrep -x UTM >/dev/null; then
   UTMCTL=/Applications/UTM.app/Contents/MacOS/utmctl
-  CORRIENDO=$("$UTMCTL" list 2>/dev/null | awk '$2=="started"{print $3" "$4}' | grep -v "^$" || true)
-  if [ -n "$CORRIENDO" ]; then
+  VMS_RUNNING=$("$UTMCTL" list 2>/dev/null | awk '$2=="started"{print $3" "$4}' | grep -v "^$" || true)
+  if [ -n "$VMS_RUNNING" ]; then
     echo "==> THERE ARE VMs RUNNING in UTM:"
-    echo "$CORRIENDO" | sed 's/^/      /'
+    echo "$VMS_RUNNING" | sed 's/^/      /'
     echo "    Registering the bundle needs UTM restarted, and that would cut them off."
     if [ -t 0 ] && [ "${ASSUME_YES:-}" != "1" ]; then
       printf "    Close them and restart UTM? [y/N]: "
@@ -3619,7 +3619,7 @@ echo "    copying disk ($(du -h "$SRC_QCOW" | cut -f1))"
 cp -c "$SRC_QCOW" "$BUNDLE/Data/$DISK_UUID.qcow2" 2>/dev/null || cp "$SRC_QCOW" "$BUNDLE/Data/$DISK_UUID.qcow2"
 # The VARS half of the aarch64 UEFI uses the edk2-ARM-vars.fd template (not
 # aarch64);
-# UTM aporta edk2-aarch64-code.fd en tiempo de ejecución vía -L.
+# UTM supplies edk2-aarch64-code.fd at run time via -L.
 install -m 0644 "$VARS_TPL" "$BUNDLE/Data/efi_vars.fd"
 
 cat > "$BUNDLE/config.plist" <<PLIST
@@ -3643,7 +3643,7 @@ cat > "$BUNDLE/config.plist" <<PLIST
 		<string>arch-linux</string>
 		<key>Notes</key>
 		<string>Arch Linux ARM (aarch64) + Hyprland + dotfiles de Omarchy 4.
-Usuario: ${NOTES_USER} · Contraseña: ${NOTES_PASS} (también root). Cámbiala con passwd.
+User: ${NOTES_USER} · Password: ${NOTES_PASS} (root too). Change it with passwd.
 La tecla Option (⌥) actúa como SUPER. Lee LEEME.md.</string>
 	</dict>
 	<key>System</key>
@@ -3829,7 +3829,7 @@ CFGEOF
   sed -i '' "s#^ROOT=.*#ROOT=$W#" "$W/scripts/qemu.sh" "$W/scripts/make-utm.sh" 2>/dev/null || true
 }
 
-make_iso() {  # make_iso <destino.iso> <fichero...>
+make_iso() {  # make_iso <target.iso> <file...>
   local out="$1"; shift
   local d; d=$(mktemp -d)
   cp "$@" "$d"/
@@ -4435,7 +4435,7 @@ __PAYLOAD_LEEME_MD__
 # Only what is genuinely a decision, and expensive to get wrong, is asked.
 # Everything else (Alpine version, rootfs URL, Omarchy branch, disk size,
 # locales) stays an environment variable: they are details of
-# implementacion, no decisiones.
+# implementation, not decisions.
 # With ':=' so they can be set from the environment, like everything else:
 #   BUILD_FREE_APPS=no ./build-omarchy-arm.sh --yes
 #   KEEP_VM=yes ./build-omarchy-arm.sh --yes  # keeps the intermediate VM
@@ -4443,7 +4443,7 @@ __PAYLOAD_LEEME_MD__
 : "${BUILD_FREE_APPS:=yes}"
 : "${BUILD_DIST:=yes}"
 
-cuestionario() {
+questionnaire() {
   detect_from_host
   if (( ! INTERACTIVE )); then
     # No terminal: the historical behaviour, fully automatic. They are saved
@@ -4458,8 +4458,8 @@ cuestionario() {
   echo
 
   ask VM_TIMEZONE "Zona horaria"                     "$VM_TIMEZONE"
-  ask VM_KEYMAP   "Teclado (consola)"                "$VM_KEYMAP"
-  ask VM_XKB      "Teclado (Hyprland/Wayland)"       "$VM_XKB"
+  ask VM_KEYMAP   "Keyboard (console)"                "$VM_KEYMAP"
+  ask VM_XKB      "Keyboard (Hyprland/Wayland)"       "$VM_XKB"
   echo
   ask UTM_CPUS    "Cores for the VM"               "$UTM_CPUS"
   ask UTM_MEM     "Memory for the VM (MiB)"         "$UTM_MEM"
@@ -4553,10 +4553,10 @@ done
 # Resuming or running a single phase must not reopen the questionnaire, but it
 # MUST recover what was answered the previous time.
 if [[ -z $run_from && -z $run_only ]]; then
-  cargar_respuestas          # what was already answered becomes the default
-  cuestionario
+  load_answers          # what was already answered becomes the default
+  questionnaire
 else
-  cargar_respuestas || true
+  load_answers || true
   if [[ -f "$W/answers.env" ]]; then
     info "resuming with the answers from $W/answers.env (user '$VM_USER', distribute: ${BUILD_DIST:-no})"
   else

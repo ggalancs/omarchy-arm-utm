@@ -24,7 +24,7 @@ log "VM tweaks in the right .lua files"
 # (monitors.conf, autostart.conf) are read by nobody. The settings go in
 # monitors.lua.
 cat > ~/.config/hypr/monitors.lua <<'LUA'
--- Ajustado para VM (UTM/QEMU virtio-gpu).
+-- Adjusted for a VM (UTM/QEMU virtio-gpu).
 -- Omarchy asume pantallas retina 2x; en la VM eso deja todo gigante.
 -- List the available resolutions:  hyprctl monitors
 o.env("GDK_SCALE", "1")

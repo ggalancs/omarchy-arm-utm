@@ -12,15 +12,15 @@ cat > ~/.config/hypr/monitors.lua <<'LUA'
 -- See https://wiki.hypr.land/Configuring/Basics/Monitors/
 -- List current monitors and supported resolutions with: hyprctl monitors all
 
--- Ajustado para VM (UTM/QEMU virtio-gpu): Omarchy asume pantallas retina 2x,
--- que en la VM deja todo gigante. Aqui 1x y la resolucion que ofrezca UTM.
+-- Adjusted for a VM (UTM/QEMU virtio-gpu): Omarchy assumes 2x retina panels,
+-- which makes everything huge in the VM. Here 1x and whatever UTM offers.
 local omarchy_gdk_scale = 1
 local omarchy_monitor_scale = 1
 
 hl.env("GDK_SCALE", tostring(omarchy_gdk_scale))
 hl.monitor({ output = "", mode = "preferred", position = "auto", scale = omarchy_monitor_scale })
 
--- Para fijar una resolucion concreta:
+-- To pin a specific resolution:
 -- hl.monitor({ output = "Virtual-1", mode = "1920x1200@60", position = "0x0", scale = 1 })
 LUA
 

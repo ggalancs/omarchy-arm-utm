@@ -62,3 +62,14 @@ variable
 version
 visible
 ones
+clones
+composable
+onappear
+nsession
+listrefresh
+contentview
+# EMPEZAR.md is the Spanish quick-start, Spanish on purpose like
+# README.es.md. Its name is referenced from code, so it is listed here
+# rather than renamed: renaming it would break links already published.
+empezar
+

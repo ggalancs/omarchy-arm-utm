@@ -5,7 +5,7 @@
 #  The proprietary ones are deliberately NOT shipped inside: packing them into
 #  a .zip that gets redistributed would mean redistributing third-party
 #  binaries. This script
-#  descarga de su fuente OFICIAL, en tu maquina y bajo tu criterio.
+#  fetches them from their OFFICIAL source, on your machine, at your call.
 #
 #  Almost all of them have an official arm64 build. The ones already inside the
 #  image (free software) are marked as installed and skipped.
@@ -35,9 +35,9 @@ OK_LIST=(); KO_LIST=()
 #  key|title|description
 CATALOG=(
   "1password|1Password|Gestor de contrasenas. Tarball arm64 oficial de AgileBits"
-  "1password-cli|1Password CLI|El comando op. Binario estatico arm64 oficial"
+  "1password-cli|1Password CLI|The op command. Official static arm64 binary"
   "obsidian|Obsidian|Notas en markdown. AppImage arm64 oficial"
-  "typora|Typora|Editor markdown WYSIWYG. Paquete arm64 oficial via AUR"
+  "typora|Typora|WYSIWYG markdown editor. Official arm64 package via AUR"
   "localsend|LocalSend|Send files between devices. Official arm64 build"
   "chrome|Google Chrome|Brings Widevine for arm64: enables Spotify and Netflix on the web"
   "spotify-web|Spotify (webapp)|Lanzador de open.spotify.com + reasigna SUPER+SHIFT+M"

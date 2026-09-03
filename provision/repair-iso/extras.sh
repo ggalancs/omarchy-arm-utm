@@ -34,14 +34,14 @@ OK_LIST=(); KO_LIST=()
 #  key|title|description
 CATALOG=(
   "1password|1Password|Gestor de contrasenas. Tarball arm64 oficial de AgileBits"
-  "1password-cli|1Password CLI|El comando op. Binario estatico arm64 oficial"
+  "1password-cli|1Password CLI|The op command. Official static arm64 binary"
   "obsidian|Obsidian|Notas en markdown. AppImage arm64 oficial"
-  "typora|Typora|Editor markdown WYSIWYG. Paquete arm64 oficial via AUR"
-  "localsend|LocalSend|Enviar ficheros entre dispositivos. Build arm64 oficial"
+  "typora|Typora|WYSIWYG markdown editor. Official arm64 package via AUR"
+  "localsend|LocalSend|Send files between devices. Official arm64 build"
   "chrome|Google Chrome|Trae Widevine para arm64: habilita Spotify y Netflix web"
   "spotify-web|Spotify (webapp)|Lanzador de open.spotify.com + reasigna SUPER+SHIFT+M"
   "pinta|Pinta|Image editor. Built with Microsoft's arm64 .NET"
-  "obs|OBS Studio|Captura y streaming. Compilado sin el plugin de navegador"
+  "obs|OBS Studio|Capture and streaming. Built without the browser plugin"
 )
 
 catalog_keys()  { printf '%s\n' "${CATALOG[@]}" | cut -d'|' -f1; }
@@ -146,9 +146,9 @@ do_1password() {
   [ -n "$src" ] || { fail "the tarball is not shaped as expected"; return 1; }
   sudo mkdir -p /opt/1Password
   sudo cp -a "$src"/. /opt/1Password/
-  ( cd /opt/1Password && sudo ./after-install.sh ) >/dev/null 2>&1 || warn "after-install.sh dio errores (suele ser inocuo)"
+  ( cd /opt/1Password && sudo ./after-install.sh ) >/dev/null 2>&1 || warn "after-install.sh reported errors (usually harmless)"
   have 1password && ok "$(1password --version 2>/dev/null | head -1 || echo installed)" || { fail "did not end up on the PATH"; return 1; }
-  info "${c_dim}En Hyprland conviene lanzarlo con --ozone-platform=wayland${c_off}"
+  info "${c_dim}On Hyprland it is best launched with --ozone-platform=wayland${c_off}"
 }
 
 do_1password_cli() { title "1Password CLI"; aur_build 1password-cli && ok "$(op --version 2>/dev/null)"; }
@@ -337,7 +337,7 @@ case "${1:-}" in
       show_list
       mapfile -t SELECTED < <(
         while read -r k; do printf '%s — %s\n' "$k" "$(catalog_title "$k")"; done < <(catalog_keys) \
-        | gum choose --no-limit --header "Selecciona qué instalar (espacio marca, enter confirma)" \
+        | gum choose --no-limit --header "Choose what to install (space selects, enter confirms)" \
         | cut -d' ' -f1
       )
     else

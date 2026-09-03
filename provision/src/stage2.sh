@@ -38,11 +38,11 @@ grep -q '^DisableDownloadTimeout' /etc/pacman.conf \
 
 # A retrying wrapper: mirrors fail in bursts, not steadily.
 pac() {
-  local intento
-  for intento in 1 2 3; do
+  local try_n
+  for try_n in 1 2 3; do
     if pacman -S --noconfirm --needed --disable-download-timeout "$@"; then return 0; fi
-    warn "pacman failed (attempt $intento/3); retrying in ${intento}0 s"
-    sleep "${intento}0"
+    warn "pacman failed (attempt $try_n/3); retrying in ${try_n}0 s"
+    sleep "${try_n}0"
     pacman -Sy --noconfirm --disable-download-timeout >/dev/null 2>&1 || true
   done
   return 1
@@ -155,7 +155,7 @@ initrd   $INITRD
 options  root=LABEL=OMROOT $KERNEL_ROOTFLAGS rw quiet loglevel=3
 EOF
 cat > /boot/loader/entries/omarchy-verbose.conf <<EOF
-title    Arch Linux ARM — Omarchy (verboso)
+title    Arch Linux ARM — Omarchy (verbose)
 linux    $KERNEL_IMG
 initrd   $INITRD
 options  root=LABEL=OMROOT $KERNEL_ROOTFLAGS rw
@@ -251,7 +251,7 @@ echo "  spice-vdagentd with -X (required under Hyprland)"
 # UTM's shared folder has TWO modes and the user picks one:
 #   VirtFS -> a 9p device with mount_tag "share"
 #   SPICE WebDAV -> the org.spice-space.webdav.0 virtio port, served by
-#     spice-webdavd (paquete phodav) en http://localhost:9843/
+#     spice-webdavd (phodav package) at http://localhost:9843/
 # Both are prepared: each only activates if its device exists.
 systemctl enable spice-webdavd.service 2>/dev/null || true
 echo "  spice-webdavd enabled (UTM SPICE WebDAV mode)"
@@ -335,7 +335,7 @@ echo "  available to stage3: $(ls "$PROVDIR" | tr '\n' ' ')"
 # assignment, so the TOK_STAGE3_<rc> token was only emitted in the zero case
 # and the host never got to see stage3's specific failure. With `|| RC=$?` the
 # command is
-# en contexto probado y set -e no interviene.
+# in a tested context and set -e does not step in.
 STAGE3_RC=0
 su - "$VM_USER" -c "bash ~/stage3.sh" || STAGE3_RC=$?
 [ $STAGE3_RC -eq 0 ] || warn "stage3 finished with errors (rc=$STAGE3_RC)"
@@ -398,7 +398,7 @@ echo "  session=$SESSION"
 ls /usr/local/share/wayland-sessions /usr/share/wayland-sessions 2>/dev/null
 
 # ---------------------------------------------------------------- ajustes VM
-log "ajustes propios de maquina virtual"
+log "virtual-machine specific settings"
 # Hardware cursors and DRM modifiers misbehave on virtio-gpu
 mkdir -p /etc/environment.d
 cat > /etc/environment.d/90-vm-graphics.conf <<'EOF'
@@ -410,7 +410,7 @@ WLR_RENDERER_ALLOW_SOFTWARE=1
 # paint: virgl does not hand over buffers Hyprland can compose. Only clients
 # using wl_shm (foot) render at all. With llvmpipe they all work.
 # Confirmed NOT to fix it: AQ_NO_MODIFIERS, render:cm_enabled=false,
-# render:explicit_sync (eliminado en Hyprland 0.56).
+# render:explicit_sync (removed in Hyprland 0.56).
 LIBGL_ALWAYS_SOFTWARE=1
 EOF
 # serial console, handy for debugging from the host

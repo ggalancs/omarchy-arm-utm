@@ -44,10 +44,10 @@ MAC=$(printf '02:%02X:%02X:%02X:%02X:%02X' $((RANDOM%256)) $((RANDOM%256)) $((RA
 # the user has running, so that is checked first.
 if [ "$DEST_DIR" = "$DOCS" ] && pgrep -x UTM >/dev/null; then
   UTMCTL=/Applications/UTM.app/Contents/MacOS/utmctl
-  CORRIENDO=$("$UTMCTL" list 2>/dev/null | awk '$2=="started"{print $3" "$4}' | grep -v "^$" || true)
-  if [ -n "$CORRIENDO" ]; then
+  VMS_RUNNING=$("$UTMCTL" list 2>/dev/null | awk '$2=="started"{print $3" "$4}' | grep -v "^$" || true)
+  if [ -n "$VMS_RUNNING" ]; then
     echo "==> THERE ARE VMs RUNNING in UTM:"
-    echo "$CORRIENDO" | sed 's/^/      /'
+    echo "$VMS_RUNNING" | sed 's/^/      /'
     echo "    Registering the bundle needs UTM restarted, and that would cut them off."
     if [ -t 0 ] && [ "${ASSUME_YES:-}" != "1" ]; then
       printf "    Close them and restart UTM? [y/N]: "
@@ -76,7 +76,7 @@ echo "    copying disk ($(du -h "$SRC_QCOW" | cut -f1))"
 cp -c "$SRC_QCOW" "$BUNDLE/Data/$DISK_UUID.qcow2" 2>/dev/null || cp "$SRC_QCOW" "$BUNDLE/Data/$DISK_UUID.qcow2"
 # The VARS half of the aarch64 UEFI uses the edk2-ARM-vars.fd template (not
 # aarch64);
-# UTM aporta edk2-aarch64-code.fd en tiempo de ejecución vía -L.
+# UTM supplies edk2-aarch64-code.fd at run time via -L.
 install -m 0644 "$VARS_TPL" "$BUNDLE/Data/efi_vars.fd"
 
 cat > "$BUNDLE/config.plist" <<PLIST
@@ -100,7 +100,7 @@ cat > "$BUNDLE/config.plist" <<PLIST
 		<string>arch-linux</string>
 		<key>Notes</key>
 		<string>Arch Linux ARM (aarch64) + Hyprland + dotfiles de Omarchy 4.
-Usuario: ${NOTES_USER} · Contraseña: ${NOTES_PASS} (también root). Cámbiala con passwd.
+User: ${NOTES_USER} · Password: ${NOTES_PASS} (root too). Change it with passwd.
 La tecla Option (⌥) actúa como SUPER. Lee LEEME.md.</string>
 	</dict>
 	<key>System</key>

@@ -35,7 +35,7 @@ for i in $(seq 1 30); do [ -S "$MON" ] && break; sleep 1; done
 echo "booting, waiting ${WAIT}s for the desktop..."
 sleep "$WAIT"
 
-# Despierta la sesion: tras ~2 min hypridle lanza el salvapantallas y la
+# Wakes the session: after ~2 min hypridle starts the screensaver and the
 # captura saldria en negro.
 printf 'sendkey esc\n' | nc -U "$MON" >/dev/null
 sleep 8

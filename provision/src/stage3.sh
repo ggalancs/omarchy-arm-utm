@@ -187,18 +187,18 @@ log "virtual machine tweaks"
 # quattro uses Lua configuration: writing monitors.conf would do nothing.
 cat > ~/.config/hypr/monitors.lua <<'LUA'
 -- See https://wiki.hypr.land/Configuring/Basics/Monitors/
--- Modos disponibles:  hyprctl monitors all
+-- Available modes:  hyprctl monitors all
 --
 -- VM en UTM/QEMU con virtio-gpu. Dos ajustes respecto a los valores de Omarchy:
 --
 --  1. Escala 1 (Omarchy asume pantallas retina 2x; en la VM deja todo gigante).
---  2. Resolucion fija 1920x1200 en vez de "preferred", que da 1280x800.
+--  2. Fixed 1920x1200 instead of "preferred", which negotiates 1280x800.
 --
--- IMPORTANTE: cambiar el modo EN CALIENTE (hyprctl / recarga de config) rompe
+-- IMPORTANT: changing the mode HOT (hyprctl / config reload) breaks
 -- rendering under virgl: the desktop stays blank until you restart.
 -- Applied from boot it works fine. If you change this, restart the VM.
 --
--- Para que la resolucion siga al tamano de la ventana de UTM:
+-- To make the resolution follow the size of the UTM window:
 --   hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
 hl.env("GDK_SCALE", "1")
 hl.monitor({ output = "Virtual-1", mode = "1920x1200@60", position = "0x0", scale = 1 })
@@ -211,9 +211,9 @@ cat > ~/.config/hypr/autostart.lua <<'LUA'
 hl.on("hyprland.start", function()
   -- spice-vdagent NO se lanza: su portapapeles es X11 y bajo Hyprland muere
   -- con "cannot open display". Peor aun, si arranca, vdagentd ve dos agentes
-  -- en la misma sesion y desconecta a los dos ("multiple agents in one
+  -- in the same session and disconnects both of them ("multiple agents in one
   -- session"). El portapapeles lo lleva omarchy-arm-vdagent, como servicio
-  -- de usuario.
+  -- of the user.
 end)
 LUA
 
@@ -253,7 +253,7 @@ for p in "$@"; do
     skip+=("$p")
   fi
 done
-((${#skip[@]})) && printf '\033[33mOmitido, no existe en Arch Linux ARM: %s\033[0m\n' "${skip[*]}" >&2
+((${#skip[@]})) && printf '\033[33mSkipped, does not exist in Arch Linux ARM: %s\033[0m\n' "${skip[*]}" >&2
 ((${#avail[@]})) || exit 0
 exec "$REAL" "${avail[@]}"
 WRAP
@@ -276,7 +276,7 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
   case "$src" in
     aur)
       # AUR URLs use the PackageBase, which is not always the name of the
-      # paquete (yaru-icon-theme vive en el repo "yaru").
+      # package (yaru-icon-theme lives in the "yaru" repo).
       local base
       base=$(curl -fsSL --max-time 20 "https://aur.archlinux.org/rpc/v5/info?arg[]=$pkg" \
              | sed -n 's/.*"PackageBase":"\([^"]*\)".*/\1/p' | head -1)
@@ -429,7 +429,7 @@ sudo bash "$OMARCHY_PATH/install/config/theme-system.sh" >/dev/null 2>&1 || true
 # /opt/zig0.15/zig and depends on a zig0.15 package that does not exist on ARM
 # (the AUR one is arch=(x86_64) and compiles LLVM from source). Omarchy's
 # declares arch=('x86_64' 'aarch64') and downloads the official tarball
-# zig-aarch64-linux-0.15.2.tar.xz de ziglang.org -sha256 958ed7d1e00d0ea7...-,
+# zig-aarch64-linux-0.15.2.tar.xz from ziglang.org -sha256 958ed7d1e00d0ea7...-,
 # which is the only version libghostty-vt accepts.
 
 # --- the kernel reboot prompt, which on ARM never goes away ---------------

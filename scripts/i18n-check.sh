@@ -15,4 +15,4 @@ case "$SHB $F" in
   *)                     echo "  (no lint for this type)" ;;
 esac
 n=$(python3 scripts/i18n-audit.py audit "$F" | awk '/TOTAL/{print $2}')
-echo "  castellano restante en $(basename "$F"): $n"
+echo "  Spanish left in $(basename "$F"): $n"

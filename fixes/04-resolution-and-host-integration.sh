@@ -14,13 +14,13 @@ cat /usr/share/omarchy/config/hypr/autostart.lua 2>/dev/null | head -6
 log "monitors.lua: 1920x1200 by default"
 cat > ~/.config/hypr/monitors.lua <<'LUA'
 -- See https://wiki.hypr.land/Configuring/Basics/Monitors/
--- Modos disponibles:  hyprctl monitors all
+-- Available modes:  hyprctl monitors all
 --
--- Ajustado para VM en UTM/QEMU (virtio-gpu). Omarchy asume pantallas retina 2x;
--- en la VM eso deja todo gigante, asi que aqui va escala 1.
+-- Adjusted for a VM in UTM/QEMU (virtio-gpu). Omarchy assumes 2x retina panels;
+-- in a VM that makes everything huge, so this uses scale 1.
 --
--- Resolucion FIJA de 1920x1200 (16:10, como la pantalla del Mac). Si prefieres
--- que la resolucion siga al tamano de la ventana de UTM, cambia mode por
+-- FIXED 1920x1200 (16:10, like the Mac panel). If you would rather have
+-- the resolution follow the size of the UTM window, change mode to
 -- "preferred":
 --   hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
 hl.env("GDK_SCALE", "1")
@@ -39,7 +39,7 @@ sudo systemctl enable spice-vdagentd.socket 2>&1 | tail -1 || true
 cat > ~/.config/hypr/autostart.lua <<'LUA'
 -- Extra processes started with the session.
 hl.on("hyprland.start", function()
-  -- Portapapeles compartido con el host de UTM
+  -- Shared clipboard with the UTM host
   hl.exec_cmd("uwsm-app -- spice-vdagent")
 end)
 LUA

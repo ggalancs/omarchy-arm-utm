@@ -12,41 +12,41 @@
 #  arguments it mounts; --umount unmounts; --status reports what it sees.
 #
 set -uo pipefail
-PUNTO="${OMARCHY_SHARE_MNT:-/mnt/share}"
+MOUNT_POINT="${OMARCHY_SHARE_MNT:-/mnt/share}"
 TAG=share
-PUERTO_WEBDAV=/dev/virtio-ports/org.spice-space.webdav.0
+WEBDAV_PORT=/dev/virtio-ports/org.spice-space.webdav.0
 URL=http://localhost:9843/
 
-hay_9p()     { grep -qw 9p /proc/filesystems 2>/dev/null && [ -e /sys/bus/virtio/drivers/9pnet_virtio ]; }
-hay_webdav() { [ -e "$PUERTO_WEBDAV" ]; }
+has_9p()     { grep -qw 9p /proc/filesystems 2>/dev/null && [ -e /sys/bus/virtio/drivers/9pnet_virtio ]; }
+has_webdav() { [ -e "$WEBDAV_PORT" ]; }
 # CAREFUL: `mountpoint -q` will NOT do here. The fstab entry carries
 # x-systemd.automount, so /mnt/share is ALWAYS a mount point -- the autofs one
 # -- even with nothing behind it. With mountpoint, this script answered
 # "already mounted" and never mounted anything: in SPICE WebDAV mode it could
 # not work at all, and the user saw "No such device" when listing it.
-montado() {
+is_mounted() {
   local t
-  t=$(findmnt -n -o FSTYPE "$PUNTO" 2>/dev/null | tail -1)
+  t=$(findmnt -n -o FSTYPE "$MOUNT_POINT" 2>/dev/null | tail -1)
   [ -n "$t" ] && [ "$t" != autofs ]
 }
 
-estado() {
-  echo "  mount point:   $PUNTO"
-  echo "  mounted:       $(montado && echo yes || echo no)"
-  echo "  VirtFS (9p):   $(hay_9p && echo available || echo no)"
-  echo "  SPICE WebDAV:  $(hay_webdav && echo available || echo no)"
-  if hay_webdav; then
+show_state() {
+  echo "  mount point:   $MOUNT_POINT"
+  echo "  mounted:       $(is_mounted && echo yes || echo no)"
+  echo "  VirtFS (9p):   $(has_9p && echo available || echo no)"
+  echo "  SPICE WebDAV:  $(has_webdav && echo available || echo no)"
+  if has_webdav; then
     echo "  spice-webdavd:    $(systemctl is-active spice-webdavd 2>&1)"
   fi
-  montado && { echo "  contents:"; ls -la "$PUNTO" 2>/dev/null | head -6 | sed 's/^/    /'; }
+  is_mounted && { echo "  contents:"; ls -la "$MOUNT_POINT" 2>/dev/null | head -6 | sed 's/^/    /'; }
 }
 
-montar() {
-  montado && { echo "already mounted on $PUNTO"; return 0; }
-  sudo mkdir -p "$PUNTO"
+do_mount() {
+  is_mounted && { echo "already mounted on $MOUNT_POINT"; return 0; }
+  sudo mkdir -p "$MOUNT_POINT"
 
   # 1) VirtFS: the simplest one, if the device is there
-  if sudo mount -t 9p -o trans=virtio,version=9p2000.L,rw,msize=512000 "$TAG" "$PUNTO" 2>/dev/null; then
+  if sudo mount -t 9p -o trans=virtio,version=9p2000.L,rw,msize=512000 "$TAG" "$MOUNT_POINT" 2>/dev/null; then
     # 9p passes host ownership straight through (security_model=mapped-xattr),
     # and UTM's default share is the Mac user's home: uid 501, mode 0750. The
     # guest account is uid 1000, so the mount succeeds and every access is
@@ -56,22 +56,22 @@ montar() {
     # so it is a one-time fix that survives reboots rather than a per-boot
     # hack. Reported and verified end-to-end by RBeach (@BeachFrontMT) in
     # omacom/omarchy discussion #7956.
-    if ! [ -r "$PUNTO" ] || ! [ -w "$PUNTO" ]; then
+    if ! [ -r "$MOUNT_POINT" ] || ! [ -w "$MOUNT_POINT" ]; then
       echo "  host ownership does not match this account; claiming the mount"
-      sudo chown "$(id -u):$(id -g)" "$PUNTO" 2>/dev/null \
+      sudo chown "$(id -u):$(id -g)" "$MOUNT_POINT" 2>/dev/null \
         && echo "  chown applied (stored as xattrs on the host: it persists)" \
         || echo "  ! chown failed; the share may be read-only for you"
     fi
-    echo "mounted over VirtFS (9p) on $PUNTO"; return 0
+    echo "mounted over VirtFS (9p) on $MOUNT_POINT"; return 0
   fi
 
   # 2) SPICE WebDAV
-  if hay_webdav; then
+  if has_webdav; then
     # The fstab autofs owns the mount point and only knows how to mount 9p.
     # While it sits there, davfs cannot mount on top. Release it; if you later
     # pick VirtFS, it comes back on the next boot.
     sudo systemctl stop mnt-share.automount 2>/dev/null || true
-    sudo mkdir -p "$PUNTO"
+    sudo mkdir -p "$MOUNT_POINT"
     sudo systemctl start spice-webdavd 2>/dev/null || true
     for _ in 1 2 3 4 5 6 7 8 9 10; do
       curl -s -m 2 -o /dev/null "$URL" && break
@@ -83,8 +83,8 @@ montar() {
       return 1
     fi
     # davfs2 asks for a username and password: neither is needed here
-    if printf '\n\n' | sudo mount -t davfs -o rw,uid=$(id -u),gid=$(id -g) "$URL" "$PUNTO" 2>/dev/null; then
-      echo "mounted over SPICE WebDAV on $PUNTO"; return 0
+    if printf '\n\n' | sudo mount -t davfs -o rw,uid=$(id -u),gid=$(id -g) "$URL" "$MOUNT_POINT" 2>/dev/null; then
+      echo "mounted over SPICE WebDAV on $MOUNT_POINT"; return 0
     fi
     echo "davfs2 could not mount $URL" >&2
     return 1
@@ -97,9 +97,9 @@ montar() {
 }
 
 case "${1:-}" in
-  --umount|-u) sudo umount "$PUNTO" && echo "unmounted" ;;
-  --status|-s) estado ;;
+  --umount|-u) sudo umount "$MOUNT_POINT" && echo "unmounted" ;;
+  --status|-s) show_state ;;
   -h|--help)   sed -n '3,14p' "$0" | sed 's/^#\{0,2\} \{0,1\}//' ;;
-  "")          montar ;;
+  "")          do_mount ;;
   *)           echo "unknown option: $1" >&2; exit 1 ;;
 esac

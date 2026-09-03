@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-omarchy-arm-vdagent — portapapeles compartido entre el anfitrión y Hyprland.
+omarchy-arm-vdagent -- shared clipboard between the host and Hyprland.
 
 CÓMO FUNCIONA EL PORTAPAPELES DE SPICE, Y POR QUÉ ESTO EXISTE
 
@@ -10,22 +10,22 @@ CÓMO FUNCIONA EL PORTAPAPELES DE SPICE, Y POR QUÉ ESTO EXISTE
     (/run/spice-vdagentd/spice-vdagent-sock). Eso es lo que hace que funcione
     en cualquier otra VM.
 
-    El agente oficial (spice-vdagent) implementa ese lado, pero entrega el
+    The official agent (spice-vdagent) implements that side, but hands the
     portapapeles a X11: vdagent.c:421 llama a
     vdagent_clipboards_new(vdagent_display_get_x11(...)) y no hay una sola
-    referencia a wlr-data-control en su repositorio. Bajo Hyprland arranca y
+    reference to wlr-data-control anywhere in its repository. Under Hyprland it
     muere con "cannot open display".
 
-    Este programa ocupa exactamente ese hueco: habla el protocolo udscs con
-    spice-vdagentd igual que el agente oficial, y al otro lado usa
-    wl-copy/wl-paste. El demonio sigue siendo quien habla con el anfitrión.
+    This program fills exactly that gap: it speaks the udscs protocol to
+    spice-vdagentd just as the official agent does, and on the other side uses
+    wl-copy/wl-paste. The daemon is still the one talking to the host.
 
     Un detalle que importa: vdagentd solo atiende al agente de la sesión
-    ACTIVA de seat0 (vdagentd.c:746). En una VM con Hyprland lanzado por SDDM
-    esa comprobación suele fallar, así que el demonio debe arrancarse con -X
+    ACTIVE session of seat0 (vdagentd.c:746). In a VM with Hyprland started by
+    SDDM that check usually fails, so the daemon has to be started with -X
     (disable-session-integration, vdagentd.c:1258).
 
-    Solo texto. Ni imágenes ni ficheros.
+    Text only. No images, no files.
 """
 import os, sys, socket, struct, subprocess, threading, time, signal
 
@@ -53,9 +53,9 @@ class Agente:
     def __init__(self, sock):
         self.s = sock
         self.lock = threading.Lock()
-        self.ultimo_local = None
-        self.esperando = threading.Event()
-        self.recibido = None
+        self.last_local = None
+        self.waiting = threading.Event()
+        self.received = None
 
     def enviar(self, tipo, arg1=0, arg2=0, datos=b""):
         cab = struct.pack("<IIII", tipo, arg1, arg2, len(datos))
@@ -93,7 +93,7 @@ class Agente:
                 if a2 == TIPO_UTF8:
                     texto = datos.decode("utf-8", "replace")
                     escribir_portapapeles(texto)
-                    self.ultimo_local = texto
+                    self.last_local = texto
                     log("  received from the host:", len(texto), "bytes")
 
             elif tipo == VERSION:
@@ -117,8 +117,8 @@ def escribir_portapapeles(texto):
         log("wl-copy failed:", e)
 
 
-def resolucion():
-    """La resolución real, si hyprctl está disponible; si no, un valor sensato."""
+def resolution():
+    """The real resolution if hyprctl is available; otherwise a sane default."""
     try:
         r = subprocess.run(["hyprctl", "monitors", "-j"], capture_output=True, timeout=4)
         if r.returncode == 0:
@@ -130,12 +130,12 @@ def resolucion():
     return 1920, 1200
 
 
-def vigilar(ag):
+def watch(ag):
     """If the user copies inside the VM, offer it to the host."""
     while True:
         t = leer_portapapeles()
-        if t is not None and t != ag.ultimo_local:
-            ag.ultimo_local = t
+        if t is not None and t != ag.last_local:
+            ag.last_local = t
             if t:
                 ag.enviar(CLIPBOARD_GRAB, SEL_CLIPBOARD, 0,
                           struct.pack("<I", TIPO_UTF8))
@@ -162,12 +162,12 @@ def main():
     # struct vdagentd_guest_xorg_resolution = 5 ints: width, height, x, y,
     # display_id (vdagentd-proto.h:51). If the size does not match exactly,
     # vdagentd drops the agent without a word (vdagentd.c:1088).
-    ancho, alto = resolucion()
-    ag.enviar(GUEST_XORG_RESOLUTION, ancho, alto,
-              struct.pack("<iiiii", ancho, alto, 0, 0, 0))
+    width, height = resolution()
+    ag.enviar(GUEST_XORG_RESOLUTION, width, height,
+              struct.pack("<iiiii", width, height, 0, 0, 0))
 
-    ag.ultimo_local = leer_portapapeles()
-    threading.Thread(target=vigilar, args=(ag,), daemon=True).start()
+    ag.last_local = leer_portapapeles()
+    threading.Thread(target=watch, args=(ag,), daemon=True).start()
     try:
         ag.bucle()
     except KeyboardInterrupt:
