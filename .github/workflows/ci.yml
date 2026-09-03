@@ -71,6 +71,14 @@ jobs:
       # Three commands have been documented that did not exist: two renamed
       # flags left stale in the README, and one invented while writing the
       # paragraph that introduced it.
+      # The contract check must run after everything it checks for is built.
+      # Written in the wrong place it aborted a 26-minute build on a tool that
+      # was about to be compiled, and nothing static would have shown it.
+      - name: Unit tests
+        run: |
+          set -euo pipefail
+          for t in tests/*.sh; do echo "::group::$t"; bash "$t"; echo "::endgroup::"; done
+
       - name: Documented flags exist
         run: python3 scripts/check-documented-flags.py
 

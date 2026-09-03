@@ -391,35 +391,6 @@ printf '%s\n' "${TOOLS_KO[@]:-}" | sed '/^$/d' \
 echo "  failure record: /usr/local/share/omarchy-arm/build-failures.txt ($((${#TOOLS_KO[@]})) entries)"
 rm -rf "$HOME/.cache/omabuild"
 
-# The contract: these 18 have to be installed when the build claims success.
-# Recording a failure and carrying on is how an image once shipped without
-# `herdr` while the documentation claimed 17 tools and listed 16. Nothing ever
-# compared what was built against what was meant to be. This asks pacman what
-# is actually installed, which is the only answer that is not a restatement of
-# what the loop above already believes about itself.
-# Contract proposed by Fail-Safe in PR #6.
-CONTRACT=(yaru-icon-theme ttf-ia-writer tzupdate ufw-docker omarchy-nvim
-          tobi-try mise-bin aether cliamp omacalc omacut omawrite herdr
-          tensaku hyprland-preview-share-picker yay xdg-terminal-exec ttfx)
-MISSING=()
-for pkg in "${CONTRACT[@]}"; do
-  if [ "$pkg" = ttfx ]; then
-    # Built from source with cargo, not packaged: ask the binary.
-    command -v ttfx >/dev/null 2>&1 || MISSING+=("$pkg")
-  else
-    pacman -Q "$pkg" >/dev/null 2>&1 || MISSING+=("$pkg")
-  fi
-done
-echo "TOOLS_CONTRACT verified=$(( ${#CONTRACT[@]} - ${#MISSING[@]} ))/${#CONTRACT[@]}"
-if [ ${#MISSING[@]} -gt 0 ]; then
-  warn "the tool contract is not met, missing: ${MISSING[*]}"
-  if [ "${ALLOW_PARTIAL_TOOLS:-no}" = yes ]; then
-    warn "continuing anyway: ALLOW_PARTIAL_TOOLS=yes"
-  else
-    warn "set ALLOW_PARTIAL_TOOLS=yes to build an image without them"
-    exit 1
-  fi
-fi
 fi
 # Omarchy deliberately swaps two Yaru icons for the Adwaita ones; if Yaru has
 # just been installed, that has to be applied again.
@@ -494,6 +465,43 @@ if ! command -v ttfx >/dev/null 2>&1 && command -v cargo >/dev/null 2>&1; then
     warn "ttfx did not build; the screensaver will show the logo without effects"
   fi
   rm -rf /tmp/ttfx-src /tmp/cargo-ttfx
+fi
+
+# The contract: these 18 have to be installed when the build claims success.
+# Recording a failure and carrying on is how an image once shipped without
+# `herdr` while the documentation claimed 17 tools and listed 16. Nothing
+# compared what was built against what was meant to be. This asks pacman what
+# is actually installed, which is the only answer that is not a restatement of
+# what the build loop already believes about itself.
+#
+# It sits HERE, after ttfx, and not up with the package loop where it was
+# first written: ttfx is built from source seventy lines further down, so the
+# check ran before the thing it checks for existed and failed every build on
+# a tool that was about to be compiled. Twenty-six minutes to find that out.
+# Contract proposed by Fail-Safe in PR #6.
+if [ "${BUILD_TOOLS:-yes}" = yes ]; then
+  CONTRACT=(yaru-icon-theme ttf-ia-writer tzupdate ufw-docker omarchy-nvim
+            tobi-try mise-bin aether cliamp omacalc omacut omawrite herdr
+            tensaku hyprland-preview-share-picker yay xdg-terminal-exec ttfx)
+  MISSING=()
+  for pkg in "${CONTRACT[@]}"; do
+    if [ "$pkg" = ttfx ]; then
+      # Built from source with cargo, not packaged: ask the binary.
+      command -v ttfx >/dev/null 2>&1 || MISSING+=("$pkg")
+    else
+      pacman -Q "$pkg" >/dev/null 2>&1 || MISSING+=("$pkg")
+    fi
+  done
+  echo "TOOLS_CONTRACT verified=$(( ${#CONTRACT[@]} - ${#MISSING[@]} ))/${#CONTRACT[@]}"
+  if [ ${#MISSING[@]} -gt 0 ]; then
+    warn "the tool contract is not met, missing: ${MISSING[*]}"
+    if [ "${ALLOW_PARTIAL_TOOLS:-no}" = yes ]; then
+      warn "continuing anyway: ALLOW_PARTIAL_TOOLS=yes"
+    else
+      warn "set ALLOW_PARTIAL_TOOLS=yes to build an image without them"
+      exit 1
+    fi
+  fi
 fi
 
 # --- keyboard: the chosen layout, and a Super key usable from macOS ------
