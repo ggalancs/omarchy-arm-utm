@@ -378,6 +378,10 @@ if [ -f /root/prov/omarchy-arm-gpu ]; then
   install -Dm755 /root/prov/omarchy-arm-gpu /usr/local/bin/omarchy-arm-gpu
   echo "  omarchy-arm-gpu installed"
 fi
+if [ -f /root/prov/omarchy-arm-display ]; then
+  install -Dm755 /root/prov/omarchy-arm-display /usr/local/bin/omarchy-arm-display
+  echo "  omarchy-arm-display installed"
+fi
 # The bootstrap-line guard, plus the profile.d hook that runs it. It has to
 # live outside Hyprland's own config chain: when the bootstrap line is gone,
 # autostart.lua is never read either, so anything started from there would be

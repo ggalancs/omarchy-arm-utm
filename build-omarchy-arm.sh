@@ -507,6 +507,8 @@ if [ -f "$PROV/gpu.sh" ]; then cp "$PROV/gpu.sh" /mnt/root/prov/omarchy-arm-gpu
 else echo "  !! gpu.sh missing from the ISO: the image will ship without omarchy-arm-gpu"; fi
 if [ -f "$PROV/hyprcheck.sh" ]; then cp "$PROV/hyprcheck.sh" /mnt/root/prov/omarchy-arm-hypr-check
 else echo "  !! hyprcheck.sh missing from the ISO: the image will ship without omarchy-arm-hypr-check"; fi
+if [ -f "$PROV/display.sh" ]; then cp "$PROV/display.sh" /mnt/root/prov/omarchy-arm-display
+else echo "  !! display.sh missing from the ISO: the image will ship without omarchy-arm-display"; fi
 cat > /mnt/root/prov/fsinfo.env <<EOF
 ROOTFS=$ROOTFS
 ROOT_MOUNT_OPTS=$MOPT_ROOT
@@ -913,6 +915,10 @@ fi
 if [ -f /root/prov/omarchy-arm-gpu ]; then
   install -Dm755 /root/prov/omarchy-arm-gpu /usr/local/bin/omarchy-arm-gpu
   echo "  omarchy-arm-gpu installed"
+fi
+if [ -f /root/prov/omarchy-arm-display ]; then
+  install -Dm755 /root/prov/omarchy-arm-display /usr/local/bin/omarchy-arm-display
+  echo "  omarchy-arm-display installed"
 fi
 # The bootstrap-line guard, plus the profile.d hook that runs it. It has to
 # live outside Hyprland's own config chain: when the bootstrap line is gone,
@@ -3345,6 +3351,86 @@ exit 1
 __PAYLOAD_PROVISION_HYPRCHECK_SH__
 chmod +x "$W/provision/hyprcheck.sh"
 
+cat > "$W/provision/display.sh" <<'__PAYLOAD_PROVISION_DISPLAY_SH__'
+#!/bin/bash
+#
+#  omarchy-arm-display - switches the guest between the shipped 1920x1200
+#  desktop and a Retina 3840x2160 at scale 2.
+#  ────────────────────────────────────────────────────────────────────────────
+#  Proposed as the default by Fail-Safe in PR #8, corroborated independently by
+#  gillesgoetsch in issue #7. Measured here on the packaged image under UTM
+#  4.7.5: the mode is in the virtual output's availableModes, `hyprctl reload`
+#  applies it with no restart, and the session survives intact -- 228 binds,
+#  no errors. The claim in that PR is correct, and it holds on 4.7 as well as
+#  on the 5.0.4 beta it was tested on.
+#
+#  It is not the default, for one reason the reports do not mention: the image
+#  renders in software (LIBGL_ALWAYS_SOFTWARE=1, because GPU clients come up
+#  black under UTM 4.7). 3840x2160 is 8,294,400 pixels against 2,304,000 --
+#  3.6 times as many, through llvmpipe, for every user who has not turned the
+#  GPU on. Crisp text is worth that on a machine that can afford it and is not
+#  worth it on one that cannot, and only the person at the keyboard knows
+#  which they have.
+#
+#  Usage:
+#    omarchy-arm-display --retina    3840x2160 at scale 2
+#    omarchy-arm-display --default   1920x1200 at scale 1
+#    omarchy-arm-display --status    what is in effect
+#
+#  Enable "Retina Mode" in the VM's Display settings in UTM first, or macOS
+#  scales the 4K framebuffer down and the sharpness is lost.
+#
+#  Pairs with `omarchy-arm-gpu --on` where the host supports it: that is what
+#  makes the extra pixels cheap.
+set -u
+
+MON="$HOME/.config/hypr/monitors.lua"
+[ -f "$MON" ] || { echo "  $MON not found: is this an Omarchy session?" >&2; exit 1; }
+
+show() {
+  echo "  config: $(grep -vE '^\s*--' "$MON" | grep -o 'mode = "[^"]*", position = "[^"]*", scale = [0-9]*' | head -1)"
+  echo "  GDK_SCALE: $(grep -vE '^\s*--' "$MON" | grep -o 'GDK_SCALE", "[0-9]*' | head -1 | grep -o '[0-9]*$')"
+  if command -v hyprctl >/dev/null 2>&1; then
+    echo "  live:   $(hyprctl monitors 2>/dev/null | grep -E '^\s+[0-9]+x[0-9]+@' | head -1 | tr -s ' ')"
+    echo "  scale:  $(hyprctl monitors 2>/dev/null | grep -m1 'scale:' | tr -s ' ')"
+  fi
+}
+
+apply() {
+  local mode="$1" scale="$2" gdk="$3" tmp
+  cp -a "$MON" "$MON.bak.$(date +%s)"
+  # A temporary file and mv rather than `sed -i`: in-place editing needs an
+  # empty argument on BSD sed and no argument on GNU, so `sed -i` would only
+  # run on one of them. This runs on the guest, but a script that cannot be
+  # tested on the machine that writes it does not get shipped.
+  tmp=$(mktemp) || { echo "  cannot create a temporary file" >&2; return 1; }
+  sed -e "s/mode = \"[0-9]*x[0-9]*@[0-9]*\"/mode = \"$mode\"/" \
+      -e "s/\(position = \"0x0\", scale = \)[0-9]*/\1$scale/" \
+      -e "s/hl.env(\"GDK_SCALE\", \"[0-9]*\")/hl.env(\"GDK_SCALE\", \"$gdk\")/" \
+      "$MON" > "$tmp" && mv "$tmp" "$MON" || { rm -f "$tmp"; echo "  could not rewrite $MON" >&2; return 1; }
+  if command -v hyprctl >/dev/null 2>&1 && hyprctl reload >/dev/null 2>&1; then
+    echo "  applied and reloaded"
+  else
+    echo "  written; run 'hyprctl reload' inside the session to apply it"
+  fi
+  show
+}
+
+case "${1:-}" in
+  --retina)
+    # GDK_SCALE stays 1: Hyprland's scale already handles GTK apps, and setting
+    # both doubles twice, which is how you get comically large windows.
+    apply 3840x2160@60 2 1
+    echo "  enable Retina Mode in UTM's Display settings if you have not"
+    ;;
+  --default)  apply 1920x1200@60 1 1 ;;
+  --status)   show ;;
+  -h|--help)  sed -n '3,31p' "$0" | sed 's/^#\{0,2\} \{0,1\}//' ;;
+  *)          sed -n '3,31p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 1 ;;
+esac
+__PAYLOAD_PROVISION_DISPLAY_SH__
+chmod +x "$W/provision/display.sh"
+
 mkdir -p "$W/scripts"
 cat > "$W/scripts/build.exp" <<'__PAYLOAD_SCRIPTS_BUILD_EXP__'
 #!/usr/bin/expect -f
@@ -3884,7 +3970,7 @@ ph_build() {
   # ran `[ -f "$PROV/user.sh" ] && cp ...`, the file was not there, and the
   # guard swallowed it in silence. Eighty-two minutes of build to discover the
   # new command was not inside. If you add a payload, add it here.
-  cp "$W/provision"/{extras.sh,armsync.sh,clipbrd.sh,vdagent.py,share.sh,user.sh,gpu.sh,hyprcheck.sh} "$d"/
+  cp "$W/provision"/{extras.sh,armsync.sh,clipbrd.sh,vdagent.py,share.sh,user.sh,gpu.sh,hyprcheck.sh,display.sh} "$d"/
   ln "$W/dl/alarm-rootfs.tgz" "$d/alarm-rootfs.tgz" 2>/dev/null || cp "$W/dl/alarm-rootfs.tgz" "$d/"
   rm -f "$W/provision/provision.iso"
   hdiutil makehybrid -iso -joliet -default-volume-name PROVISION -o "$W/provision/provision.iso" "$d" >/dev/null
@@ -4284,6 +4370,25 @@ land you on the SDDM greeter, and SDDM only auto-logs-in when the service
 starts, so restarting it needs a password you may not be able to type from
 there. Fix the file from the terminal you already have.
 (Reported by RBeach in omacom/omarchy#7956.)
+
+## Retina display
+
+The desktop ships at 1920x1200, scale 1. For a sharp 4K framebuffer at scale 2:
+
+```bash
+omarchy-arm-display --retina    # 3840x2160 at scale 2
+omarchy-arm-display --default   # back to 1920x1200
+omarchy-arm-display --status
+```
+
+Turn on **Retina Mode** in the VM's Display settings in UTM first, or macOS
+scales the 4K framebuffer back down and the sharpness is lost.
+
+It is not the default because the image renders in software: 3840x2160 is
+3.6 times the pixels of 1920x1200, all of them through llvmpipe. Pair it with
+`omarchy-arm-gpu --on` where your host supports that, which is what makes the
+extra pixels cheap. Proposed by Fail-Safe (PR #8) and corroborated by
+gillesgoetsch (issue #7).
 
 ## Timezone
 

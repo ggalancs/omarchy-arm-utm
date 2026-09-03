@@ -118,6 +118,8 @@ if [ -f "$PROV/gpu.sh" ]; then cp "$PROV/gpu.sh" /mnt/root/prov/omarchy-arm-gpu
 else echo "  !! gpu.sh missing from the ISO: the image will ship without omarchy-arm-gpu"; fi
 if [ -f "$PROV/hyprcheck.sh" ]; then cp "$PROV/hyprcheck.sh" /mnt/root/prov/omarchy-arm-hypr-check
 else echo "  !! hyprcheck.sh missing from the ISO: the image will ship without omarchy-arm-hypr-check"; fi
+if [ -f "$PROV/display.sh" ]; then cp "$PROV/display.sh" /mnt/root/prov/omarchy-arm-display
+else echo "  !! display.sh missing from the ISO: the image will ship without omarchy-arm-display"; fi
 cat > /mnt/root/prov/fsinfo.env <<EOF
 ROOTFS=$ROOTFS
 ROOT_MOUNT_OPTS=$MOPT_ROOT

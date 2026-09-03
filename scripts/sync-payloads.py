@@ -18,6 +18,7 @@ PAYLOAD_MAP={
  "__PAYLOAD_PROVISION_USER_SH__":"provision/src/omarchy-arm-user",
  "__PAYLOAD_PROVISION_GPU_SH__":"provision/src/omarchy-arm-gpu",
  "__PAYLOAD_PROVISION_HYPRCHECK_SH__":"provision/src/omarchy-arm-hypr-check",
+ "__PAYLOAD_PROVISION_DISPLAY_SH__":"provision/src/omarchy-arm-display",
  "__PAYLOAD_README_MD__":"provision/src/README.md",
  "__PAYLOAD_PROVISION_ARMSYNC_SH__":"provision/src/hooks/10-arm-sync",
  "__PAYLOAD_SCRIPTS_BUILD_EXP__":"scripts/build.exp",

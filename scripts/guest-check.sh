@@ -134,6 +134,9 @@ if grep -qs 'bootstrap\.lua' /home/omarchy/.config/hypr/hyprland.lua; then
 else
   bad "hyprland.lua has no bootstrap line: the desktop would ship with no binds"
 fi
+[ -x /usr/local/bin/omarchy-arm-display ] \
+  && ok_ "omarchy-arm-display present" \
+  || bad "omarchy-arm-display missing"
 TZL=$(readlink /etc/localtime 2>/dev/null)
 case "$TZL" in
   */zoneinfo/UTC) ok_ "neutral timezone (UTC)" ;;

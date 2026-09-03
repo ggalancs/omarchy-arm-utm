@@ -189,6 +189,7 @@ after
 all_tokens
 amber
 ans
+apply
 ask
 aur_build
 aur_install
@@ -261,6 +262,7 @@ lit
 load_answers
 log
 make_iso
+mode
 ncpu
 need_sudo
 new_body
@@ -292,6 +294,7 @@ run_item
 run_list
 save_answers
 sel
+show
 show_list
 show_state
 shq
