@@ -12,6 +12,7 @@ import os, re, sys
 COMMANDS = {
     'omarchy-arm-share':     'provision/src/omarchy-arm-share',
     'omarchy-arm-gpu':       'provision/src/omarchy-arm-gpu',
+    'omarchy-arm-hypr-check': 'provision/src/omarchy-arm-hypr-check',
     'omarchy-arm-user':      'provision/src/omarchy-arm-user',
     'omarchy-arm-extras':    'provision/src/omarchy-arm-extras',
     'omarchy-arm-clipboard': 'provision/src/omarchy-arm-clipboard',

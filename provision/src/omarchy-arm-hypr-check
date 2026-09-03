@@ -1,0 +1,70 @@
+#!/bin/bash
+#
+#  omarchy-arm-hypr-check - tells you when the session config lost its
+#  bootstrap line, and gives you the one command that puts it back.
+#  ────────────────────────────────────────────────────────────────────────────
+#  Omarchy's whole session -- every keybinding, the bar, the menu -- is loaded
+#  by one line at the end of ~/.config/hypr/hyprland.lua:
+#
+#    dofile((os.getenv("OMARCHY_PATH") or "/usr/share/omarchy") .. "/default/hypr/bootstrap.lua")
+#
+#  Without it Hyprland starts with no binds registered. Nothing crashes and
+#  nothing is logged: the desktop is simply inert, and SUPER+anything does
+#  nothing. The trap closes because the obvious reactions -- SUPER+R, `uwsm
+#  stop` -- land on the SDDM greeter, and SDDM only auto-logs-in when the
+#  service starts, so getting back in needs a password.
+#
+#  This does NOT rewrite the file on its own. In the case it was written for
+#  the line had been deleted by hand, in the user's own editing session, and a
+#  guard that silently restores what somebody chose to delete is its own bug.
+#  It says what is wrong and offers --fix.
+#
+#  Usage:
+#    omarchy-arm-hypr-check          report only
+#    omarchy-arm-hypr-check --fix    append the line and reload
+#
+#  Runs from /etc/profile.d on login, where it is silent unless something is
+#  actually wrong -- and a terminal is exactly what you still have when the
+#  desktop is inert.
+set -u
+
+CONF="${HYPRLAND_LUA:-$HOME/.config/hypr/hyprland.lua}"
+LINE='dofile((os.getenv("OMARCHY_PATH") or "/usr/share/omarchy") .. "/default/hypr/bootstrap.lua")'
+
+case "${1:-}" in
+  -h|--help) sed -n '3,26p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 0 ;;
+esac
+
+[ -f "$CONF" ] || exit 0          # not an Omarchy session; say nothing
+
+# Only the bootstrap call matters, not the exact spelling: a user may have
+# written their own OMARCHY_PATH or split it over lines.
+if grep -q 'bootstrap\.lua' "$CONF"; then
+  [ "${1:-}" = "--fix" ] && echo "  $CONF already loads bootstrap.lua; nothing to do"
+  exit 0
+fi
+
+if [ "${1:-}" = "--fix" ]; then
+  cp -a "$CONF" "$CONF.bak.$(date +%s)" 2>/dev/null
+  printf '\n%s\n' "$LINE" >> "$CONF"
+  echo "  bootstrap line appended to $CONF (previous copy kept as $CONF.bak.*)"
+  if command -v hyprctl >/dev/null 2>&1 && hyprctl reload >/dev/null 2>&1; then
+    echo "  hyprctl reload done"
+  else
+    echo "  run 'hyprctl reload' inside the session to apply it"
+  fi
+  exit 0
+fi
+
+cat <<EOF
+
+  Hyprland has no bindings: $CONF does not load Omarchy's bootstrap.
+  That is why SUPER and the menu do nothing. To put it back:
+
+      omarchy-arm-hypr-check --fix
+
+  Do NOT press SUPER+R or run 'uwsm stop' first. Both land you on the SDDM
+  greeter, which asks for a password you may not be able to type from there.
+
+EOF
+exit 1

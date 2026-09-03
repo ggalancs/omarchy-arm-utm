@@ -253,6 +253,21 @@ via `altwin:swap_lalt_lwin`:
 
 ⌥+Space opens the Omarchy menu, ⌥+Return a terminal, ⌥+K the full keybinding list.
 
+## If the desktop comes up with no keybindings
+
+Omarchy's whole session is loaded by one line at the end of
+`~/.config/hypr/hyprland.lua`. Without it Hyprland starts with no binds
+registered: nothing crashes, nothing is logged, SUPER does nothing.
+
+```bash
+omarchy-arm-hypr-check         # says whether the line is there
+omarchy-arm-hypr-check --fix   # puts it back, keeps a copy, reloads
+```
+
+It also runs on login and is silent unless the line is missing. Do **not**
+press SUPER+R or run `uwsm stop` first: both land on the SDDM greeter, which
+asks for a password you may not be able to type from there.
+
 ## Graphics: `omarchy-arm-gpu`
 
 The image ships with software rendering forced on (`LIBGL_ALWAYS_SOFTWARE=1`),

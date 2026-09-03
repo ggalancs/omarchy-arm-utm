@@ -119,6 +119,21 @@ case "$KBL" in
   "")       bad "input.lua has no kb_layout: cannot tell what ships" ;;
   *)        bad "the image ships the builder's layout: $KBL" ;;
 esac
+# The bootstrap-line guard has to be present, and reachable from a login
+# shell: that is the only thing a user still has when the desktop comes up
+# inert, and it is where the fix has to be findable.
+if [ -x /usr/local/bin/omarchy-arm-hypr-check ] \
+   && [ -f /etc/profile.d/omarchy-arm-hypr-check.sh ]; then
+  ok_ "hyprland bootstrap guard installed and hooked into login"
+else
+  bad "hyprland bootstrap guard missing (command or profile.d hook)"
+fi
+# And the config it guards must itself be intact in the shipped image.
+if grep -qs 'bootstrap\.lua' /home/omarchy/.config/hypr/hyprland.lua; then
+  ok_ "hyprland.lua loads Omarchy's bootstrap"
+else
+  bad "hyprland.lua has no bootstrap line: the desktop would ship with no binds"
+fi
 TZL=$(readlink /etc/localtime 2>/dev/null)
 case "$TZL" in
   */zoneinfo/UTC) ok_ "neutral timezone (UTC)" ;;

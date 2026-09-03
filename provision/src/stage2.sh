@@ -378,6 +378,21 @@ if [ -f /root/prov/omarchy-arm-gpu ]; then
   install -Dm755 /root/prov/omarchy-arm-gpu /usr/local/bin/omarchy-arm-gpu
   echo "  omarchy-arm-gpu installed"
 fi
+# The bootstrap-line guard, plus the profile.d hook that runs it. It has to
+# live outside Hyprland's own config chain: when the bootstrap line is gone,
+# autostart.lua is never read either, so anything started from there would be
+# just as absent as the bindings. A login shell is what the user still has.
+if [ -f /root/prov/omarchy-arm-hypr-check ]; then
+  install -Dm755 /root/prov/omarchy-arm-hypr-check /usr/local/bin/omarchy-arm-hypr-check
+  cat > /etc/profile.d/omarchy-arm-hypr-check.sh <<'HOOK'
+# Silent unless the Hyprland session config has lost its bootstrap line, in
+# which case the desktop is inert and this terminal is the way back.
+[ -n "${PS1:-}" ] && command -v omarchy-arm-hypr-check >/dev/null 2>&1 \
+  && omarchy-arm-hypr-check || true
+HOOK
+  chmod 644 /etc/profile.d/omarchy-arm-hypr-check.sh
+  echo "  omarchy-arm-hypr-check installed"
+fi
 sed -i '/-auth.*pam_gnome_keyring\.so/d;/-password.*pam_gnome_keyring\.so/d' /etc/pam.d/sddm 2>/dev/null || true
 echo "  session=$SESSION"
 ls /usr/local/share/wayland-sessions /usr/share/wayland-sessions 2>/dev/null

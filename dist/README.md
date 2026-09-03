@@ -97,7 +97,11 @@ config lost its bootstrap line. Restore it in `~/.config/hypr/hyprland.lua`:
 dofile((os.getenv("OMARCHY_PATH") or "/usr/share/omarchy") .. "/default/hypr/bootstrap.lua")
 ```
 
-then `hyprctl reload`. Do **not** reach for SUPER+R or `uwsm stop` first: both
+or run `omarchy-arm-hypr-check --fix`, which appends it, keeps a copy of the
+previous file and reloads. It also runs on login and stays quiet unless that
+line is missing.
+
+Do **not** reach for SUPER+R or `uwsm stop` first: both
 land you on the SDDM greeter, and SDDM only auto-logs-in when the service
 starts, so restarting it needs a password you may not be able to type from
 there. Fix the file from the terminal you already have.

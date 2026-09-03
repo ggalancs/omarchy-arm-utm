@@ -478,9 +478,11 @@ cp "$PROV/stage2.sh" "$PROV/stage3.sh" "$PROV/config.env" \
 # No silent `&&`: if it is missing, say so. The quiet guard on this line
 # shipped a whole image without the command and nobody noticed until boot.
 if [ -f "$PROV/user.sh" ]; then cp "$PROV/user.sh" /mnt/root/prov/omarchy-arm-user
-fi
-if [ -f "$PROV/gpu.sh" ]; then cp "$PROV/gpu.sh" /mnt/root/prov/omarchy-arm-gpu
 else echo "  !! user.sh missing from the ISO: the image will ship without omarchy-arm-user"; fi
+if [ -f "$PROV/gpu.sh" ]; then cp "$PROV/gpu.sh" /mnt/root/prov/omarchy-arm-gpu
+else echo "  !! gpu.sh missing from the ISO: the image will ship without omarchy-arm-gpu"; fi
+if [ -f "$PROV/hyprcheck.sh" ]; then cp "$PROV/hyprcheck.sh" /mnt/root/prov/omarchy-arm-hypr-check
+else echo "  !! hyprcheck.sh missing from the ISO: the image will ship without omarchy-arm-hypr-check"; fi
 cat > /mnt/root/prov/fsinfo.env <<EOF
 ROOTFS=$ROOTFS
 ROOT_MOUNT_OPTS=$MOPT_ROOT
@@ -887,6 +889,21 @@ fi
 if [ -f /root/prov/omarchy-arm-gpu ]; then
   install -Dm755 /root/prov/omarchy-arm-gpu /usr/local/bin/omarchy-arm-gpu
   echo "  omarchy-arm-gpu installed"
+fi
+# The bootstrap-line guard, plus the profile.d hook that runs it. It has to
+# live outside Hyprland's own config chain: when the bootstrap line is gone,
+# autostart.lua is never read either, so anything started from there would be
+# just as absent as the bindings. A login shell is what the user still has.
+if [ -f /root/prov/omarchy-arm-hypr-check ]; then
+  install -Dm755 /root/prov/omarchy-arm-hypr-check /usr/local/bin/omarchy-arm-hypr-check
+  cat > /etc/profile.d/omarchy-arm-hypr-check.sh <<'HOOK'
+# Silent unless the Hyprland session config has lost its bootstrap line, in
+# which case the desktop is inert and this terminal is the way back.
+[ -n "${PS1:-}" ] && command -v omarchy-arm-hypr-check >/dev/null 2>&1 \
+  && omarchy-arm-hypr-check || true
+HOOK
+  chmod 644 /etc/profile.d/omarchy-arm-hypr-check.sh
+  echo "  omarchy-arm-hypr-check installed"
 fi
 sed -i '/-auth.*pam_gnome_keyring\.so/d;/-password.*pam_gnome_keyring\.so/d' /etc/pam.d/sddm 2>/dev/null || true
 echo "  session=$SESSION"
@@ -3171,6 +3188,80 @@ esac
 __PAYLOAD_PROVISION_GPU_SH__
 chmod +x "$W/provision/gpu.sh"
 
+cat > "$W/provision/hyprcheck.sh" <<'__PAYLOAD_PROVISION_HYPRCHECK_SH__'
+#!/bin/bash
+#
+#  omarchy-arm-hypr-check - tells you when the session config lost its
+#  bootstrap line, and gives you the one command that puts it back.
+#  ────────────────────────────────────────────────────────────────────────────
+#  Omarchy's whole session -- every keybinding, the bar, the menu -- is loaded
+#  by one line at the end of ~/.config/hypr/hyprland.lua:
+#
+#    dofile((os.getenv("OMARCHY_PATH") or "/usr/share/omarchy") .. "/default/hypr/bootstrap.lua")
+#
+#  Without it Hyprland starts with no binds registered. Nothing crashes and
+#  nothing is logged: the desktop is simply inert, and SUPER+anything does
+#  nothing. The trap closes because the obvious reactions -- SUPER+R, `uwsm
+#  stop` -- land on the SDDM greeter, and SDDM only auto-logs-in when the
+#  service starts, so getting back in needs a password.
+#
+#  This does NOT rewrite the file on its own. In the case it was written for
+#  the line had been deleted by hand, in the user's own editing session, and a
+#  guard that silently restores what somebody chose to delete is its own bug.
+#  It says what is wrong and offers --fix.
+#
+#  Usage:
+#    omarchy-arm-hypr-check          report only
+#    omarchy-arm-hypr-check --fix    append the line and reload
+#
+#  Runs from /etc/profile.d on login, where it is silent unless something is
+#  actually wrong -- and a terminal is exactly what you still have when the
+#  desktop is inert.
+set -u
+
+CONF="${HYPRLAND_LUA:-$HOME/.config/hypr/hyprland.lua}"
+LINE='dofile((os.getenv("OMARCHY_PATH") or "/usr/share/omarchy") .. "/default/hypr/bootstrap.lua")'
+
+case "${1:-}" in
+  -h|--help) sed -n '3,26p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 0 ;;
+esac
+
+[ -f "$CONF" ] || exit 0          # not an Omarchy session; say nothing
+
+# Only the bootstrap call matters, not the exact spelling: a user may have
+# written their own OMARCHY_PATH or split it over lines.
+if grep -q 'bootstrap\.lua' "$CONF"; then
+  [ "${1:-}" = "--fix" ] && echo "  $CONF already loads bootstrap.lua; nothing to do"
+  exit 0
+fi
+
+if [ "${1:-}" = "--fix" ]; then
+  cp -a "$CONF" "$CONF.bak.$(date +%s)" 2>/dev/null
+  printf '\n%s\n' "$LINE" >> "$CONF"
+  echo "  bootstrap line appended to $CONF (previous copy kept as $CONF.bak.*)"
+  if command -v hyprctl >/dev/null 2>&1 && hyprctl reload >/dev/null 2>&1; then
+    echo "  hyprctl reload done"
+  else
+    echo "  run 'hyprctl reload' inside the session to apply it"
+  fi
+  exit 0
+fi
+
+cat <<EOF
+
+  Hyprland has no bindings: $CONF does not load Omarchy's bootstrap.
+  That is why SUPER and the menu do nothing. To put it back:
+
+      omarchy-arm-hypr-check --fix
+
+  Do NOT press SUPER+R or run 'uwsm stop' first. Both land you on the SDDM
+  greeter, which asks for a password you may not be able to type from there.
+
+EOF
+exit 1
+__PAYLOAD_PROVISION_HYPRCHECK_SH__
+chmod +x "$W/provision/hyprcheck.sh"
+
 mkdir -p "$W/scripts"
 cat > "$W/scripts/build.exp" <<'__PAYLOAD_SCRIPTS_BUILD_EXP__'
 #!/usr/bin/expect -f
@@ -3710,7 +3801,7 @@ ph_build() {
   # ran `[ -f "$PROV/user.sh" ] && cp ...`, the file was not there, and the
   # guard swallowed it in silence. Eighty-two minutes of build to discover the
   # new command was not inside. If you add a payload, add it here.
-  cp "$W/provision"/{extras.sh,armsync.sh,clipbrd.sh,vdagent.py,share.sh,user.sh,gpu.sh} "$d"/
+  cp "$W/provision"/{extras.sh,armsync.sh,clipbrd.sh,vdagent.py,share.sh,user.sh,gpu.sh,hyprcheck.sh} "$d"/
   ln "$W/dl/alarm-rootfs.tgz" "$d/alarm-rootfs.tgz" 2>/dev/null || cp "$W/dl/alarm-rootfs.tgz" "$d/"
   rm -f "$W/provision/provision.iso"
   hdiutil makehybrid -iso -joliet -default-volume-name PROVISION -o "$W/provision/provision.iso" "$d" >/dev/null
@@ -4101,7 +4192,11 @@ config lost its bootstrap line. Restore it in `~/.config/hypr/hyprland.lua`:
 dofile((os.getenv("OMARCHY_PATH") or "/usr/share/omarchy") .. "/default/hypr/bootstrap.lua")
 ```
 
-then `hyprctl reload`. Do **not** reach for SUPER+R or `uwsm stop` first: both
+or run `omarchy-arm-hypr-check --fix`, which appends it, keeps a copy of the
+previous file and reloads. It also runs on login and stays quiet unless that
+line is missing.
+
+Do **not** reach for SUPER+R or `uwsm stop` first: both
 land you on the SDDM greeter, and SDDM only auto-logs-in when the service
 starts, so restarting it needs a password you may not be able to type from
 there. Fix the file from the terminal you already have.
