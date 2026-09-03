@@ -109,10 +109,11 @@ there. Fix the file from the terminal you already have.
 
 ## Retina display
 
-The desktop ships at 1920x1200, scale 1. For a sharp 4K framebuffer at scale 2:
+The desktop ships at 1920x1200, scale 1. For the same desktop at twice the
+pixels in each direction, sharp:
 
 ```bash
-omarchy-arm-display --retina    # 3840x2160 at scale 2
+omarchy-arm-display --retina    # 3840x2400 at scale 2
 omarchy-arm-display --default   # back to 1920x1200
 omarchy-arm-display --status
 ```
@@ -120,8 +121,12 @@ omarchy-arm-display --status
 Turn on **Retina Mode** in the VM's Display settings in UTM first, or macOS
 scales the 4K framebuffer back down and the sharpness is lost.
 
-It is not the default because the image renders in software: 3840x2160 is
-3.6 times the pixels of 1920x1200, all of them through llvmpipe. Pair it with
+The mode is 3840x2400, which is 1920x1200 doubled: 16:10, the aspect of the
+Mac panels this image runs on. A 16:9 mode such as 3840x2160 leaves black bars
+above and below the window.
+
+It is not the default because the image renders in software: 3840x2400 is four
+times the pixels of 1920x1200, all of them through llvmpipe. Pair it with
 `omarchy-arm-gpu --on` where your host supports that, which is what makes the
 extra pixels cheap. Proposed by Fail-Safe (PR #8) and corroborated by
 gillesgoetsch (issue #7).

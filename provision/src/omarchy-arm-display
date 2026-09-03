@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #  omarchy-arm-display - switches the guest between the shipped 1920x1200
-#  desktop and a Retina 3840x2160 at scale 2.
+#  desktop and a Retina 3840x2400 at scale 2.
 #  ────────────────────────────────────────────────────────────────────────────
 #  Proposed as the default by Fail-Safe in PR #8, corroborated independently by
 #  gillesgoetsch in issue #7. Measured here on the packaged image under UTM
@@ -19,7 +19,7 @@
 #  which they have.
 #
 #  Usage:
-#    omarchy-arm-display --retina    3840x2160 at scale 2
+#    omarchy-arm-display --retina    3840x2400 at scale 2
 #    omarchy-arm-display --default   1920x1200 at scale 1
 #    omarchy-arm-display --status    what is in effect
 #
@@ -36,9 +36,25 @@ MON="$HOME/.config/hypr/monitors.lua"
 show() {
   echo "  config: $(grep -vE '^\s*--' "$MON" | grep -o 'mode = "[^"]*", position = "[^"]*", scale = [0-9]*' | head -1)"
   echo "  GDK_SCALE: $(grep -vE '^\s*--' "$MON" | grep -o 'GDK_SCALE", "[0-9]*' | head -1 | grep -o '[0-9]*$')"
+  # timeout, because hyprctl blocks when it cannot reach a session: called from
+  # outside the graphical session -- over the guest agent, or from a serial
+  # console -- `--status` hung with no output at all rather than saying it
+  # could not ask.
   if command -v hyprctl >/dev/null 2>&1; then
-    echo "  live:   $(hyprctl monitors 2>/dev/null | grep -E '^\s+[0-9]+x[0-9]+@' | head -1 | tr -s ' ')"
-    echo "  scale:  $(hyprctl monitors 2>/dev/null | grep -m1 'scale:' | tr -s ' ')"
+    local live
+    # `timeout` is coreutils and the guest has it; guarded so this file can be
+    # exercised on a machine that does not, which is where it gets written.
+    if command -v timeout >/dev/null 2>&1; then
+      live=$(timeout 5 hyprctl monitors 2>/dev/null)
+    else
+      live=$(hyprctl monitors 2>/dev/null)
+    fi
+    if [ -n "$live" ]; then
+      echo "  live:   $(printf '%s' "$live" | grep -E '^[[:space:]]+[0-9]+x[0-9]+@' | head -1 | tr -s ' ')"
+      echo "  scale:  $(printf '%s' "$live" | grep -m1 'scale:' | tr -s ' ')"
+    else
+      echo "  live:   (no Hyprland session reachable from here)"
+    fi
   fi
 }
 
@@ -64,9 +80,18 @@ apply() {
 
 case "${1:-}" in
   --retina)
+    # 3840x2400, not the 3840x2160 the PR proposed: 2160 is 16:9 and every
+    # Mac panel this image targets is 16:10, so a 4K-television mode letterboxes
+    # the window with black bars top and bottom. 3840x2400 is exactly the
+    # shipped 1920x1200 doubled -- same aspect, four times the pixels, and the
+    # logical desktop stays 1920x1200. Confirmed on a 3456x2234 MacBook panel.
+    #
+    # It is not in the output's availableModes and works anyway: virtio-gpu
+    # takes arbitrary modes, which is also how gillesgoetsch reached 4112x2570.
+    #
     # GDK_SCALE stays 1: Hyprland's scale already handles GTK apps, and setting
     # both doubles twice, which is how you get comically large windows.
-    apply 3840x2160@60 2 1
+    apply 3840x2400@60 2 1
     echo "  enable Retina Mode in UTM's Display settings if you have not"
     ;;
   --default)  apply 1920x1200@60 1 1 ;;

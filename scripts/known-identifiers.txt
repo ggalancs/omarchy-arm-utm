@@ -260,6 +260,7 @@ last_remote
 latest
 line
 lit
+live
 load_answers
 log
 make_iso
