@@ -73,7 +73,7 @@ cat /etc/sddm.conf.d/20-autologin.conf
 
 log "4/10 credentials and keys"
 rm -rf "/home/$NEW/.ssh"
-rm -f /etc/ssh/ssh_host_*        # se regeneran solas en el primer arranque
+rm -f /etc/ssh/ssh_host_*        # they regenerate themselves on first boot
 systemctl disable sshd.service 2>/dev/null || true
 rm -f /etc/systemd/system/multi-user.target.wants/sshd.service
 rm -f /etc/sudoers.d/99-fix /etc/sudoers.d/99-install

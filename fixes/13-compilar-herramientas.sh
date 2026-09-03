@@ -10,7 +10,7 @@ OK=(); KO=()
 log()  { echo ""; echo "==> $*"; }
 note() { echo "    $*"; }
 
-build() {                      # build <origen> <paquete>
+build() {                      # build <source> <package>
   # A single `local` expands everything before assigning: $pkg would not exist yet.
   local src="$1" pkg="$2"
   local dir="$WORK/$pkg"

@@ -43,6 +43,29 @@ ES = re.compile(r'\b(que|para|con|del|los|las|una|por|como|pero|desde|hasta|'
 # inside usage lines and must not be counted as untranslated text.
 FILEISH = re.compile(r'\S*[/.][A-Za-z0-9._-]+')
 
+# A comment that starts mid-line. `set -uo pipefail   # sin -e: esta etapa...`
+# sat in stage3 through every pass, because the scan only ever looked at lines
+# whose FIRST character was '#'. Naive, but shell has no other comment form,
+# and a '#' inside a quoted string is excluded by requiring whitespace before
+# it and no unbalanced quote ahead of it on the line.
+INLINE_COMMENT = re.compile(r'\s#\s(.*)$')
+
+def inline_comments(path, text):
+    """Yield (lineno, comment) for comments that begin part-way down a line."""
+    if path.suffix in ('.md', '.markdown'):
+        return
+    for i, l in enumerate(text.splitlines(), 1):
+        st = l.strip()
+        if not st or st.startswith('#'):
+            continue
+        m = INLINE_COMMENT.search(l)
+        if not m:
+            continue
+        before = l[:m.start()]
+        if before.count('"') % 2 or before.count("'") % 2:
+            continue          # the '#' is inside a string
+        yield i, m.group(1)
+
 def comment_lines(path, text):
     """Yield (lineno, text) for lines that are entirely a comment."""
     # Markdown is not code: '#' starts a heading, not a comment, so every
@@ -74,10 +97,14 @@ def audit(paths):
             continue
         # The morphological test, same as for strings. The word list below was
         # what this used, and it let "# usuario durante la construccion" past.
+        if p.name == 'i18n-audit.py':
+            continue
         n = sum(1 for _, l in comment_lines(p, t)
-                if p.name != 'i18n-audit.py'
-                and (ES.search(FILEISH.sub(' ', l))
-                     or len(spanish_words(FILEISH.sub(' ', l))) >= 2))
+                if ES.search(FILEISH.sub(' ', l))
+                or len(spanish_words(FILEISH.sub(' ', l))) >= 2)
+        n += sum(1 for _, c in inline_comments(p, t)
+                 if ES.search(FILEISH.sub(' ', c))
+                 or spanish_words(FILEISH.sub(' ', c)))
         if n:
             rows.append((str(p), n)); total += n
     w = max((len(r[0]) for r in rows), default=10)
@@ -203,8 +230,14 @@ PLAIN_ES = {'libre', 'libres', 'fichero', 'ficheros', 'carpeta', 'carpetas',
             'huerfanos', 'huerfano', 'correcto', 'correcta', 'falta', 'faltan',
             'sobra', 'sobran', 'queda', 'quedan', 'error de', 'tanda'}
 # Technical English the 1913 dictionary behind /usr/share/dict/words predates.
-TECH_OK = {'unattended', 'automounted', 'sandboxed', 'sandboxed', 'unicode',
-           'metadata', 'sudo', 'systemd', 'ide', 'ida'}
+# Technical English the 1913 dictionary behind /usr/share/dict/words predates.
+# 'timezone' is the reason this list exists: it is not in the dictionary, and
+# 'timezones' ends in -ones, so the pair that is normally quiet said Spanish
+# about a line reading `timedatectl list-timezones`.
+TECH_OK = {'unattended', 'automounted', 'sandboxed', 'unicode', 'metadata',
+           'sudo', 'systemd', 'ide', 'timezone', 'timezones', 'clipboard',
+           'bootloader', 'namespace', 'hostname', 'filesystem', 'filesystems',
+           'checksum', 'checksums', 'runtime', 'toolchain', 'keyring'}
 
 def _english_words():
     try:
@@ -226,7 +259,8 @@ def spanish_words(text):
         # Spanish (it ends in -ones) and flagged a sentence that was English
         # throughout. Spanish plurals survive this -- "libre" and "imagene" are
         # not English words either.
-        if lw.endswith('s') and (lw[:-1] in ENGLISH or lw[:-2:] in ENGLISH):
+        if lw.endswith('s') and (lw[:-1] in ENGLISH or lw[:-1] in TECH_OK
+                                 or lw[:-2] in ENGLISH):
             continue
         if (MORPH.search(lw) or lw in PLAIN_ES
                 or (len(lw) >= INFINITIVE_MIN and INFINITIVE.search(lw))):

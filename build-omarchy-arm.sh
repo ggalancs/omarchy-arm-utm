@@ -52,7 +52,7 @@ from_env() { case " $SET_BY_ENV " in *" $1 "*) return 0 ;; *) return 1 ;; esac; 
 : "${W:=$HOME/omarchy-arm-build}"        # directorio de trabajo
 : "${VM_NAME:=Omarchy ARM}"              # nombre de la VM en UTM
 : "${VM_USER:=builder}"                  # account used while building
-: "${VM_PASSWORD:=builder}"              # se pregunta; la imagen distribuible lo renombra
+: "${VM_PASSWORD:=builder}"              # asked for; the distributable image renames it
 : "${VM_FULLNAME:=Omarchy ARM}"
 : "${VM_EMAIL:=user@example.com}"
 : "${VM_HOSTNAME:=omarchy}"
@@ -62,8 +62,8 @@ from_env() { case " $SET_BY_ENV " in *" $1 "*) return 0 ;; *) return 1 ;; esac; 
 : "${VM_LOCALE:=en_US.UTF-8}"
 : "${VM_LOCALE_EXTRA:=es_ES.UTF-8}"
 : "${DISK_SIZE:=80G}"
-: "${BUILD_SMP:=8}"                      # vCPU durante la construccion
-: "${BUILD_MEM:=8192}"                   # MiB durante la construccion
+: "${BUILD_SMP:=8}"                      # vCPUs while building
+: "${BUILD_MEM:=8192}"                   # MiB while building
 : "${UTM_CPUS:=6}"                       # vCPU de la VM final
 : "${UTM_MEM:=6144}"                     # MiB de la VM final
 : "${OMARCHY_REF:=quattro}"              # rama de Omarchy (¡NO master!)
@@ -73,7 +73,7 @@ from_env() { case " $SET_BY_ENV " in *" $1 "*) return 0 ;; *) return 1 ;; esac; 
 # in August still resolve to the exact bytes they were written for. It used to
 # be hardcoded here, so the builder produced a file with that same name:
 # uploading it meant overwriting the original.
-: "${DIST_ZIP:=omarchy-arm-utm-v2.zip}"  # nombre del zip que se reparte
+: "${DIST_ZIP:=omarchy-arm-utm-v2.zip}"  # name of the zip that gets handed around
 : "${ALPINE_VER:=v3.24}"
 : "${ALPINE_ISO:=alpine-virt-3.24.1-aarch64.iso}"
 : "${ALARM_URL:=http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz}"
@@ -137,7 +137,7 @@ cargar_respuestas() {
   return 0
 }
 
-ask() {  # ask <variable> <pregunta> [valor por defecto]
+ask() {  # ask <variable> <question> [default]
   local var="$1" q="$2" def="${3:-}" cur ans
   cur="${!var:-$def}"
   if (( ! INTERACTIVE )); then printf -v "$var" '%s' "$cur"; return; fi
@@ -976,7 +976,7 @@ cat > "$W/provision/stage3.sh" <<'__PAYLOAD_PROVISION_STAGE3_SH__'
 #!/bin/bash
 # Stage 3 - as a normal user inside the chroot.
 # Omarchy dotfiles, theme, and the pieces that only exist in AUR.
-set -uo pipefail   # sin -e: esta etapa es best-effort por partes
+set -uo pipefail   # no -e: this stage is best-effort in places
 . ~/config.env
 
 log()  { echo ""; echo "==> [stage3] $*"; }
@@ -1365,6 +1365,36 @@ printf '%s\n' "${TOOLS_KO[@]:-}" | sed '/^$/d' \
   | sudo tee /usr/local/share/omarchy-arm/build-failures.txt >/dev/null
 echo "  failure record: /usr/local/share/omarchy-arm/build-failures.txt ($((${#TOOLS_KO[@]})) entries)"
 rm -rf "$HOME/.cache/omabuild"
+
+# The contract: these 18 have to be installed when the build claims success.
+# Recording a failure and carrying on is how an image once shipped without
+# `herdr` while the documentation claimed 17 tools and listed 16. Nothing ever
+# compared what was built against what was meant to be. This asks pacman what
+# is actually installed, which is the only answer that is not a restatement of
+# what the loop above already believes about itself.
+# Contract proposed by Fail-Safe in PR #6.
+CONTRACT=(yaru-icon-theme ttf-ia-writer tzupdate ufw-docker omarchy-nvim
+          tobi-try mise-bin aether cliamp omacalc omacut omawrite herdr
+          tensaku hyprland-preview-share-picker yay xdg-terminal-exec ttfx)
+MISSING=()
+for pkg in "${CONTRACT[@]}"; do
+  if [ "$pkg" = ttfx ]; then
+    # Built from source with cargo, not packaged: ask the binary.
+    command -v ttfx >/dev/null 2>&1 || MISSING+=("$pkg")
+  else
+    pacman -Q "$pkg" >/dev/null 2>&1 || MISSING+=("$pkg")
+  fi
+done
+echo "TOOLS_CONTRACT verified=$(( ${#CONTRACT[@]} - ${#MISSING[@]} ))/${#CONTRACT[@]}"
+if [ ${#MISSING[@]} -gt 0 ]; then
+  warn "the tool contract is not met, missing: ${MISSING[*]}"
+  if [ "${ALLOW_PARTIAL_TOOLS:-no}" = yes ]; then
+    warn "continuing anyway: ALLOW_PARTIAL_TOOLS=yes"
+  else
+    warn "set ALLOW_PARTIAL_TOOLS=yes to build an image without them"
+    exit 1
+  fi
+fi
 fi
 # Omarchy deliberately swaps two Yaru icons for the Adwaita ones; if Yaru has
 # just been installed, that has to be applied again.
@@ -1772,7 +1802,7 @@ cat /etc/sddm.conf.d/20-autologin.conf
 
 log "4/10 credentials and keys"
 rm -rf "/home/$NEW/.ssh"
-rm -f /etc/ssh/ssh_host_*        # se regeneran solas en el primer arranque
+rm -f /etc/ssh/ssh_host_*        # they regenerate themselves on first boot
 systemctl disable sshd.service 2>/dev/null || true
 rm -f /etc/systemd/system/multi-user.target.wants/sshd.service
 rm -f /etc/sudoers.d/99-fix /etc/sudoers.d/99-install
@@ -4523,7 +4553,7 @@ done
 # Resuming or running a single phase must not reopen the questionnaire, but it
 # MUST recover what was answered the previous time.
 if [[ -z $run_from && -z $run_only ]]; then
-  cargar_respuestas          # lo ya contestado sale como valor por defecto
+  cargar_respuestas          # what was already answered becomes the default
   cuestionario
 else
   cargar_respuestas || true

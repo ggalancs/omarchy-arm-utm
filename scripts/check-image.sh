@@ -51,7 +51,7 @@ hdiutil makehybrid -quiet -iso -joliet -default-volume-name CHEQUEO \
 
 cat > "$TMP/t.exp" <<'EXPEOF'
 set timeout 1200
-log_user 1  # sin esto expect no emite nada y el informe se pierde
+log_user 1  # without this expect emits nothing and the report is lost
 # log_file writes the session to disk UNBUFFERED. Without it, expect's output
 # sits in the stdout buffer (8 KB) and the file lags far behind what is
 # actually happening: hours have gone into reading a frozen log, believing the
