@@ -265,21 +265,31 @@ def _english_words():
              'ENGLISH_WORDLIST at a file. Without it every English word looks\n'
              'unknown and this tool reports nonsense.')
 
-ENGLISH = _english_words()
+# Loaded on first use, not on import: `lint-cont` and `guard` do not need a
+# dictionary, and making them die for want of one turned a wordlist into a
+# dependency of checks that have nothing to do with language.
+_ENGLISH = None
+
+def english_words():
+    global _ENGLISH
+    if _ENGLISH is None:
+        _ENGLISH = _english_words()
+    return _ENGLISH
 
 def spanish_words(text):
     """Words with Spanish shape that English does not claim."""
     out = []
+    english = english_words()
     for w in re.findall(r"[A-Za-z]{4,}", text):
         lw = w.lower()
-        if lw in ENGLISH or lw in TECH_OK:
+        if lw in english or lw in TECH_OK:
             continue
         # English plurals: the dictionary lists the singular, so "ones" looked
         # Spanish (it ends in -ones) and flagged a sentence that was English
         # throughout. Spanish plurals survive this -- "libre" and "imagene" are
         # not English words either.
-        if lw.endswith('s') and (lw[:-1] in ENGLISH or lw[:-1] in TECH_OK
-                                 or lw[:-2] in ENGLISH):
+        if lw.endswith('s') and (lw[:-1] in english or lw[:-1] in TECH_OK
+                                 or lw[:-2] in english):
             continue
         if (MORPH.search(lw) or lw in PLAIN_ES
                 or (len(lw) >= INFINITIVE_MIN and INFINITIVE.search(lw))):
