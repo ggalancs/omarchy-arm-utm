@@ -136,10 +136,17 @@ def main():
     print("""
   This is a repository-consistency fault upstream, not a fault in this build:
   the two sides of a soname bump are out of step in the aarch64 repositories.
-  On 2026-09-04 it was aquamarine-0.15.0-2 providing libaquamarine.so=14-64
-  while hyprland-0.56.1-3 and hyprtoolkit-0.5.4-5, in the same repository, were
-  still built against =13-64. The library moved first and its consumers have
-  not been rebuilt. It is transient: wait for the mirrors and build again.
+
+  What it looked like on 2026-09-04, which is a useful shape to recognise:
+  Arch bumped aquamarine and rebuilt its consumers together, and both landed
+  the same day -- aquamarine-0.15.0-2 in extra, hyprland-0.56.2-3 in
+  extra-testing. Arch Linux ARM rebuilds downstream of that, and had taken the
+  library (built 2026-09-04) while still shipping hyprland-0.56.1-3 from
+  2026-08-01, compiled against the older soname.
+
+  So it is a lag in one distribution's rebuild queue, not a broken package, and
+  it clears on its own. Nothing in this build can work around it: wait for the
+  aarch64 mirrors to carry the matching rebuild and run this again.
 
   To build anyway and let it fail later:  ALARM_SKIP_SAT=1
 """)
