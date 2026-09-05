@@ -69,6 +69,7 @@ unable
 unavailable
 unparseable
 unreachable
+unreadable
 unrecognisable
 unsatisfiable
 usable

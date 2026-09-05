@@ -66,4 +66,47 @@ for f in sorted(pathlib.Path('scripts').glob('negative-test*.sh')):
         print(f"  ok  {f.name}: all {len(expectations)} expectations"
               " correspond to a real message")
 
+# And the other direction: which of guest-check's assertions has NO batch ever
+# driven red? Those are the checks nobody has seen fail, which this project
+# rates worse than no check at all. The allowance below is a closed list with a
+# reason for each; anything else appearing here means a check was added without
+# a sabotage, and that is what this half exists to catch.
+NEVER_SABOTAGED = {
+    # deleting the image account cascades into half the list and proves nothing
+    # the account checks in batch 2 do not
+    'no $NEW user',
+    # this fires only when the [Autologin] section is absent entirely, which
+    # excludes the three assertions batch 5 drives through that same file
+    'no [Autologin] section under /etc/sddm.conf.d',
+    # the three below fire only when a QUERY itself fails -- an unreadable
+    # journal, an unreachable user manager -- which cannot be arranged from
+    # inside the guest without breaking the session the rest of the batch needs
+    'no spice-vdagentd journal: the mouse could not be checked',
+    '$U failed user units in $NEW\'s session',
+    'could not query $NEW\'s user manager: $(printf \'%s\' "$UOUT" | head -1)',
+}
+
+all_exp = []
+for f in sorted(pathlib.Path('scripts').glob('negative-test*.sh')):
+    all_exp += re.findall(r'EXPECTED\+=\("([^"]*)"\)', f.read_text())
+
+
+def driven(message):
+    rx, raw = to_regex(message), message
+    return any(re.search(rx, e, re.I) or e.lower() in raw.lower() for e in all_exp)
+
+
+uncovered = [m for m in msgs if not driven(m)]
+unexpected = [m for m in uncovered if m not in NEVER_SABOTAGED]
+print(f"  ..  {len(msgs) - len(uncovered)} of {len(msgs)} assertions have been"
+      f" driven red by a batch; {len(uncovered)} have not")
+for m in unexpected:
+    print(f"  !! no batch ever makes this fail: {m!r}")
+    print("     add a sabotage, or list it in NEVER_SABOTAGED with the reason")
+fail += len(unexpected)
+stale = [m for m in NEVER_SABOTAGED if m not in uncovered]
+for m in stale:
+    print(f"  !! NEVER_SABOTAGED still lists {m!r}, which a batch now covers")
+    fail += 1
+
 sys.exit(1 if fail else 0)
