@@ -123,6 +123,45 @@ grep -q "grep -qa 'package(s) compiled during the build'" "$BLD" \
   && ok "the README section is appended only when something was compiled" \
   || bad "$BLD: the README section is not conditional on the sanitize log"
 
+# 8. THE CLASSIFIER, DRIVEN OVER THE PAIRS A REAL BUILD PRODUCED.
+#    pacman prints the whole transitive closure of an unsatisfiable list, not
+#    the root cause -- and the first version of this gate accepted only the two
+#    direct pairs, so a real run on 2026-09-05 aborted with "a shape this build
+#    does not know how to work around" about the exact breakage the block below
+#    it exists for. Five of the seven pairs were consequences of the other two.
+#
+#    The classifier is extracted from the source and run, rather than described:
+#    a comment saying which shapes it accepts is not a check.
+CLASSIFY=$(sed -n '/^    HYPR_FOREIGN=0$/,/^    done <<< "\$HYPR_PAIRS"$/p' "$S2")
+if [ -z "$CLASSIFY" ]; then
+  bad "$S2: cannot find the classifier that decides whether to compile locally"
+else
+  classify() {  # reads pairs on stdin, echoes the resulting HYPR_FOREIGN
+    HYPR_PAIRS=$(cat)
+    eval "$CLASSIFY"
+    echo "$HYPR_FOREIGN"
+  }
+  # Exactly what pacman printed on that run.
+  REAL='hyprland libaquamarine.so=13-64
+hyprtoolkit libaquamarine.so=13-64
+hyprland-guiutils hyprtoolkit
+hyprland-guiutils libhyprtoolkit.so=5-64
+hyprland hyprland-guiutils
+hyprpaper hyprtoolkit
+hyprpaper libhyprtoolkit.so=5-64'
+  [ "$(printf '%s\n' "$REAL" | classify)" = 0 ] \
+    && ok "the classifier compiles around the closure a real build produced" \
+    || bad "$S2: the classifier still refuses the pairs of the 2026-09-05 run"
+  # And it must still refuse something that is not this breakage, or the fix
+  # has turned the gate into a rubber stamp.
+  [ "$(printf '%s\n' 'firefox libnss3.so=3-64' | classify)" = 1 ] \
+    && ok "and it still refuses a package outside the Hypr stack" \
+    || bad "$S2: the classifier now accepts unrelated breakage"
+  [ "$(printf '%s\n' 'hyprland libsystemd.so=0-64' | classify)" = 1 ] \
+    && ok "and a Hypr package missing something outside the stack" \
+    || bad "$S2: the classifier accepts a Hypr package missing an unrelated library"
+fi
+
 echo
 [ $fail -eq 0 ] && echo "  every property of the local Hyprland build holds" || echo "  FAILURES"
 exit $fail

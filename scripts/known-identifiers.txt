@@ -524,3 +524,7 @@ autologin_files
 GITID
 _gc
 UOUT
+CLASSIFY
+classify
+SESSDIR
+REAL

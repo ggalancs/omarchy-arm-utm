@@ -285,10 +285,38 @@ else
     warn "guessing here would attach a true symptom to the wrong cause"
     exit 1
   else
+    # pacman reports the WHOLE transitive closure, not just the root cause, and
+    # the first version of this accepted only the two direct pairs -- so the
+    # real thing looked like this:
+    #
+    #   hyprland          libaquamarine.so=13-64     <- the root
+    #   hyprtoolkit       libaquamarine.so=13-64     <- the root
+    #   hyprland-guiutils hyprtoolkit                <- a consequence
+    #   hyprland-guiutils libhyprtoolkit.so=5-64     <- a consequence
+    #   hyprland          hyprland-guiutils          <- a consequence
+    #   hyprpaper         hyprtoolkit                <- a consequence
+    #   hyprpaper         libhyprtoolkit.so=5-64     <- a consequence
+    #
+    # and five of those seven made it declare "a shape this build does not know
+    # how to work around" about the exact breakage it was written for. Building
+    # hyprtoolkit and publishing it resolves every one of the consequences.
+    #
+    # So the rule is the STACK, not two names: the package that cannot be
+    # installed has to belong to it, and what it is missing has to be either the
+    # aquamarine soname that started this or something inside that same stack --
+    # which the local build is about to publish. Anything else is a different
+    # problem and still stops the build here.
+    #
+    # This gate does not have to be exactly right, and must not pretend to be:
+    # the assertion after the compile re-runs the same resolution and refuses to
+    # go on if the local packages did not actually fix it.
     HYPR_FOREIGN=0
     while read -r p d; do
-      case "$p" in hyprland|hyprtoolkit) ;; *) HYPR_FOREIGN=1 ;; esac
-      case "$d" in libaquamarine.so=*-64) ;; *) HYPR_FOREIGN=1 ;; esac
+      case "$p" in hypr*) ;; *) HYPR_FOREIGN=1 ;; esac
+      case "$d" in
+        libaquamarine.so=*-64|libhypr*.so=*-64|hypr*) ;;
+        *) HYPR_FOREIGN=1 ;;
+      esac
     done <<< "$HYPR_PAIRS"
     if [ "$HYPR_FOREIGN" = 1 ]; then
       warn "the core list cannot be resolved, in a shape this build does not know how to work around:"
