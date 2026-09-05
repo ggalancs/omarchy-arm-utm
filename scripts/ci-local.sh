@@ -42,8 +42,31 @@ step() {
   fi
 }
 
-shell_syntax()  { local f r=0; while IFS= read -r f; do bash -n "$f" || r=1; done < <(git ls-files '*.sh'); return $r; }
-python_syntax() { local f r=0; while IFS= read -r f; do python3 -m py_compile "$f" || r=1; done < <(git ls-files '*.py'); return $r; }
+# Selected by SHEBANG, not by suffix. Every step here used to glob '*.sh', and
+# ten tracked shell programs have no suffix at all -- the eight omarchy-arm-*
+# commands that ship inside the image, the update hook, and scripts/omssh.
+# None of them was ever syntax-checked or linted, and omssh had an unbalanced
+# quote that made it unparseable from the day it was written, through every
+# green CI run since.
+shell_files() {
+  local f
+  git ls-files | while IFS= read -r f; do
+    case "$f" in *.sh) printf '%s\n' "$f"; continue ;; esac
+    [ -f "$f" ] || continue
+    head -1 "$f" 2>/dev/null | grep -qE '^#!.*[/ ](bash|sh)$' && printf '%s\n' "$f"
+  done
+}
+python_files() {
+  local f
+  git ls-files | while IFS= read -r f; do
+    case "$f" in *.py) printf '%s\n' "$f"; continue ;; esac
+    [ -f "$f" ] || continue
+    head -1 "$f" 2>/dev/null | grep -qE '^#!.*python' && printf '%s\n' "$f"
+  done
+}
+
+shell_syntax()  { local f r=0; while IFS= read -r f; do bash -n "$f" || r=1; done < <(shell_files); return $r; }
+python_syntax() { local f r=0; while IFS= read -r f; do python3 -m py_compile "$f" || r=1; done < <(python_files); return $r; }
 unit_tests()    { local t r=0; for t in tests/*.sh; do [ -e "$t" ] || continue; bash "$t" || r=1; done; return $r; }
 shellcheck_errors() {
   # return 1, not 0. `step` prints "ok" for a 0 and only shows the captured
@@ -59,7 +82,7 @@ shellcheck_errors() {
   command -v shellcheck >/dev/null 2>&1 \
     || { echo "not installed: brew install shellcheck"; return 77; }
   local f r=0
-  while IFS= read -r f; do shellcheck -S error -e SC1090,SC1091 "$f" || r=1; done < <(git ls-files '*.sh')
+  while IFS= read -r f; do shellcheck -S error -e SC1090,SC1091 "$f" || r=1; done < <(shell_files)
   return $r
 }
 
@@ -81,18 +104,20 @@ shellcheck_errors() {
 shellcheck_warnings() {
   command -v shellcheck >/dev/null 2>&1 \
     || { echo "not installed: brew install shellcheck"; return 77; }
+  # The live sources, now including the extensionless commands: they are what
+  # ships inside the image, so they are exactly the files a warning matters in.
   local f r=0
-  for f in build-omarchy-arm.sh provision/src/*.sh scripts/*.sh tests/*.sh; do
-    [ -f "$f" ] || continue
+  while IFS= read -r f; do
+    case "$f" in fixes/*|provision/repair-iso/*) continue ;; esac
     shellcheck -S warning -e SC1090,SC1091,SC2046,SC2024,SC2034 "$f" || r=1
-  done
+  done < <(shell_files)
   return $r
 }
 
 echo "  running every step of .github/workflows/ci.yml"
 step "shell syntax"                shell_syntax
 step "python syntax"               python_syntax
-step "no comments in continued commands" python3 scripts/i18n-audit.py lint-cont $(git ls-files '*.sh')
+step "no comments in continued commands" python3 scripts/i18n-audit.py lint-cont $(shell_files)
 step "payloads match their sources"      python3 scripts/sync-payloads.py --check
 step "language self-test"                python3 scripts/i18n-audit.py selftest
 # The satisfiability pre-check carries eight assertions over its own

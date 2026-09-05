@@ -64,8 +64,10 @@ sparse
 stable
 table
 tabular
+tolerable
 unable
 unavailable
+unparseable
 unreachable
 usable
 utilizable

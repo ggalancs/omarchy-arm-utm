@@ -55,14 +55,20 @@ fi
 # Nothing may start depending on the snapshot: the moment something does, it is
 # no longer a snapshot and the page's central claim is false.
 #
-# scripts/i18n-audit.py is allowed to NAME the directory, and only that one.
-# It exempts the snapshot from the English rule -- those files were written in
-# Spanish and translating them would edit the record rather than the code --
-# which is the opposite of depending on it: it is the audit declining to read
-# it. Any OTHER file that mentions the path is a dependency and fails here.
+# Three files are allowed to NAME the directory, and only in order to SKIP it:
+# scripts/i18n-audit.py exempts it from the English rule (those files were
+# written in Spanish, and translating them would edit the record rather than
+# the code), and the two lint runners exclude it from the step that reads
+# warnings, because relinting a frozen copy buys nothing. Declining to read
+# something is the opposite of depending on it, and that is the distinction
+# this check draws. Any OTHER file that mentions the path is a dependency and
+# fails here.
+#
+# (No comment in this file may open with the linter's own name: that is parsed
+# as a directive and the linter itself then fails on it.)
+ALLOWED='^\./(provision/repair-iso/|tests/test-repair-iso-note\.sh|scripts/i18n-audit\.py$|scripts/ci-local\.sh$|\.github/workflows/ci\.yml$)'
 USERS=$(grep -rln 'repair-iso' --include='*.sh' --include='*.py' --include='*.yml' . 2>/dev/null \
-        | grep -v '^./provision/repair-iso/' | grep -v '^./tests/test-repair-iso-note.sh' \
-        | grep -v '^./scripts/i18n-audit.py$')
+        | grep -vE "$ALLOWED")
 # And that exemption has to still be there, or the audit will start reporting
 # six Spanish strings in a directory this page says nobody should touch.
 # The EXEMPT_DIRS assignment, not any mention of the path. The audit explains

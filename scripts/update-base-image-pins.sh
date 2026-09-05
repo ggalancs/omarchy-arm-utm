@@ -22,7 +22,21 @@ done
 
 # The name in the pin file is the upstream one, not the local shortened copy.
 ALPINE_NAME=$(grep -ohE 'alpine-virt-[0-9.]+-aarch64\.iso' "$W"/logs/*.log 2>/dev/null | sort -u | tail -1)
-[ -n "$ALPINE_NAME" ] || ALPINE_NAME=$(basename "$ISO")
+# NOT `basename "$ISO"`. The local copy is named alpine-virt-aarch64.iso, with
+# no version in it, and check_pin looks the artifact up by its UPSTREAM name --
+# so a pin written under the short name is one no build will ever find, and the
+# refresh would silently produce a file that pins nothing.
+if [ -z "$ALPINE_NAME" ]; then
+  echo "cannot tell which Alpine release $ISO is: no build log under $W/logs" >&2
+  echo "names it. Pass the upstream file name as the second argument:" >&2
+  echo "  $0 \"$W\" alpine-virt-3.24.1-aarch64.iso" >&2
+  ALPINE_NAME="${2:-}"
+  [ -n "$ALPINE_NAME" ] || exit 1
+fi
+case "$ALPINE_NAME" in
+  alpine-virt-*-aarch64.iso) : ;;
+  *) echo "'$ALPINE_NAME' is not an upstream Alpine file name" >&2; exit 1 ;;
+esac
 
 NEW_ISO=$(shasum -a 256 "$ISO" | awk '{print $1}')
 NEW_TGZ=$(shasum -a 256 "$TGZ" | awk '{print $1}')

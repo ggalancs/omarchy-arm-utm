@@ -228,13 +228,16 @@ which upstream turns on and this build did not. Docker is not removed and
 
 ## What does not work
 
-- **No GL acceleration inside the VM.** Under virtio-gpu, GPU clients map but
-  never paint; only `wl_shm` clients render. Fixed with
-  `LIBGL_ALWAYS_SOFTWARE=1`, so blur and shadows are disabled. Fine for normal
-  use, not for video or 3D.
-- **Resolution is fixed at boot** (1920x1200 by default, editable in
-  `~/.config/hypr/monitors.lua`). Changing the mode at runtime whites out the
-  screen under virtio-gpu.
+- **Software rendering by default, under UTM 4.7.** GPU clients map their
+  windows and never paint them there, so the image ships
+  `LIBGL_ALWAYS_SOFTWARE=1` and blur and shadows are off. **Under UTM 5.0.x
+  that bug is gone** and the GPU works: `omarchy-arm-gpu --on` (and `--off` if
+  anything renders black). The guest cannot tell which UTM is hosting it, which
+  is why this is a command and not a default.
+- **Ships at 1920x1200**, changed at runtime with `omarchy-arm-display
+  --retina` / `--default`, measured on the packaged image under UTM 4.7.5. A
+  hand edit of `~/.config/hypr/monitors.lua` still needs a restart; the command
+  rewrites and reloads in one step, which is what makes it safe.
 - Single monitor.
 
 ## Clipboard and shared folder

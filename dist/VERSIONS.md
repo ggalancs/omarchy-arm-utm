@@ -6,7 +6,7 @@
 |---|---|---|
 | | **← download this one** | the first release |
 | Size | 3.6 GB (3.8 GB unpacked) | 6.5 GB (13 GB unpacked) |
-| Published | 2026-09-02 | 2026-08-23 |
+| Published | 2026-09-03 | 2026-08-23 |
 | Shared clipboard | **works, verified both ways** | does not work |
 | "Update System" notification | gone | repeats on every boot |
 | "Reboot?" after each update | gone | repeats forever |
@@ -16,6 +16,14 @@
 The plain name belongs to the first release and keeps it, so links and checksums
 published back in August still resolve to the exact bytes they were written
 for. That is the only reason the better file is the one with `-v2` in its name.
+
+**`omarchy-arm-utm-v2.zip` has been replaced under the same name more than
+once**, on 2 and 3 September, while the community's reports were being worked
+through. If you downloaded during those days and `shasum -a 256 -c` now fails,
+that is this file changing underneath the name, not a corrupt download: fetch
+it again and it will match. The published sha256 always describes the bytes
+that are on archive.org today. (This table said 2026-09-02 for a while, which
+is the date of a version that was superseded the next day.)
 
 ```bash
 shasum -a 256 -c omarchy-arm-utm-v2.zip.sha256
@@ -205,10 +213,11 @@ curl -fsSL https://raw.githubusercontent.com/ggalancs/omarchy-arm-utm/main/fixes
 
 ## What does not work in either
 
-- **No GPU acceleration inside the VM.** Software rendering; blur and shadows
-  are off. Fine for normal use, not for video or 3D.
-- **Resolution is fixed at boot** (1920x1200, editable in
-  `~/.config/hypr/monitors.lua`). Changing it at runtime whites out the screen.
+- **Software rendering by default, under UTM 4.7** — not a limitation of the
+  image. Under UTM 5.0.x the GPU works: `omarchy-arm-gpu --on`.
+- **Ships at 1920x1200**, changed at runtime with `omarchy-arm-display
+  --retina` / `--default`. A hand edit of `~/.config/hypr/monitors.lua` still
+  needs a restart; the command does not.
 - Single monitor.
 - Proprietary apps are not bundled, on purpose. `omarchy-arm-extras` fetches
   1Password, Obsidian, Typora, LocalSend and Chrome from their official source.

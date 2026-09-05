@@ -240,14 +240,24 @@ ensure_dirs() { mkdir -p "$W"/{dl,vm,provision,scripts,logs,dist,shots}; }
 PINS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/checksums/base-images.sha256"
 check_pin() {
   local file="$1" name="$2" want got
-  # return 2 means "could not compare", which is NOT the same answer as
-  # "compared and matched". Both paths returned 0, and the caller then printed
-  # "checked against the local pin" over a check that had not run -- next to
-  # the warning saying so. The single-file mode README.md documents reaches
-  # here with no pins file at all.
+  # Three answers, not two. "compared and matched" is return 0; "could not
+  # compare at all" is return 2 and the caller must not claim a check; and "the
+  # pins file is here and does not list this artifact" is FATAL, because that
+  # means something was downloaded that nobody reviewed.
+  #
+  # No pins file is the one tolerable case: README.md tells the reader they can
+  # copy this single script to another Mac, and there is no checksums/
+  # directory there.
   [[ -r $PINS ]] || { warn "no $PINS: base images left unpinned"; return 2; }
   want=$(awk -v n="$name" '$2 == n {print $1}' "$PINS")
-  [[ -n $want ]] || { warn "$name is not pinned in checksums/base-images.sha256"; return 2; }
+  # This returned 0 -- "a check that cannot fail", in the words of the comment
+  # forty lines below, which fixed the sibling hole and left this one. A fresh
+  # Alpine point release resolves its name from the CDN index, is compared only
+  # against the checksum that same server publishes, and then walked past this
+  # line with a warning nobody was going to act on.
+  [[ -n $want ]] || die "$name is not in checksums/base-images.sha256.
+       Nothing has reviewed these bytes. Look at what changed upstream, then:
+       scripts/update-base-image-pins.sh \"$W\""
   got=$(shasum -a 256 "$file" | awk '{print $1}')
   if [[ $want != "$got" ]]; then
     warn "$name does not match its reviewed pin"
@@ -4174,8 +4184,17 @@ case "${1:-}" in
     # 'omarchy' and Session=omarchy is in there, switching user must not
     # switch desktop.
     SES=$([ -f "$CONF" ] && sed -n 's/^Session=//p' "$CONF" | tail -1)
-    [ -n "$SES" ] || SES=$(ls /usr/local/share/wayland-sessions /usr/share/wayland-sessions 2>/dev/null \
-                            | grep -m1 '\.desktop$' | sed 's/\.desktop$//')
+    # find, not `ls | grep`: the session directories are ours, but parsing ls
+    # output breaks on any name the shell would have to quote, and the two
+    # directories are searched in the order SDDM reads them rather than in
+    # whatever order ls happens to concatenate them.
+    if [ -z "$SES" ]; then
+      for _d in /usr/local/share/wayland-sessions /usr/share/wayland-sessions; do
+        [ -d "$_d" ] || continue
+        SES=$(find "$_d" -maxdepth 1 -name '*.desktop' -type f 2>/dev/null | sort | head -1)
+        [ -n "$SES" ] && { SES=${SES##*/}; SES=${SES%.desktop}; break; }
+      done
+    fi
     [ -n "$SES" ] || SES=hyprland-uwsm
     printf '[Autologin]\nUser=%s\nSession=%s\n' "$U" "$SES" | sudo tee "$CONF" >/dev/null || exit 1
     echo "Done: from the next boot it logs in as '$U' (session $SES)."
@@ -6202,9 +6221,24 @@ failing halfway through.
 
 ## Resolution
 
-Fixed at 1920x1200. To change it, edit `~/.config/hypr/monitors.lua` and
-**restart the VM** — switching mode while running leaves the screen blank under
-virtio-gpu.
+Ships at 1920x1200, and it is one command either way:
+
+```bash
+omarchy-arm-display --status    # what is in effect
+omarchy-arm-display --retina    # 3840x2400 at scale 2
+omarchy-arm-display --default   # back to 1920x1200
+```
+
+That was measured on the packaged image under UTM 4.7.5: the mode applies with
+`hyprctl reload`, with no restart and with the session intact. Enable "Retina
+Mode" in the VM's Display settings in UTM first, or macOS scales the 4K
+framebuffer down again.
+
+Retina is four times the pixels, so on software rendering it costs; pair it
+with `omarchy-arm-gpu --on` where the host supports that.
+
+A hand edit of `~/.config/hypr/monitors.lua` still needs a restart — the tool
+rewrites the file and reloads in one step, which is what makes it safe.
 
 ## Note
 

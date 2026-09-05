@@ -7,10 +7,14 @@
 #
 # These values are pinned here instead: reviewed once, committed, and compared
 # on every build. They are the exact bytes that produced the image published
-# on 2026-09-02 as omarchy-arm-utm-v2.zip, sha256
-# 00c592c9099f4ea02f19a6708d14d31f3db65dd88e2bd168101a83d2da910e82 -- the
-# strongest provenance this project can offer: not "what the server served
-# today" but "what the image people downloaded was actually built from".
+# on 2026-09-03 as omarchy-arm-utm-v2.zip -- the strongest provenance this
+# project can offer: not "what the server served today" but "what the image
+# people downloaded was actually built from".
+#
+# The sha256 of that image is NOT repeated here. It lives in
+# dist/omarchy-arm-utm-v2.zip.sha256, and it lived here too until
+# scripts/update-base-image-pins.sh -- which copies every comment line forward
+# on a refresh -- made this header outlive the values it describes.
 #
 # The sha256 quoted here used to be a301f6a8..., which matches no artifact this
 # repository has ever published, dated to a release that does not exist. In the

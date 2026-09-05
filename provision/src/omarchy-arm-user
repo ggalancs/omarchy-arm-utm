@@ -60,8 +60,17 @@ case "${1:-}" in
     # 'omarchy' and Session=omarchy is in there, switching user must not
     # switch desktop.
     SES=$([ -f "$CONF" ] && sed -n 's/^Session=//p' "$CONF" | tail -1)
-    [ -n "$SES" ] || SES=$(ls /usr/local/share/wayland-sessions /usr/share/wayland-sessions 2>/dev/null \
-                            | grep -m1 '\.desktop$' | sed 's/\.desktop$//')
+    # find, not `ls | grep`: the session directories are ours, but parsing ls
+    # output breaks on any name the shell would have to quote, and the two
+    # directories are searched in the order SDDM reads them rather than in
+    # whatever order ls happens to concatenate them.
+    if [ -z "$SES" ]; then
+      for _d in /usr/local/share/wayland-sessions /usr/share/wayland-sessions; do
+        [ -d "$_d" ] || continue
+        SES=$(find "$_d" -maxdepth 1 -name '*.desktop' -type f 2>/dev/null | sort | head -1)
+        [ -n "$SES" ] && { SES=${SES##*/}; SES=${SES%.desktop}; break; }
+      done
+    fi
     [ -n "$SES" ] || SES=hyprland-uwsm
     printf '[Autologin]\nUser=%s\nSession=%s\n' "$U" "$SES" | sudo tee "$CONF" >/dev/null || exit 1
     echo "Done: from the next boot it logs in as '$U' (session $SES)."
