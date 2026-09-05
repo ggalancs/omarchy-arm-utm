@@ -116,14 +116,14 @@ for f in "$OMARCHY_PATH"/bin/*; do
   chmod +x "$f"
   sudo ln -sfn "/usr/share/omarchy/bin/$(basename "$f")" "/usr/bin/$(basename "$f")" && n=$((n+1))
 done
-echo "  $n binarios en /usr/bin -> /usr/share/omarchy/bin"
+echo "  $n binaries in /usr/bin -> /usr/share/omarchy/bin"
 # User units go in /usr/lib/systemd/user/, which is where systemd looks for
 # them. They are installed by the omarchy-settings package, which does not
 # exist for ARM either. Without this, install/user/first-run/enable-user-units.sh
 # fails on every login, and since omarchy-provision-first-run is only marked
 # done when NO step fails, first-run repeats forever, re-sending the
 # "Update System" notice.
-# Fuente: docs/file-layout.md, "systemd/user/*.service → /usr/lib/systemd/user/".
+# Source: docs/file-layout.md, "systemd/user/*.service → /usr/lib/systemd/user/".
 if [ -d "$OMARCHY_PATH/default/systemd/user" ]; then
   sudo install -d /usr/lib/systemd/user
   sudo cp -a "$OMARCHY_PATH/default/systemd/user/." /usr/lib/systemd/user/
@@ -164,25 +164,43 @@ sudo bash "$OMARCHY_PATH/install/config/theme-system.sh" 2>&1 | tail -2 || true
 export OMARCHY_PATH=/usr/share/omarchy
 export PATH="/usr/local/bin:$PATH"
 
-# ------------------------------------------------------------ tema
+# ------------------------------------------------------------ theme
 log "applying the Tokyo Night theme"
 mkdir -p ~/.config/omarchy/themes
 if command -v omarchy-theme-set >/dev/null 2>&1; then
   omarchy-theme-set "Tokyo Night" || warn "omarchy-theme-set failed; linking by hand"
 fi
-if [ ! -e ~/.config/omarchy/current/theme ]; then
-  mkdir -p ~/.config/omarchy/current
-  ln -snf "$OMARCHY_PATH/themes/tokyo-night" ~/.config/omarchy/current/theme
+# The fallback goes where quattro actually looks. It used to write
+# ~/.config/omarchy/current/theme -- the Omarchy 3 path, which nothing in this
+# image reads -- so when omarchy-theme-set failed (tolerated by the `|| warn`
+# above) the image ended up with no ~/.local/state/omarchy/current at all, a
+# dangling btop link, and a summary line that still printed a theme path,
+# because it was reading the decorative link this block had just made.
+if [ ! -e ~/.local/state/omarchy/current/theme ]; then
+  warn "omarchy-theme-set left no active theme; linking tokyo-night by hand"
+  mkdir -p ~/.local/state/omarchy/current
+  ln -snf "$OMARCHY_PATH/themes/tokyo-night" ~/.local/state/omarchy/current/theme
+fi
+# The background comes with the theme and is what the lock screen and the
+# desktop read. Without it hyprpaper starts with nothing.
+if [ ! -e ~/.local/state/omarchy/current/background ]; then
+  _bg=$(find -L "$OMARCHY_PATH/themes/tokyo-night/backgrounds" -maxdepth 1 -type f 2>/dev/null | sort | head -1)
+  if [ -n "$_bg" ]; then
+    ln -snf "$_bg" ~/.local/state/omarchy/current/background
+    echo "  background linked by hand: $_bg"
+  else
+    warn "the theme carries no background: the desktop will come up with none"
+  fi
 fi
 # Per-app theme links. In quattro the active theme lives in
-# ~/.local/state/omarchy/current/theme (bin/omarchy-theme-set:12), no en
+# ~/.local/state/omarchy/current/theme (bin/omarchy-theme-set:12), not in
 # ~/.config/omarchy/current, which is the Omarchy 3 path and does not exist here.
 # There is no mako link: quattro has no external notification daemon.
 mkdir -p ~/.config/btop/themes
 ln -snf ~/.local/state/omarchy/current/theme/btop.theme ~/.config/btop/themes/current.theme
 ls -l ~/.local/state/omarchy/current/ 2>/dev/null
 
-# ------------------------------------------------------------ ajustes de VM
+# ------------------------------------------------------------ VM tweaks
 log "virtual machine tweaks"
 # quattro uses Lua configuration: writing monitors.conf would do nothing.
 cat > ~/.config/hypr/monitors.lua <<'LUA'
@@ -229,7 +247,7 @@ for f in "$OMARCHY_PATH"/migrations/*.sh; do
 done
 echo "  migrations sealed:   $(ls -1 ~/.local/state/omarchy/migrations | wc -l)"
 
-# --- branding (about + salvapantallas) -----------------------------------
+# --- branding (about + screensaver) --------------------------------------
 mkdir -p ~/.config/omarchy/branding
 cp "$OMARCHY_PATH/icon.txt" ~/.config/omarchy/branding/about.txt 2>/dev/null || true
 cp "$OMARCHY_PATH/logo.txt" ~/.config/omarchy/branding/screensaver.txt 2>/dev/null || true
@@ -343,11 +361,11 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
     # having nothing to do with it.
     rm -rf "$dir"
   else
-    mkdir -p "$HOME/.omarchy-arm-prov/fallos"
-    cp "$dir/build.log" "$HOME/.omarchy-arm-prov/fallos/$pkg.log" 2>/dev/null || true
+    mkdir -p "$HOME/.omarchy-arm-prov/failures"
+    cp "$dir/build.log" "$HOME/.omarchy-arm-prov/failures/$pkg.log" 2>/dev/null || true
     echo "  --- $pkg failed; last lines of makepkg ---"
     tail -20 "$dir/build.log" 2>/dev/null | sed 's/^/      /'
-    echo "  --- (log completo en ~/.omarchy-arm-prov/fallos/$pkg.log) ---"
+    echo "  --- (full log in ~/.omarchy-arm-prov/failures/$pkg.log) ---"
     rm -rf "$dir"
     return 1
   fi
@@ -387,7 +405,7 @@ for spec in \
       TOOLS_OK+=("$pkg")
       # The failed attempt's log is removed: if it stayed, the "nothing
       # failed to build" check would go red over something that did make it in.
-      rm -f "$HOME/.omarchy-arm-prov/fallos/$pkg.log"
+      rm -f "$HOME/.omarchy-arm-prov/failures/$pkg.log"
     else
       TOOLS_KO+=("$pkg")
     fi
@@ -559,7 +577,7 @@ mkdir -p ~/Pictures/Screenshots ~/Videos ~/Desktop ~/Documents ~/Downloads
 
 # ------------------------------------------------------------ git
 # --- optional installer for apps not shipped in the image ----------------
-# Varias apps (1Password, Obsidian, Typora, LocalSend) SI tienen build arm64
+# Several apps (1Password, Obsidian, Typora, LocalSend) DO have an arm64 build
 # official builds, but they are proprietary: including them in an image that
 # gets redistributed would mean redistributing third-party binaries. The
 # installer is left behind instead.
@@ -581,10 +599,10 @@ fi
 
 # --- clipboard shared with the host --------------------------------------
 # The SPICE clipboard travels in three hops:
-#   cliente SPICE (UTM) <-virtio-> spice-vdagentd <-socket unix-> agente
+#   SPICE client (UTM) <-virtio-> spice-vdagentd <-unix socket-> agent
 # The daemon talks to the host; the session agent only talks to the daemon.
 # daemon. The STOCK agent delivers the clipboard to X11 (vdagent.c:421 ->
-# vdagent_clipboards_new(vdagent_display_get_x11(...)), cero referencias a
+# vdagent_clipboards_new(vdagent_display_get_x11(...)), zero references to
 # wlr-data-control) and under Hyprland it dies with "cannot open display".
 #
 # omarchy-arm-vdagent fills that gap: the same udscs protocol with the daemon,
@@ -682,11 +700,12 @@ git config --global user.name  "$VM_FULLNAME"
 git config --global user.email "$VM_EMAIL"
 git config --global init.defaultBranch master
 
-# ------------------------------------------------------------ resumen
-log "resumen"
+# ------------------------------------------------------------ summary
+log "summary"
 echo "  omarchy:   $(ls -d "$OMARCHY_PATH" 2>/dev/null || echo MISSING)"
 echo "  ~/.config: $(ls ~/.config | wc -l) entries"
-echo "  theme:     $(readlink -f ~/.config/omarchy/current/theme 2>/dev/null || echo 'not linked')"
+echo "  theme:     $(readlink -f ~/.local/state/omarchy/current/theme 2>/dev/null || echo 'NOT LINKED')"
+echo "  background: $(readlink -f ~/.local/state/omarchy/current/background 2>/dev/null || echo 'NOT LINKED')"
 echo "  hyprland:  $(command -v Hyprland || command -v hyprland || echo 'NO')"
 echo "  omarchy-shell: $(command -v omarchy-shell || echo 'NO')"
 echo "  terminal:  $(command -v xdg-terminal-exec || echo 'NO')"

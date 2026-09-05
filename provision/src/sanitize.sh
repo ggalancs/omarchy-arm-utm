@@ -235,11 +235,18 @@ rm -f /var/lib/systemd/random-seed /var/lib/systemd/credential.secret 2>/dev/nul
 : > /var/log/lastlog 2>/dev/null || true
 
 log "8/10 notice for the recipient"
-cat > /etc/motd <<'EOF'
+# NOT a quoted heredoc any more. These two lines named "omarchy" literally
+# while the account and its password both come from $NEW, which is a
+# questionnaire answer: with DIST_NEW_USER=arch the image's own motd and the
+# README on the desktop documented an account that does not exist, and the real
+# password appeared nowhere. Autologin still worked, so the failure surfaced at
+# the first sudo, the lock screen or a reboot -- the worst possible moments to
+# discover the only credentials you were given are wrong.
+cat > /etc/motd <<EOF
 
   Omarchy on Arch Linux ARM (aarch64) - a UTM image for Apple Silicon
 
-  User: omarchy   Password: omarchy   (root too)
+  User: $NEW   Password: $NEW   (root too)
 
   >> CHANGE THE PASSWORD NOW:  passwd
 
@@ -370,7 +377,7 @@ log "orphan packages"
 for _round in 1 2 3 4; do
   mapfile -t ORPHANS < <(pacman -Qtdq 2>/dev/null || true)
   [ "${#ORPHANS[@]}" -gt 0 ] && [ -n "${ORPHANS[0]:-}" ] || break
-  echo "  vuelta $_round: ${ORPHANS[*]}"
+  echo "  round $_round: ${ORPHANS[*]}"
   pacman -Rns --noconfirm "${ORPHANS[@]}" >/dev/null 2>&1 \
     || { warn "could not remove: ${ORPHANS[*]}"; break; }
 done
@@ -382,6 +389,10 @@ fstrim -av 2>&1 | head -3 || true
 echo ""
 log "usermod backup files (they carry the old username and hash)"
 rm -f /etc/passwd- /etc/shadow- /etc/group- /etc/gshadow-
+# NOTE: this is not the last word. The chfn further down changes the GECOS
+# field, and shadow-utils writes /etc/passwd- from the old file every time the
+# passwd database changes -- so the file comes back, carrying the builder's
+# real name. It is removed again after that, below.
 log "subuid/subgid"
 sed -i "s/^$OLD:/$NEW:/" /etc/subuid /etc/subgid 2>/dev/null || true
 cat /etc/subuid /etc/subgid 2>/dev/null
@@ -390,7 +401,7 @@ log "final sweep for references to $OLD"
 echo "  /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null || echo "    none"
 echo "  /home:"; grep -rl "\b$OLD\b" /home/$NEW/.config /home/$NEW/.bashrc 2>/dev/null | head -5 || echo "    none"
 echo "  /usr/local/bin:"; grep -rl "\b$OLD\b" /usr/local/bin 2>/dev/null | head -5 || echo "    none"
-echo "  enlaces rotos en /usr/bin: $(find /usr/bin -xtype l 2>/dev/null | wc -l)"
+echo "  broken links in /usr/bin: $(find /usr/bin -xtype l 2>/dev/null | wc -l)"
 echo "  /usr/share/omarchy (must not point into /home):"; ls -ld /usr/share/omarchy
 
 log "system coherence"
@@ -398,7 +409,7 @@ echo "  passwd: $(getent passwd $NEW)"
 echo "  home:   $(ls -ld /home/$NEW | awk '{print $3, $4, $9}')"
 echo "  symlink omarchy: $(readlink /home/$NEW/.local/share/omarchy)"
 echo "  autologin: $(grep -h User= /etc/sddm.conf.d/*.conf 2>/dev/null | tr '\n' ' ')"
-echo "  binarios omarchy: $(find /usr/bin -maxdepth 1 -name 'omarchy-*' | wc -l) en /usr/bin"
+echo "  omarchy binaries: $(find /usr/bin -maxdepth 1 -name 'omarchy-*' | wc -l) in /usr/bin"
 echo "  ttfx: $(command -v ttfx || echo NO)"
 echo "  migrations sealed:   $(ls -1 /home/$NEW/.local/state/omarchy/migrations 2>/dev/null | wc -l)"
 sync
@@ -411,6 +422,14 @@ done
 log "real name in passwd (it shows in the greeter)"
 chfn -f "Omarchy" "$NEW" 2>/dev/null || usermod -c "Omarchy" "$NEW"
 getent passwd "$NEW"
+# And now the backup that the line above just recreated. shadow-utils rewrites
+# /etc/passwd- from the previous contents on every change, so the file deleted
+# in step 10 came straight back holding `<user>:x:1000:1000:<the builder's real
+# name>`. Nothing downstream could see it: the sweeps grep for the old
+# USERNAME, and this line carries the new one; the filename check matches names
+# containing the old user, and "passwd-" does not. It was the one surviving
+# copy of the builder's identity in the distributed image.
+rm -f /etc/passwd- /etc/shadow- /etc/group- /etc/gshadow-
 
 log "user-dirs with absolute paths"
 for f in /home/$NEW/.config/user-dirs.dirs; do
@@ -434,14 +453,12 @@ done
 chown -h $NEW:$NEW "${BADLINKS[@]:-/home/$NEW}" 2>/dev/null || true
 
 log "final sweep"
-echo "  /etc:   $(grep -rl "\b$OLD\b" /etc 2>/dev/null | wc -l) coincidencias"
-echo "  /home:  $(grep -rl "\b$OLD\b" /home/$NEW/.config /home/$NEW/.bashrc /home/$NEW/.bash_profile 2>/dev/null | wc -l) coincidencias"
-echo "  enlaces a /home/$OLD: $(find /home/$NEW /etc /usr/bin /usr/local /opt -xdev -type l -lname "*/home/$OLD/*" 2>/dev/null | wc -l)"
-echo "  enlaces rotos en el home: $(find /home/$NEW -xdev -type l ! -exec test -e {} \; -print 2>/dev/null | wc -l)"
-echo "  enlaces rotos en /usr/bin: $(find /usr/bin -xtype l 2>/dev/null | wc -l)"
-echo "  fondo activo: $(readlink -f /home/$NEW/.local/state/omarchy/current/background 2>/dev/null || echo NINGUNO)"
-test -e "/home/$NEW/.local/state/omarchy/current/background" \
-  && echo "  fondo resuelve: OK" || echo "  fondo resuelve: ROTO"
+echo "  /etc:   $(grep -rl "\b$OLD\b" /etc 2>/dev/null | wc -l) matches"
+echo "  /home:  $(grep -rl "\b$OLD\b" /home/$NEW/.config /home/$NEW/.bashrc /home/$NEW/.bash_profile 2>/dev/null | wc -l) matches"
+echo "  links to /home/$OLD: $(find /home/$NEW /etc /usr/bin /usr/local /opt -xdev -type l -lname "*/home/$OLD/*" 2>/dev/null | wc -l)"
+echo "  broken links in the home: $(find /home/$NEW -xdev -type l ! -exec test -e {} \; -print 2>/dev/null | wc -l)"
+echo "  broken links in /usr/bin: $(find /usr/bin -xtype l 2>/dev/null | wc -l)"
+echo "  active background: $(readlink -f /home/$NEW/.local/state/omarchy/current/background 2>/dev/null || echo NONE)"
 # ttfx is built from source inside the VM, and the binary keeps the build path
 # in its debug info: /home/<builder>/... That is exactly what this phase exists
 # to remove, so it gets stripped rather than declared harmless, which is what
@@ -453,7 +470,7 @@ for b in /usr/local/bin/ttfx /usr/local/bin/omarchy-arm-vdagent; do
   esac
 done
 if strings /usr/local/bin/ttfx 2>/dev/null | grep -q "$OLD"; then
-  echo "  ttfx: AUN menciona a '$OLD' tras el strip"
+  echo "  ttfx: STILL mentions '$OLD' after the strip"
 else
   echo "  ttfx: no trace of the build account"
 fi
@@ -495,7 +512,7 @@ fi
   || bad "/usr/share/omarchy is not a real directory"
 
 N_CMD=$(find /usr/bin -maxdepth 1 -name 'omarchy-*' | wc -l)
-[ "$N_CMD" -ge 400 ] && ok_ "$N_CMD comandos omarchy-*" || bad "only $N_CMD omarchy-* commands (expected >=400)"
+[ "$N_CMD" -ge 400 ] && ok_ "$N_CMD omarchy-* commands" || bad "only $N_CMD omarchy-* commands (expected >=400)"
 
 N_DANGLING=$(find /usr/bin /usr/local/bin /home/"$NEW" -xdev -xtype l 2>/dev/null | wc -l)
 [ "$N_DANGLING" -le 5 ] && ok_ "$N_DANGLING dangling links" || bad "$N_DANGLING dangling links"
@@ -511,11 +528,11 @@ if [ "$OLD" != "$NEW" ]; then
   # name is settable from the environment, so the pattern has to require $OLD
   # to appear delimited by something non-alphanumeric.
   RX_OLD=".*/([^/]*[^[:alnum:]])?$OLD([^[:alnum:]][^/]*)?"
-  mapfile -t PORNOMBRE < <(find /home/"$NEW" /etc /usr/local /opt -xdev -mindepth 1 \
+  mapfile -t BY_NAME < <(find /home/"$NEW" /etc /usr/local /opt -xdev -mindepth 1 \
       -regextype posix-extended -regex "$RX_OLD" 2>/dev/null)
-  if [ "${#PORNOMBRE[@]}" -gt 0 ] && [ -n "${PORNOMBRE[0]:-}" ]; then
-    echo "  removing ${#PORNOMBRE[@]} file(s) whose NAME carries '$OLD':"
-    for f in "${PORNOMBRE[@]}"; do echo "    $f"; rm -rf "$f"; done
+  if [ "${#BY_NAME[@]}" -gt 0 ] && [ -n "${BY_NAME[0]:-}" ]; then
+    echo "  removing ${#BY_NAME[@]} file(s) whose NAME carries '$OLD':"
+    for f in "${BY_NAME[@]}"; do echo "    $f"; rm -rf "$f"; done
   fi
   REMAINING=$(find /home/"$NEW" /etc /usr/local /opt -xdev -mindepth 1 \
       -regextype posix-extended -regex "$RX_OLD" 2>/dev/null | wc -l)
@@ -528,7 +545,7 @@ fi
 # file that passes it the flag. On the booted image the process itself is
 # checked, which is stronger (scripts/guest-check.sh).
 grep -qs -- '-X' /etc/conf.d/spice-vdagentd \
-  && ok_ "spice-vdagentd recibira -X" || bad "spice-vdagentd without -X: the clipboard will not work"
+  && ok_ "spice-vdagentd will get -X" || bad "spice-vdagentd without -X: the clipboard will not work"
 [ -e /etc/systemd/system/spice-vdagentd.service.d/override.conf ] \
   && bad "the old spice-vdagentd override is still there" || ok_ "no old override left"
 [ -e "/home/$NEW/.config/systemd/user/graphical-session.target.wants/omarchy-arm-vdagent.service" ] \
@@ -537,7 +554,7 @@ grep -qs -- '-X' /etc/conf.d/spice-vdagentd \
 if grep -vs -- '^[[:space:]]*--' "/home/$NEW/.config/hypr/autostart.lua" 2>/dev/null | grep -qs spice-vdagent; then
   bad "autostart.lua launches the stock agent: vdagentd will disconnect both"
 else
-  ok_ "autostart.lua no lanza el agente oficial"
+  ok_ "autostart.lua does not launch the stock agent"
 fi
 
 [ "$(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l)" -eq 0 ] && ok_ "no ssh host keys" || bad "ssh host keys left behind"
@@ -553,6 +570,41 @@ if grep -q 'omarchy-arm-hypr-local' /etc/motd 2>/dev/null; then
     && ok_ "the motd points at omarchy-arm-hypr-local, and it is installed" \
     || bad "the motd tells the user to run omarchy-arm-hypr-local, which is not installed"
 fi
+
+# The builder's identity, in the one place every sweep in this file is blind
+# to. shadow-utils rewrites /etc/passwd- on every change to the passwd
+# database, so the chfn that neutralises the GECOS field puts the file back
+# carrying the builder's real name. The sweeps look for the old USERNAME and
+# this line has the new one; the filename check looks for names containing the
+# old user and "passwd-" does not. Both checks below can go red on their own.
+if [ -e /etc/passwd- ] || [ -e /etc/shadow- ] || [ -e /etc/group- ] || [ -e /etc/gshadow- ]; then
+  bad "shadow-utils backup files are back in /etc: $(ls /etc/passwd- /etc/shadow- /etc/group- /etc/gshadow- 2>/dev/null | tr '\n' ' ')"
+else
+  ok_ "no shadow-utils backup files left in /etc"
+fi
+# VM_FULLNAME comes from config.env, which this script sources. Skipped when it
+# is empty or already the neutral value, because then there is nothing to find
+# and a check with nothing to look for is not a check.
+if [ -n "${VM_FULLNAME:-}" ] && [ "${VM_FULLNAME:-}" != "Omarchy" ]; then
+  if grep -rqs -- "$VM_FULLNAME" /etc/passwd /etc/passwd- /etc/shadow 2>/dev/null; then
+    bad "the builder's real name is still in the passwd database"
+  else
+    ok_ "the builder's real name is nowhere in the passwd database"
+  fi
+fi
+
+# The theme and its background, at the path quattro actually reads. stage3
+# tolerates omarchy-theme-set failing, and the fallback used to write the
+# Omarchy 3 path instead -- so an image could ship with no active theme at all
+# while the build summary printed one, and nothing here or in guest-check ever
+# asked. hyprpaper with no background is a desktop that comes up blank.
+for _s in theme background; do
+  if [ -e "/home/$NEW/.local/state/omarchy/current/$_s" ]; then
+    ok_ "the active $_s resolves: $(readlink -f "/home/$NEW/.local/state/omarchy/current/$_s")"
+  else
+    bad "there is no active $_s under /home/$NEW/.local/state/omarchy/current"
+  fi
+done
 
 # The session the greeter will start must exist as a file. A greeter that
 # accepts the password and returns to itself is what issue #2 reported, and a
@@ -697,10 +749,26 @@ unit_enabled systemd-resolved.service && ok_ "systemd-resolved enabled" \
 # layout. Checking only input.lua meant checking our own sed, which passes by
 # construction. The console keymap and any other hypr config are what a user
 # actually meets, and they are covered here too.
-NONUS=$(grep -rlsE 'kb_layout[[:space:]]*=[[:space:]]*"(?!us)' --include='*.lua' \
-          "/home/$NEW/.config" 2>/dev/null || \
-        grep -rls 'kb_layout' --include='*.lua' "/home/$NEW/.config" 2>/dev/null \
-          | while read -r f; do grep -q 'kb_layout[^,]*"us"' "$f" || echo "$f"; done)
+# One expression, and one grep can compile it. The first form here was
+# `"(?!us)`, a PCRE lookahead inside grep -E: that is not an ERE, grep exited 2
+# every single time, 2>/dev/null hid the syntax error, and the `||` fallback
+# ran on every build. So the primary check never once executed -- and the
+# fallback it silently handed over to asks a weaker question ("does this file
+# mention us anywhere"), which any file naming both a us and a non-us layout
+# passes clean.
+#
+# What is asked now: list every .lua that names a layout, and keep the ones
+# whose kb_layout value is not exactly "us". No lookahead, no fallback, and no
+# suppressed error.
+NONUS=""
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  grep -oE 'kb_layout[[:space:]]*=[[:space:]]*"[^"]*"' "$f" \
+    | grep -qvE 'kb_layout[[:space:]]*=[[:space:]]*"us"' && NONUS="$NONUS $f"
+done <<EOF
+$(grep -rls 'kb_layout' --include='*.lua' "/home/$NEW/.config" 2>/dev/null)
+EOF
+NONUS=${NONUS# }
 [ -z "$NONUS" ] && ok_ "no config in the home names a layout other than us" \
                 || bad "these still name a non-us layout: $NONUS"
 grep -qs '^KEYMAP=us$' /etc/vconsole.conf \

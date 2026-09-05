@@ -21,7 +21,10 @@ set ROOT "@OMARM_ROOT@"
 if {[string match "@*@" $ROOT]} {
   set ROOT [expr {[info exists env(OMARM_ROOT)] ? $env(OMARM_ROOT) : [pwd]}]
 }
-spawn -noecho $ROOT/scripts/qemu-build.sh
+# Braced, not bare. Tcl word-splits an unbraced $ROOT, so a build directory
+# with a space in it spawned the wrong argv and expect reported a login
+# timeout that never mentioned the path.
+spawn -noecho "$ROOT/scripts/qemu-build.sh"
 
 # --- Alpine live login (root, no password)
 wait_for "localhost login:" 10 "the Alpine live environment never reached the login" 300

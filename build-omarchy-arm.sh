@@ -16,13 +16,14 @@
 #  equivalent on Arch Linux ARM and applies the real contents of the Omarchy
 #  repository to it.
 #
-#  Uso:
+#  Usage:
 #    ./build-omarchy-arm.sh                  # every phase
 #    ./build-omarchy-arm.sh --from build     # resume from a phase
 #    ./build-omarchy-arm.sh --only package   # run a single phase
-#    ./build-omarchy-arm.sh --list           # listar fases
+#    ./build-omarchy-arm.sh --list           # list the phases
+#    ./build-omarchy-arm.sh --yes            # take every default, ask nothing
 #
-#  Fases:
+#  Phases:
 #    deps      check the host's dependencies
 #    fetch     download the Alpine ISO + ALARM rootfs (MD5 verified)
 #    prepare   compute the package list from Omarchy's live branch
@@ -32,12 +33,12 @@
 #    sanitize  clean a copy for distribution
 #    package   compact, compress and sign with sha256
 #
-#  Requisitos: macOS en Apple Silicon, Homebrew, UTM 4.7+, Command Line Tools
-#  (git, python3) y ~40 GB free. No necesita sudo.
+#  Requirements: macOS on Apple Silicon, Homebrew, UTM 4.7+, Command Line Tools
+#  (git, python3) and ~40 GB free. No sudo needed.
 #  ────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 
-# ───────────────────────────────── parametros ──────────────────────────────
+# ───────────────────────────────── parameters ──────────────────────────────
 # Which variables the environment already carries, BEFORE the ':=' below fill
 # them in. Without this there is no way to tell "the user passed it" from "that
 # is the default", and detect_from_host overwrote what the user had set:
@@ -268,19 +269,19 @@ ph_fetch() {
              | grep -oE 'alpine-virt-[0-9.]+-aarch64\.iso' | sort -V | tail -1)
     [[ -n $latest ]] || { warn "could not read Alpine's index; using $ALPINE_ISO"; latest="$ALPINE_ISO"; }
     info "Alpine $latest (live environment for the bootstrap)"
-    aria2c -x8 -s8 -c --file-allocation=none -q -d "$W/dl" -o "$(basename "$iso").parcial" \
+    aria2c -x8 -s8 -c --file-allocation=none -q -d "$W/dl" -o "$(basename "$iso").partial" \
       "$base/$latest" || die "could not download Alpine ($base/$latest)"
     # Verified against the published sha256 before being trusted: an
     # interrupted download leaves a non-empty file that would be reused
     # forever.
     local wsha gsha
     wsha=$(curl -fsSL --max-time 30 "$base/$latest.sha256" 2>/dev/null | awk '{print $1}')
-    gsha=$(shasum -a 256 "$W/dl/$(basename "$iso").parcial" | awk '{print $1}')
+    gsha=$(shasum -a 256 "$W/dl/$(basename "$iso").partial" | awk '{print $1}')
     if [[ -n $wsha && $wsha != "$gsha" ]]; then
-      rm -f "$W/dl/$(basename "$iso").parcial"
+      rm -f "$W/dl/$(basename "$iso").partial"
       die "the Alpine ISO does not match its published sha256"
     fi
-    mv "$W/dl/$(basename "$iso").parcial" "$iso"
+    mv "$W/dl/$(basename "$iso").partial" "$iso"
     [[ -n $wsha ]] && info "sha256 verified" || warn "no published sha256: not verified"
   fi
   # When the ISO was already on disk from an earlier run, $latest was never
@@ -306,8 +307,13 @@ ph_fetch() {
   got=$(md5 -q "$tgz")
   if [[ -z $want ]]; then
     # It used to announce "MD5 verified" even when the checksum curl failed.
-    warn "could not read $ALARM_URL.md5: the rootfs is left UNVERIFIED"
-    ok "rootfs ALARM $(du -h "$tgz" | cut -f1), unverified"
+    # And then it left the file unverified while a reviewed sha256 for it sat
+    # in checksums/base-images.sha256, needing no network at all: the check
+    # that could still run was skipped because a different one had failed.
+    # This is the same hole the Alpine branch above was fixed for.
+    warn "could not read $ALARM_URL.md5; falling back to the reviewed local pin"
+    check_pin "$tgz" "ArchLinuxARM-aarch64-latest.tar.gz"
+    ok "rootfs ALARM $(du -h "$tgz" | cut -f1), checked against the local pin"
   elif [[ $want != "$got" ]]; then
     warn "MD5 mismatch (expected $want, got $got); downloading again"
     rm -f "$tgz"
@@ -413,7 +419,16 @@ PYEOF
   local SATCHECK; SATCHECK="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scripts/check-alarm-satisfiable.py"
   if [ "${ALARM_SKIP_SAT:-}" = 1 ]; then
     warn "satisfiability pre-check skipped (ALARM_SKIP_SAT=1)"
-  elif [ -x "$SATCHECK" ]; then
+  elif [ ! -r "$SATCHECK" ]; then
+    # It was `-x`, and the line below runs it as `python3 "$SATCHECK"`, which
+    # needs -r. It was also an if/elif with no else, so a missing file skipped
+    # a ten-second gate before a forty-minute build without saying a word --
+    # and README.md tells the reader they may copy this one script to another
+    # Mac, where the file genuinely is not there. Every other check in this
+    # function announces when it did not run; this one now does too.
+    warn "$SATCHECK is not readable: the satisfiability pre-check did not run"
+    warn "the build will start without knowing whether the core list resolves"
+  else
     info "checking Arch Linux ARM can actually satisfy the core list..."
     # Four outcomes, not two. Treating every non-zero as fatal would refuse to
     # start over exactly the breakage stage2 knows how to compile around, and
@@ -491,7 +506,7 @@ else
   fi
 fi
 
-log "repositorios y herramientas de Alpine"
+log "Alpine repositories and tools"
 V=$(cut -d. -f1,2 < /etc/alpine-release)
 cat > /etc/apk/repositories <<EOF
 https://dl-cdn.alpinelinux.org/alpine/v$V/main
@@ -512,7 +527,7 @@ else
   ROOTFS=ext4
 fi
 grep -qw vfat /proc/filesystems || warn "vfat not listed in /proc/filesystems"
-echo "  raiz: $ROOTFS   filesystems: $(tr '\n' ' ' < /proc/filesystems | tr -s ' ')"
+echo "  root: $ROOTFS   filesystems: $(tr '\n' ' ' < /proc/filesystems | tr -s ' ')"
 
 log "partitioning $DISK (GPT: ESP 1GiB + root $ROOTFS)"
 umount -R /mnt 2>/dev/null || true
@@ -555,7 +570,7 @@ log "unpacking the Arch Linux ARM rootfs (bsdtar -xpf, preserves xattr/ACL)"
 # tarball. pacman repopulates the kernel in stage2 onto the mounted ESP.
 bsdtar -xpf "$PROV/alarm-rootfs.tgz" -C /mnt
 echo "  contents: $(ls /mnt | tr '\n' ' ')"
-[ -d /mnt/etc ] && [ -d /mnt/usr ] || { warn "rootfs incompleto"; exit 1; }
+[ -d /mnt/etc ] && [ -d /mnt/usr ] || { warn "the unpacked rootfs is incomplete: /mnt/etc or /mnt/usr is missing"; exit 1; }
 
 log "mounting the ESP at /boot"
 rm -rf /mnt/boot
@@ -589,23 +604,37 @@ log "copying payload"
 mkdir -p /mnt/root/prov
 cp "$PROV/stage2.sh" "$PROV/stage3.sh" "$PROV/config.env" \
    "$PROV/packages-core.txt" "$PROV/packages-extra.txt" /mnt/root/prov/
-[ -f "$PROV/extras.sh" ] && cp "$PROV/extras.sh" /mnt/root/prov/omarchy-arm-extras
-[ -f "$PROV/armsync.sh" ] && cp "$PROV/armsync.sh" /mnt/root/prov/10-arm-sync
-[ -f "$PROV/clipbrd.sh" ] && cp "$PROV/clipbrd.sh" /mnt/root/prov/omarchy-arm-clipboard
-[ -f "$PROV/vdagent.py" ] && cp "$PROV/vdagent.py" /mnt/root/prov/omarchy-arm-vdagent
-[ -f "$PROV/share.sh" ] && cp "$PROV/share.sh" /mnt/root/prov/omarchy-arm-share
-# No silent `&&`: if it is missing, say so. The quiet guard on this line
-# shipped a whole image without the command and nobody noticed until boot.
-if [ -f "$PROV/user.sh" ]; then cp "$PROV/user.sh" /mnt/root/prov/omarchy-arm-user
-else echo "  !! user.sh missing from the ISO: the image will ship without omarchy-arm-user"; fi
-if [ -f "$PROV/gpu.sh" ]; then cp "$PROV/gpu.sh" /mnt/root/prov/omarchy-arm-gpu
-else echo "  !! gpu.sh missing from the ISO: the image will ship without omarchy-arm-gpu"; fi
-if [ -f "$PROV/hyprcheck.sh" ]; then cp "$PROV/hyprcheck.sh" /mnt/root/prov/omarchy-arm-hypr-check
-else echo "  !! hyprcheck.sh missing from the ISO: the image will ship without omarchy-arm-hypr-check"; fi
-if [ -f "$PROV/display.sh" ]; then cp "$PROV/display.sh" /mnt/root/prov/omarchy-arm-display
-else echo "  !! display.sh missing from the ISO: the image will ship without omarchy-arm-display"; fi
-if [ -f "$PROV/hyprlocal.sh" ]; then cp "$PROV/hyprlocal.sh" /mnt/root/prov/omarchy-arm-hypr-local
-else echo "  !! hyprlocal.sh missing from the ISO: the image will ship without omarchy-arm-hypr-local"; fi
+# No silent `&&` anywhere in this table. Five of these lines used to be
+# `[ -f x ] && cp x y`, which under `set -eu` is a skip that says nothing --
+# and the comment that used to sit here recorded exactly what that costs:
+# user.sh was added to the payload generator but not to the hand-maintained
+# copy list, stage1 found no file, the guard swallowed it, and eighty-two
+# minutes of build ended with an image missing the command. The five loud
+# lines were added afterwards and the five quiet ones were left alone, so the
+# same trap stayed open next to its own warning. One table, one rule.
+#
+# It is still a hand-maintained list: adding a payload means adding a line
+# here AND in build-omarchy-arm.sh's cp list. The difference is that
+# forgetting now prints a warning instead of nothing.
+while IFS='|' read -r _src _dst; do
+  [ -n "$_src" ] || continue
+  if [ -f "$PROV/$_src" ]; then
+    cp "$PROV/$_src" "/mnt/root/prov/$_dst"
+  else
+    echo "  !! $_src missing from the ISO: the image will ship without $_dst"
+  fi
+done <<'PAYLOADS'
+extras.sh|omarchy-arm-extras
+armsync.sh|10-arm-sync
+clipbrd.sh|omarchy-arm-clipboard
+vdagent.py|omarchy-arm-vdagent
+share.sh|omarchy-arm-share
+user.sh|omarchy-arm-user
+gpu.sh|omarchy-arm-gpu
+hyprcheck.sh|omarchy-arm-hypr-check
+display.sh|omarchy-arm-display
+hyprlocal.sh|omarchy-arm-hypr-local
+PAYLOADS
 cat > /mnt/root/prov/fsinfo.env <<EOF
 ROOTFS=$ROOTFS
 ROOT_MOUNT_OPTS=$MOPT_ROOT
@@ -687,7 +716,7 @@ log "updating the system (the tarball is from August, the repos are current)"
 pacman -Syu --noconfirm --needed --disable-download-timeout \
   || pacman -Syu --noconfirm --needed --disable-download-timeout
 
-log "sistema base"
+log "base system"
 # linux-firmware is left out on purpose: ~800 MB of no use in a VM
 pac base base-devel linux-aarch64 \
   sudo git vim networkmanager openssh which man-db man-pages less \
@@ -743,7 +772,7 @@ install -m 0440 /dev/stdin /etc/sudoers.d/10-wheel <<<'%wheel ALL=(ALL:ALL) ALL'
 install -m 0440 /dev/stdin /etc/sudoers.d/99-install <<<"$VM_USER ALL=(ALL:ALL) NOPASSWD: ALL"
 
 # ---------------------------------------------------------------- initramfs
-log "mkinitcpio (modulos virtio + btrfs)"
+log "mkinitcpio (virtio + btrfs modules)"
 sed -i 's/^MODULES=.*/MODULES=(virtio virtio_pci virtio_blk virtio_scsi virtio_net virtio_gpu 9p 9pnet 9pnet_virtio btrfs ext4)/' /etc/mkinitcpio.conf
 grep -q '^MODULES=' /etc/mkinitcpio.conf || echo 'MODULES=(virtio virtio_pci virtio_blk virtio_gpu 9p 9pnet_virtio btrfs)' >> /etc/mkinitcpio.conf
 mkinitcpio -P
@@ -958,7 +987,12 @@ else
     # so the distribution's own rebuild will replace ours the moment it lands.
     for _spec in "hyprtoolkit $HYPR_TK_VER" "hyprland $HYPR_HL_VER"; do
       _p=${_spec%% *}; _v=${_spec#* }
-      _e=$(pacman -Si "extra/$_p" 2>/dev/null | awk '/^Version/{print $3; exit}')
+      # `|| _e=""` is what makes the next line reachable. Under `set -e` plus
+      # pipefail a pacman that cannot find the package takes the whole stage
+      # down on THIS line, so the guard below -- and its specific message --
+      # could never run: the operator got "stage2 failed at line 326" instead
+      # of being told the index does not carry the package.
+      _e=$(pacman -Si "extra/$_p" 2>/dev/null | awk '/^Version/{print $3; exit}') || _e=""
       [ -n "$_e" ] || { warn "extra/$_p is not in the index at all; refusing to guess"; exit 1; }
       if [ "$(vercmp "$_v" "$_e")" -le 0 ]; then
         warn "extra/$_p is now $_e, which is not below the pinned $_v."
@@ -1044,7 +1078,22 @@ else
         # forty-five minutes and fails identically.
         case "$rc" in
           6|8) warn "$pkg: retrying once (that code is transient)"
-               su - "$VM_USER" -c "cd '$dir' && PATH='$HYPR_SHIM:\$PATH' PACKAGER='$HYPR_PACKAGER' PKGDEST='$HYPR_LOCALREPO' CMAKE_BUILD_PARALLEL_LEVEL=$HYPR_J MAKEFLAGS=-j$HYPR_J timeout 5400 makepkg -s --noconfirm --noprogressbar --nocheck $extra" >>"$dir/build.log" 2>&1 || { warn "$pkg failed again"; exit 1; } ;;
+               # 1800, not 5400, and in the background with the same heartbeat
+               # as the first attempt. The retry used to run in the foreground
+               # with both streams redirected: nothing reached the console
+               # while it ran, which is precisely what build.exp kills after
+               # 5400 s of silence. A retry that burned its own 5400 s cap
+               # therefore lost the race with the harness, and the operator got
+               # "THE BUILD STALLED" instead of the makepkg exit code that says
+               # what actually happened. rc=6 is a mirror that will not serve
+               # the sources; half an hour is already generous for that.
+               su - "$VM_USER" -c "cd '$dir' && PATH='$HYPR_SHIM:\$PATH' PACKAGER='$HYPR_PACKAGER' PKGDEST='$HYPR_LOCALREPO' CMAKE_BUILD_PARALLEL_LEVEL=$HYPR_J MAKEFLAGS=-j$HYPR_J timeout 1800 makepkg -s --noconfirm --noprogressbar --nocheck $extra" >>"$dir/build.log" 2>&1 &
+               bg=$!; t=0
+               while kill -0 "$bg" 2>/dev/null; do
+                 sleep 60; t=$((t+60))
+                 echo "    [$pkg retry] ${t}s  $(tail -1 "$dir/build.log" 2>/dev/null | cut -c1-80)"
+               done
+               wait "$bg" || { warn "$pkg failed again"; exit 1; } ;;
           *)   exit 1 ;;
         esac
       fi
@@ -1161,8 +1210,16 @@ echo "  spice-vdagentd with -X (required under Hyprland)"
 #   SPICE WebDAV -> the org.spice-space.webdav.0 virtio port, served by
 #     spice-webdavd (phodav package) at http://localhost:9843/
 # Both are prepared: each only activates if its device exists.
-systemctl enable spice-webdavd.service 2>/dev/null || true
-echo "  spice-webdavd enabled (UTM SPICE WebDAV mode)"
+# Reported, not asserted. The enable is tolerated because the unit only exists
+# when phodav is installed -- but the line under it used to claim success
+# either way, which made it a statement that could not be wrong. The image can
+# legitimately ship without SPICE WebDAV; what it must not do is say it has it.
+if systemctl enable spice-webdavd.service 2>/dev/null; then
+  echo "  spice-webdavd enabled (UTM SPICE WebDAV mode)"
+else
+  echo "  !! spice-webdavd not enabled: the phodav package is not installed,"
+  echo "     so the SPICE WebDAV route to the shared folder will not work"
+fi
 
 # UTM's shared folder. The bundle declares DirectoryShareMode=VirtFS, but that
 # only exposes the device: the guest has to mount it. The tag is
@@ -1387,12 +1444,12 @@ sed -i '/-auth.*pam_gnome_keyring\.so/d;/-password.*pam_gnome_keyring\.so/d' /et
 echo "  session=$SESSION"
 ls /usr/local/share/wayland-sessions /usr/share/wayland-sessions 2>/dev/null
 
-# ---------------------------------------------------------------- ajustes VM
+# --------------------------------------------------------- VM-specific bits
 log "virtual-machine specific settings"
 # Hardware cursors and DRM modifiers misbehave on virtio-gpu
 mkdir -p /etc/environment.d
 cat > /etc/environment.d/90-vm-graphics.conf <<'EOF'
-# virtio-gpu (virgl) bajo UTM/QEMU
+# virtio-gpu (virgl) under UTM/QEMU
 WLR_NO_HARDWARE_CURSORS=1
 AQ_NO_MODIFIERS=1
 WLR_RENDERER_ALLOW_SOFTWARE=1
@@ -1448,7 +1505,7 @@ pacman -Sy --noconfirm >/dev/null 2>&1 || true
 paccache -rk1 2>/dev/null || true
 rm -rf /var/cache/pacman/pkg/* 2>/dev/null || true
 
-log "resumen"
+log "summary"
 echo "  kernel:    $(pacman -Q linux-aarch64 2>/dev/null || echo '?')"
 echo "  hyprland:  $(pacman -Q hyprland 2>/dev/null || echo 'NOT INSTALLED')"
 echo "  sddm:      $(pacman -Q sddm 2>/dev/null || echo 'NOT INSTALLED')"
@@ -1582,14 +1639,14 @@ for f in "$OMARCHY_PATH"/bin/*; do
   chmod +x "$f"
   sudo ln -sfn "/usr/share/omarchy/bin/$(basename "$f")" "/usr/bin/$(basename "$f")" && n=$((n+1))
 done
-echo "  $n binarios en /usr/bin -> /usr/share/omarchy/bin"
+echo "  $n binaries in /usr/bin -> /usr/share/omarchy/bin"
 # User units go in /usr/lib/systemd/user/, which is where systemd looks for
 # them. They are installed by the omarchy-settings package, which does not
 # exist for ARM either. Without this, install/user/first-run/enable-user-units.sh
 # fails on every login, and since omarchy-provision-first-run is only marked
 # done when NO step fails, first-run repeats forever, re-sending the
 # "Update System" notice.
-# Fuente: docs/file-layout.md, "systemd/user/*.service → /usr/lib/systemd/user/".
+# Source: docs/file-layout.md, "systemd/user/*.service → /usr/lib/systemd/user/".
 if [ -d "$OMARCHY_PATH/default/systemd/user" ]; then
   sudo install -d /usr/lib/systemd/user
   sudo cp -a "$OMARCHY_PATH/default/systemd/user/." /usr/lib/systemd/user/
@@ -1630,25 +1687,43 @@ sudo bash "$OMARCHY_PATH/install/config/theme-system.sh" 2>&1 | tail -2 || true
 export OMARCHY_PATH=/usr/share/omarchy
 export PATH="/usr/local/bin:$PATH"
 
-# ------------------------------------------------------------ tema
+# ------------------------------------------------------------ theme
 log "applying the Tokyo Night theme"
 mkdir -p ~/.config/omarchy/themes
 if command -v omarchy-theme-set >/dev/null 2>&1; then
   omarchy-theme-set "Tokyo Night" || warn "omarchy-theme-set failed; linking by hand"
 fi
-if [ ! -e ~/.config/omarchy/current/theme ]; then
-  mkdir -p ~/.config/omarchy/current
-  ln -snf "$OMARCHY_PATH/themes/tokyo-night" ~/.config/omarchy/current/theme
+# The fallback goes where quattro actually looks. It used to write
+# ~/.config/omarchy/current/theme -- the Omarchy 3 path, which nothing in this
+# image reads -- so when omarchy-theme-set failed (tolerated by the `|| warn`
+# above) the image ended up with no ~/.local/state/omarchy/current at all, a
+# dangling btop link, and a summary line that still printed a theme path,
+# because it was reading the decorative link this block had just made.
+if [ ! -e ~/.local/state/omarchy/current/theme ]; then
+  warn "omarchy-theme-set left no active theme; linking tokyo-night by hand"
+  mkdir -p ~/.local/state/omarchy/current
+  ln -snf "$OMARCHY_PATH/themes/tokyo-night" ~/.local/state/omarchy/current/theme
+fi
+# The background comes with the theme and is what the lock screen and the
+# desktop read. Without it hyprpaper starts with nothing.
+if [ ! -e ~/.local/state/omarchy/current/background ]; then
+  _bg=$(find -L "$OMARCHY_PATH/themes/tokyo-night/backgrounds" -maxdepth 1 -type f 2>/dev/null | sort | head -1)
+  if [ -n "$_bg" ]; then
+    ln -snf "$_bg" ~/.local/state/omarchy/current/background
+    echo "  background linked by hand: $_bg"
+  else
+    warn "the theme carries no background: the desktop will come up with none"
+  fi
 fi
 # Per-app theme links. In quattro the active theme lives in
-# ~/.local/state/omarchy/current/theme (bin/omarchy-theme-set:12), no en
+# ~/.local/state/omarchy/current/theme (bin/omarchy-theme-set:12), not in
 # ~/.config/omarchy/current, which is the Omarchy 3 path and does not exist here.
 # There is no mako link: quattro has no external notification daemon.
 mkdir -p ~/.config/btop/themes
 ln -snf ~/.local/state/omarchy/current/theme/btop.theme ~/.config/btop/themes/current.theme
 ls -l ~/.local/state/omarchy/current/ 2>/dev/null
 
-# ------------------------------------------------------------ ajustes de VM
+# ------------------------------------------------------------ VM tweaks
 log "virtual machine tweaks"
 # quattro uses Lua configuration: writing monitors.conf would do nothing.
 cat > ~/.config/hypr/monitors.lua <<'LUA'
@@ -1695,7 +1770,7 @@ for f in "$OMARCHY_PATH"/migrations/*.sh; do
 done
 echo "  migrations sealed:   $(ls -1 ~/.local/state/omarchy/migrations | wc -l)"
 
-# --- branding (about + salvapantallas) -----------------------------------
+# --- branding (about + screensaver) --------------------------------------
 mkdir -p ~/.config/omarchy/branding
 cp "$OMARCHY_PATH/icon.txt" ~/.config/omarchy/branding/about.txt 2>/dev/null || true
 cp "$OMARCHY_PATH/logo.txt" ~/.config/omarchy/branding/screensaver.txt 2>/dev/null || true
@@ -1809,11 +1884,11 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
     # having nothing to do with it.
     rm -rf "$dir"
   else
-    mkdir -p "$HOME/.omarchy-arm-prov/fallos"
-    cp "$dir/build.log" "$HOME/.omarchy-arm-prov/fallos/$pkg.log" 2>/dev/null || true
+    mkdir -p "$HOME/.omarchy-arm-prov/failures"
+    cp "$dir/build.log" "$HOME/.omarchy-arm-prov/failures/$pkg.log" 2>/dev/null || true
     echo "  --- $pkg failed; last lines of makepkg ---"
     tail -20 "$dir/build.log" 2>/dev/null | sed 's/^/      /'
-    echo "  --- (log completo en ~/.omarchy-arm-prov/fallos/$pkg.log) ---"
+    echo "  --- (full log in ~/.omarchy-arm-prov/failures/$pkg.log) ---"
     rm -rf "$dir"
     return 1
   fi
@@ -1853,7 +1928,7 @@ for spec in \
       TOOLS_OK+=("$pkg")
       # The failed attempt's log is removed: if it stayed, the "nothing
       # failed to build" check would go red over something that did make it in.
-      rm -f "$HOME/.omarchy-arm-prov/fallos/$pkg.log"
+      rm -f "$HOME/.omarchy-arm-prov/failures/$pkg.log"
     else
       TOOLS_KO+=("$pkg")
     fi
@@ -2025,7 +2100,7 @@ mkdir -p ~/Pictures/Screenshots ~/Videos ~/Desktop ~/Documents ~/Downloads
 
 # ------------------------------------------------------------ git
 # --- optional installer for apps not shipped in the image ----------------
-# Varias apps (1Password, Obsidian, Typora, LocalSend) SI tienen build arm64
+# Several apps (1Password, Obsidian, Typora, LocalSend) DO have an arm64 build
 # official builds, but they are proprietary: including them in an image that
 # gets redistributed would mean redistributing third-party binaries. The
 # installer is left behind instead.
@@ -2047,10 +2122,10 @@ fi
 
 # --- clipboard shared with the host --------------------------------------
 # The SPICE clipboard travels in three hops:
-#   cliente SPICE (UTM) <-virtio-> spice-vdagentd <-socket unix-> agente
+#   SPICE client (UTM) <-virtio-> spice-vdagentd <-unix socket-> agent
 # The daemon talks to the host; the session agent only talks to the daemon.
 # daemon. The STOCK agent delivers the clipboard to X11 (vdagent.c:421 ->
-# vdagent_clipboards_new(vdagent_display_get_x11(...)), cero referencias a
+# vdagent_clipboards_new(vdagent_display_get_x11(...)), zero references to
 # wlr-data-control) and under Hyprland it dies with "cannot open display".
 #
 # omarchy-arm-vdagent fills that gap: the same udscs protocol with the daemon,
@@ -2148,11 +2223,12 @@ git config --global user.name  "$VM_FULLNAME"
 git config --global user.email "$VM_EMAIL"
 git config --global init.defaultBranch master
 
-# ------------------------------------------------------------ resumen
-log "resumen"
+# ------------------------------------------------------------ summary
+log "summary"
 echo "  omarchy:   $(ls -d "$OMARCHY_PATH" 2>/dev/null || echo MISSING)"
 echo "  ~/.config: $(ls ~/.config | wc -l) entries"
-echo "  theme:     $(readlink -f ~/.config/omarchy/current/theme 2>/dev/null || echo 'not linked')"
+echo "  theme:     $(readlink -f ~/.local/state/omarchy/current/theme 2>/dev/null || echo 'NOT LINKED')"
+echo "  background: $(readlink -f ~/.local/state/omarchy/current/background 2>/dev/null || echo 'NOT LINKED')"
 echo "  hyprland:  $(command -v Hyprland || command -v hyprland || echo 'NO')"
 echo "  omarchy-shell: $(command -v omarchy-shell || echo 'NO')"
 echo "  terminal:  $(command -v xdg-terminal-exec || echo 'NO')"
@@ -2483,11 +2559,18 @@ rm -f /var/lib/systemd/random-seed /var/lib/systemd/credential.secret 2>/dev/nul
 : > /var/log/lastlog 2>/dev/null || true
 
 log "8/10 notice for the recipient"
-cat > /etc/motd <<'EOF'
+# NOT a quoted heredoc any more. These two lines named "omarchy" literally
+# while the account and its password both come from $NEW, which is a
+# questionnaire answer: with DIST_NEW_USER=arch the image's own motd and the
+# README on the desktop documented an account that does not exist, and the real
+# password appeared nowhere. Autologin still worked, so the failure surfaced at
+# the first sudo, the lock screen or a reboot -- the worst possible moments to
+# discover the only credentials you were given are wrong.
+cat > /etc/motd <<EOF
 
   Omarchy on Arch Linux ARM (aarch64) - a UTM image for Apple Silicon
 
-  User: omarchy   Password: omarchy   (root too)
+  User: $NEW   Password: $NEW   (root too)
 
   >> CHANGE THE PASSWORD NOW:  passwd
 
@@ -2618,7 +2701,7 @@ log "orphan packages"
 for _round in 1 2 3 4; do
   mapfile -t ORPHANS < <(pacman -Qtdq 2>/dev/null || true)
   [ "${#ORPHANS[@]}" -gt 0 ] && [ -n "${ORPHANS[0]:-}" ] || break
-  echo "  vuelta $_round: ${ORPHANS[*]}"
+  echo "  round $_round: ${ORPHANS[*]}"
   pacman -Rns --noconfirm "${ORPHANS[@]}" >/dev/null 2>&1 \
     || { warn "could not remove: ${ORPHANS[*]}"; break; }
 done
@@ -2630,6 +2713,10 @@ fstrim -av 2>&1 | head -3 || true
 echo ""
 log "usermod backup files (they carry the old username and hash)"
 rm -f /etc/passwd- /etc/shadow- /etc/group- /etc/gshadow-
+# NOTE: this is not the last word. The chfn further down changes the GECOS
+# field, and shadow-utils writes /etc/passwd- from the old file every time the
+# passwd database changes -- so the file comes back, carrying the builder's
+# real name. It is removed again after that, below.
 log "subuid/subgid"
 sed -i "s/^$OLD:/$NEW:/" /etc/subuid /etc/subgid 2>/dev/null || true
 cat /etc/subuid /etc/subgid 2>/dev/null
@@ -2638,7 +2725,7 @@ log "final sweep for references to $OLD"
 echo "  /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null || echo "    none"
 echo "  /home:"; grep -rl "\b$OLD\b" /home/$NEW/.config /home/$NEW/.bashrc 2>/dev/null | head -5 || echo "    none"
 echo "  /usr/local/bin:"; grep -rl "\b$OLD\b" /usr/local/bin 2>/dev/null | head -5 || echo "    none"
-echo "  enlaces rotos en /usr/bin: $(find /usr/bin -xtype l 2>/dev/null | wc -l)"
+echo "  broken links in /usr/bin: $(find /usr/bin -xtype l 2>/dev/null | wc -l)"
 echo "  /usr/share/omarchy (must not point into /home):"; ls -ld /usr/share/omarchy
 
 log "system coherence"
@@ -2646,7 +2733,7 @@ echo "  passwd: $(getent passwd $NEW)"
 echo "  home:   $(ls -ld /home/$NEW | awk '{print $3, $4, $9}')"
 echo "  symlink omarchy: $(readlink /home/$NEW/.local/share/omarchy)"
 echo "  autologin: $(grep -h User= /etc/sddm.conf.d/*.conf 2>/dev/null | tr '\n' ' ')"
-echo "  binarios omarchy: $(find /usr/bin -maxdepth 1 -name 'omarchy-*' | wc -l) en /usr/bin"
+echo "  omarchy binaries: $(find /usr/bin -maxdepth 1 -name 'omarchy-*' | wc -l) in /usr/bin"
 echo "  ttfx: $(command -v ttfx || echo NO)"
 echo "  migrations sealed:   $(ls -1 /home/$NEW/.local/state/omarchy/migrations 2>/dev/null | wc -l)"
 sync
@@ -2659,6 +2746,14 @@ done
 log "real name in passwd (it shows in the greeter)"
 chfn -f "Omarchy" "$NEW" 2>/dev/null || usermod -c "Omarchy" "$NEW"
 getent passwd "$NEW"
+# And now the backup that the line above just recreated. shadow-utils rewrites
+# /etc/passwd- from the previous contents on every change, so the file deleted
+# in step 10 came straight back holding `<user>:x:1000:1000:<the builder's real
+# name>`. Nothing downstream could see it: the sweeps grep for the old
+# USERNAME, and this line carries the new one; the filename check matches names
+# containing the old user, and "passwd-" does not. It was the one surviving
+# copy of the builder's identity in the distributed image.
+rm -f /etc/passwd- /etc/shadow- /etc/group- /etc/gshadow-
 
 log "user-dirs with absolute paths"
 for f in /home/$NEW/.config/user-dirs.dirs; do
@@ -2682,14 +2777,12 @@ done
 chown -h $NEW:$NEW "${BADLINKS[@]:-/home/$NEW}" 2>/dev/null || true
 
 log "final sweep"
-echo "  /etc:   $(grep -rl "\b$OLD\b" /etc 2>/dev/null | wc -l) coincidencias"
-echo "  /home:  $(grep -rl "\b$OLD\b" /home/$NEW/.config /home/$NEW/.bashrc /home/$NEW/.bash_profile 2>/dev/null | wc -l) coincidencias"
-echo "  enlaces a /home/$OLD: $(find /home/$NEW /etc /usr/bin /usr/local /opt -xdev -type l -lname "*/home/$OLD/*" 2>/dev/null | wc -l)"
-echo "  enlaces rotos en el home: $(find /home/$NEW -xdev -type l ! -exec test -e {} \; -print 2>/dev/null | wc -l)"
-echo "  enlaces rotos en /usr/bin: $(find /usr/bin -xtype l 2>/dev/null | wc -l)"
-echo "  fondo activo: $(readlink -f /home/$NEW/.local/state/omarchy/current/background 2>/dev/null || echo NINGUNO)"
-test -e "/home/$NEW/.local/state/omarchy/current/background" \
-  && echo "  fondo resuelve: OK" || echo "  fondo resuelve: ROTO"
+echo "  /etc:   $(grep -rl "\b$OLD\b" /etc 2>/dev/null | wc -l) matches"
+echo "  /home:  $(grep -rl "\b$OLD\b" /home/$NEW/.config /home/$NEW/.bashrc /home/$NEW/.bash_profile 2>/dev/null | wc -l) matches"
+echo "  links to /home/$OLD: $(find /home/$NEW /etc /usr/bin /usr/local /opt -xdev -type l -lname "*/home/$OLD/*" 2>/dev/null | wc -l)"
+echo "  broken links in the home: $(find /home/$NEW -xdev -type l ! -exec test -e {} \; -print 2>/dev/null | wc -l)"
+echo "  broken links in /usr/bin: $(find /usr/bin -xtype l 2>/dev/null | wc -l)"
+echo "  active background: $(readlink -f /home/$NEW/.local/state/omarchy/current/background 2>/dev/null || echo NONE)"
 # ttfx is built from source inside the VM, and the binary keeps the build path
 # in its debug info: /home/<builder>/... That is exactly what this phase exists
 # to remove, so it gets stripped rather than declared harmless, which is what
@@ -2701,7 +2794,7 @@ for b in /usr/local/bin/ttfx /usr/local/bin/omarchy-arm-vdagent; do
   esac
 done
 if strings /usr/local/bin/ttfx 2>/dev/null | grep -q "$OLD"; then
-  echo "  ttfx: AUN menciona a '$OLD' tras el strip"
+  echo "  ttfx: STILL mentions '$OLD' after the strip"
 else
   echo "  ttfx: no trace of the build account"
 fi
@@ -2743,7 +2836,7 @@ fi
   || bad "/usr/share/omarchy is not a real directory"
 
 N_CMD=$(find /usr/bin -maxdepth 1 -name 'omarchy-*' | wc -l)
-[ "$N_CMD" -ge 400 ] && ok_ "$N_CMD comandos omarchy-*" || bad "only $N_CMD omarchy-* commands (expected >=400)"
+[ "$N_CMD" -ge 400 ] && ok_ "$N_CMD omarchy-* commands" || bad "only $N_CMD omarchy-* commands (expected >=400)"
 
 N_DANGLING=$(find /usr/bin /usr/local/bin /home/"$NEW" -xdev -xtype l 2>/dev/null | wc -l)
 [ "$N_DANGLING" -le 5 ] && ok_ "$N_DANGLING dangling links" || bad "$N_DANGLING dangling links"
@@ -2759,11 +2852,11 @@ if [ "$OLD" != "$NEW" ]; then
   # name is settable from the environment, so the pattern has to require $OLD
   # to appear delimited by something non-alphanumeric.
   RX_OLD=".*/([^/]*[^[:alnum:]])?$OLD([^[:alnum:]][^/]*)?"
-  mapfile -t PORNOMBRE < <(find /home/"$NEW" /etc /usr/local /opt -xdev -mindepth 1 \
+  mapfile -t BY_NAME < <(find /home/"$NEW" /etc /usr/local /opt -xdev -mindepth 1 \
       -regextype posix-extended -regex "$RX_OLD" 2>/dev/null)
-  if [ "${#PORNOMBRE[@]}" -gt 0 ] && [ -n "${PORNOMBRE[0]:-}" ]; then
-    echo "  removing ${#PORNOMBRE[@]} file(s) whose NAME carries '$OLD':"
-    for f in "${PORNOMBRE[@]}"; do echo "    $f"; rm -rf "$f"; done
+  if [ "${#BY_NAME[@]}" -gt 0 ] && [ -n "${BY_NAME[0]:-}" ]; then
+    echo "  removing ${#BY_NAME[@]} file(s) whose NAME carries '$OLD':"
+    for f in "${BY_NAME[@]}"; do echo "    $f"; rm -rf "$f"; done
   fi
   REMAINING=$(find /home/"$NEW" /etc /usr/local /opt -xdev -mindepth 1 \
       -regextype posix-extended -regex "$RX_OLD" 2>/dev/null | wc -l)
@@ -2776,7 +2869,7 @@ fi
 # file that passes it the flag. On the booted image the process itself is
 # checked, which is stronger (scripts/guest-check.sh).
 grep -qs -- '-X' /etc/conf.d/spice-vdagentd \
-  && ok_ "spice-vdagentd recibira -X" || bad "spice-vdagentd without -X: the clipboard will not work"
+  && ok_ "spice-vdagentd will get -X" || bad "spice-vdagentd without -X: the clipboard will not work"
 [ -e /etc/systemd/system/spice-vdagentd.service.d/override.conf ] \
   && bad "the old spice-vdagentd override is still there" || ok_ "no old override left"
 [ -e "/home/$NEW/.config/systemd/user/graphical-session.target.wants/omarchy-arm-vdagent.service" ] \
@@ -2785,7 +2878,7 @@ grep -qs -- '-X' /etc/conf.d/spice-vdagentd \
 if grep -vs -- '^[[:space:]]*--' "/home/$NEW/.config/hypr/autostart.lua" 2>/dev/null | grep -qs spice-vdagent; then
   bad "autostart.lua launches the stock agent: vdagentd will disconnect both"
 else
-  ok_ "autostart.lua no lanza el agente oficial"
+  ok_ "autostart.lua does not launch the stock agent"
 fi
 
 [ "$(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l)" -eq 0 ] && ok_ "no ssh host keys" || bad "ssh host keys left behind"
@@ -2801,6 +2894,41 @@ if grep -q 'omarchy-arm-hypr-local' /etc/motd 2>/dev/null; then
     && ok_ "the motd points at omarchy-arm-hypr-local, and it is installed" \
     || bad "the motd tells the user to run omarchy-arm-hypr-local, which is not installed"
 fi
+
+# The builder's identity, in the one place every sweep in this file is blind
+# to. shadow-utils rewrites /etc/passwd- on every change to the passwd
+# database, so the chfn that neutralises the GECOS field puts the file back
+# carrying the builder's real name. The sweeps look for the old USERNAME and
+# this line has the new one; the filename check looks for names containing the
+# old user and "passwd-" does not. Both checks below can go red on their own.
+if [ -e /etc/passwd- ] || [ -e /etc/shadow- ] || [ -e /etc/group- ] || [ -e /etc/gshadow- ]; then
+  bad "shadow-utils backup files are back in /etc: $(ls /etc/passwd- /etc/shadow- /etc/group- /etc/gshadow- 2>/dev/null | tr '\n' ' ')"
+else
+  ok_ "no shadow-utils backup files left in /etc"
+fi
+# VM_FULLNAME comes from config.env, which this script sources. Skipped when it
+# is empty or already the neutral value, because then there is nothing to find
+# and a check with nothing to look for is not a check.
+if [ -n "${VM_FULLNAME:-}" ] && [ "${VM_FULLNAME:-}" != "Omarchy" ]; then
+  if grep -rqs -- "$VM_FULLNAME" /etc/passwd /etc/passwd- /etc/shadow 2>/dev/null; then
+    bad "the builder's real name is still in the passwd database"
+  else
+    ok_ "the builder's real name is nowhere in the passwd database"
+  fi
+fi
+
+# The theme and its background, at the path quattro actually reads. stage3
+# tolerates omarchy-theme-set failing, and the fallback used to write the
+# Omarchy 3 path instead -- so an image could ship with no active theme at all
+# while the build summary printed one, and nothing here or in guest-check ever
+# asked. hyprpaper with no background is a desktop that comes up blank.
+for _s in theme background; do
+  if [ -e "/home/$NEW/.local/state/omarchy/current/$_s" ]; then
+    ok_ "the active $_s resolves: $(readlink -f "/home/$NEW/.local/state/omarchy/current/$_s")"
+  else
+    bad "there is no active $_s under /home/$NEW/.local/state/omarchy/current"
+  fi
+done
 
 # The session the greeter will start must exist as a file. A greeter that
 # accepts the password and returns to itself is what issue #2 reported, and a
@@ -2945,10 +3073,26 @@ unit_enabled systemd-resolved.service && ok_ "systemd-resolved enabled" \
 # layout. Checking only input.lua meant checking our own sed, which passes by
 # construction. The console keymap and any other hypr config are what a user
 # actually meets, and they are covered here too.
-NONUS=$(grep -rlsE 'kb_layout[[:space:]]*=[[:space:]]*"(?!us)' --include='*.lua' \
-          "/home/$NEW/.config" 2>/dev/null || \
-        grep -rls 'kb_layout' --include='*.lua' "/home/$NEW/.config" 2>/dev/null \
-          | while read -r f; do grep -q 'kb_layout[^,]*"us"' "$f" || echo "$f"; done)
+# One expression, and one grep can compile it. The first form here was
+# `"(?!us)`, a PCRE lookahead inside grep -E: that is not an ERE, grep exited 2
+# every single time, 2>/dev/null hid the syntax error, and the `||` fallback
+# ran on every build. So the primary check never once executed -- and the
+# fallback it silently handed over to asks a weaker question ("does this file
+# mention us anywhere"), which any file naming both a us and a non-us layout
+# passes clean.
+#
+# What is asked now: list every .lua that names a layout, and keep the ones
+# whose kb_layout value is not exactly "us". No lookahead, no fallback, and no
+# suppressed error.
+NONUS=""
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  grep -oE 'kb_layout[[:space:]]*=[[:space:]]*"[^"]*"' "$f" \
+    | grep -qvE 'kb_layout[[:space:]]*=[[:space:]]*"us"' && NONUS="$NONUS $f"
+done <<EOF
+$(grep -rls 'kb_layout' --include='*.lua' "/home/$NEW/.config" 2>/dev/null)
+EOF
+NONUS=${NONUS# }
 [ -z "$NONUS" ] && ok_ "no config in the home names a layout other than us" \
                 || bad "these still name a non-us layout: $NONUS"
 grep -qs '^KEYMAP=us$' /etc/vconsole.conf \
@@ -3019,8 +3163,8 @@ cat > "$W/provision/extras.sh" <<'__PAYLOAD_PROVISION_EXTRAS_SH__'
 #  Almost all of them have an official arm64 build. The ones already inside the
 #  image (free software) are marked as installed and skipped.
 #
-#  Uso:
-#    omarchy-arm-extras                    menu interactivo
+#  Usage:
+#    omarchy-arm-extras                    interactive menu
 #    omarchy-arm-extras --list             see what it can install
 #    omarchy-arm-extras 1password obsidian install specific items
 #    omarchy-arm-extras --all              everything still missing
@@ -4470,7 +4614,10 @@ set ROOT "@OMARM_ROOT@"
 if {[string match "@*@" $ROOT]} {
   set ROOT [expr {[info exists env(OMARM_ROOT)] ? $env(OMARM_ROOT) : [pwd]}]
 }
-spawn -noecho $ROOT/scripts/qemu-build.sh
+# Braced, not bare. Tcl word-splits an unbraced $ROOT, so a build directory
+# with a space in it spawned the wrong argv and expect reported a login
+# timeout that never mentioned the path.
+spawn -noecho "$ROOT/scripts/qemu-build.sh"
 
 # --- Alpine live login (root, no password)
 wait_for "localhost login:" 10 "the Alpine live environment never reached the login" 300
@@ -4602,7 +4749,10 @@ set ROOT "@OMARM_ROOT@"
 if {[string match "@*@" $ROOT]} {
   set ROOT [expr {[info exists env(OMARM_ROOT)] ? $env(OMARM_ROOT) : [pwd]}]
 }
-spawn -noecho $ROOT/scripts/qemu-build.sh
+# Braced, not bare. Tcl word-splits an unbraced $ROOT, so a build directory
+# with a space in it spawned the wrong argv and expect reported a login
+# timeout that never mentioned the path.
+spawn -noecho "$ROOT/scripts/qemu-build.sh"
 wait_for "localhost login:" 10 "login de Alpine" 300
 send "root\r"
 wait_for "localhost:~#" 11 "shell de root" 120
@@ -4710,7 +4860,32 @@ VARS_TPL=/Applications/UTM.app/Contents/Resources/qemu/edk2-arm-vars.fd
 [ -f "$SRC_QCOW" ] || { echo "!! $SRC_QCOW is missing"; exit 1; }
 [ -f "$VARS_TPL" ] || { echo "!! the UEFI NVRAM template $VARS_TPL is missing"; exit 1; }
 
-VM_UUID=$(uuidgen)
+# Identifiers: random by default, DERIVED when UTM_SEED is set.
+#
+# The bundle that ships used to mint a fresh VM UUID, disk UUID and MAC on
+# every run, so the zip's sha256 was different every time. ph_package refuses
+# to finish while the six documents that publish that checksum disagree with
+# it, and told the operator to "put $NEWSUM in the files above and package
+# again" -- which produced yet another hash. The instruction described a loop
+# that could not be closed, and the only way out was to stop believing the
+# gate.
+#
+# With a seed the same image packages to the same bytes, so the checksum can
+# be written down once. The build VM registered in UTM keeps random ones: two
+# VMs sharing a UUID in the same UTM library is a real collision, and that one
+# is not published anyway.
+if [ -n "${UTM_SEED:-}" ]; then
+  # Version and variant nibbles are forced so the result is a well-formed v4
+  # UUID and not merely 32 hex characters with dashes in them.
+  _seeded_uuid() {
+    local h
+    h=$(printf '%s\0%s' "$UTM_SEED" "$1" | shasum -a 256 | cut -c1-32)
+    printf '%s-%s-4%s-8%s-%s' "${h:0:8}" "${h:8:4}" "${h:13:3}" "${h:17:3}" "${h:20:12}"
+  }
+  VM_UUID=$(_seeded_uuid vm)
+else
+  VM_UUID=$(uuidgen)
+fi
 # Whoever receives the bundle reads these notes in UTM before starting it:
 # they have to state the real credentials, not the builder's.
 NOTES_USER="${NOTES_USER:-omarchy}"
@@ -4723,8 +4898,16 @@ xmlq() { printf "%s" "${1-}" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&
 NOTES_USER=$(xmlq "$NOTES_USER")
 NOTES_PASS=$(xmlq "$NOTES_PASS")
 
-DISK_UUID=$(uuidgen)
-MAC=$(printf '02:%02X:%02X:%02X:%02X:%02X' $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)))
+if [ -n "${UTM_SEED:-}" ]; then
+  DISK_UUID=$(_seeded_uuid disk)
+  # Locally administered unicast, same as the random branch: the 02 prefix is
+  # what makes it legal to invent one at all.
+  _m=$(printf '%s\0mac' "$UTM_SEED" | shasum -a 256 | cut -c1-10)
+  MAC=$(printf '02:%s:%s:%s:%s:%s' "${_m:0:2}" "${_m:2:2}" "${_m:4:2}" "${_m:6:2}" "${_m:8:2}" | tr 'a-f' 'A-F')
+else
+  DISK_UUID=$(uuidgen)
+  MAC=$(printf '02:%02X:%02X:%02X:%02X:%02X' $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)))
+fi
 
 # UTM only scans Documents when the app starts, so it has to be restarted for
 # the bundle to be recognised. But quitting it by force takes down whatever VMs
@@ -4982,19 +5165,40 @@ CFGEOF
   # The harnesses carry the root as the marker @OMARM_ROOT@, substituted when
   # they are deployed. It used to be the literal path of the Mac they were
   # written on.
+  # The substitution goes into shell source, so it has to survive a path with a
+  # space: `ROOT=/Users/x/om build` parses as an assignment plus the command
+  # `build`, and under the `set -e` those harnesses use, the run dies with
+  # "build: command not found" and never mentions the path. # and & are also
+  # rejected outright rather than escaped: both are sed metacharacters here and
+  # neither belongs in a build directory.
+  case "$W" in
+    *'#'*|*'&'*) die "the working directory must not contain '#' or '&': $W" ;;
+    *\'*) die "the working directory must not contain a single quote: $W" ;;
+  esac
   sed -i '' "s#@OMARM_ROOT@#$W#g" \
     "$W/scripts/build.exp" "$W/scripts/repair.exp" "$W/scripts/qemu.sh" "$W/scripts/make-utm.sh" 2>/dev/null || true
   sed -i '' "s#scripts/qemu-build.sh#scripts/qemu.sh#g" "$W/scripts/build.exp" "$W/scripts/repair.exp" 2>/dev/null || true
-  sed -i '' "s#^ROOT=.*#ROOT=$W#" "$W/scripts/qemu.sh" "$W/scripts/make-utm.sh" 2>/dev/null || true
+  sed -i '' "s#^ROOT=.*#ROOT='$W'#" "$W/scripts/qemu.sh" "$W/scripts/make-utm.sh" 2>/dev/null || true
 }
 
 make_iso() {  # make_iso <target.iso> <file...>
   local out="$1"; shift
   local d; d=$(mktemp -d)
-  cp "$@" "$d"/
+  # Every one of these was unchecked. A missing payload produced a short ISO,
+  # a failed hdiutil produced none at all, and in both cases the phase printed
+  # its ok line and QEMU later refused to start with a message that never
+  # mentions the ISO -- which reads, from the log, exactly like a guest that
+  # failed to boot.
+  local f
+  for f in "$@"; do
+    [ -f "$f" ] || { rm -rf "$d"; die "make_iso: $f does not exist"; }
+  done
+  cp "$@" "$d"/ || { rm -rf "$d"; die "make_iso: could not stage the files for $out"; }
   rm -f "$out"
-  hdiutil makehybrid -iso -joliet -default-volume-name PROVISION -o "$out" "$d" >/dev/null
+  hdiutil makehybrid -iso -joliet -default-volume-name PROVISION -o "$out" "$d" >/dev/null \
+    || { rm -rf "$d"; die "make_iso: hdiutil could not create $out"; }
   rm -rf "$d"
+  [ -s "$out" ] || die "make_iso: $out came out empty"
 }
 
 # ─────────────────────────────── phase: build ──────────────────────────────
@@ -5005,7 +5209,10 @@ ph_build() {
   make_iso "$W/provision/provision.iso" \
     "$W/provision/stage1.sh" "$W/provision/stage2.sh" "$W/provision/stage3.sh" \
     "$W/provision/config.env" "$W/provision/packages-core.txt" "$W/provision/packages-extra.txt"
-  ln -f "$W/dl/alarm-rootfs.tgz" /tmp/alarm-rootfs.tgz 2>/dev/null || true
+  # A hardlink to the 800 MB rootfs used to be made in /tmp here. Nothing ever
+  # read it: the guest gets the tarball from the provisioning ISO, which is
+  # built below. It only meant that an operator clearing $W/dl to free space
+  # got 800 MB less back than they expected, in a build documented to need 40.
   # the rootfs travels inside the provisioning ISO
   local d; d=$(mktemp -d)
   cp "$W/provision"/{stage1.sh,stage2.sh,stage3.sh,config.env,packages-core.txt,packages-extra.txt} "$d"/
@@ -5027,8 +5234,8 @@ ph_build() {
     if confirm "A built disk already exists ($(du -h "$W/vm/omarchy-arm.qcow2" | cut -f1)). Discard it and rebuild?" no; then
       rm -f "$W/vm/omarchy-arm.qcow2"
     else
-      mv "$W/vm/omarchy-arm.qcow2" "$W/vm/omarchy-arm.qcow2.anterior"
-      info "the previous one is kept at $W/vm/omarchy-arm.qcow2.anterior"
+      mv "$W/vm/omarchy-arm.qcow2" "$W/vm/omarchy-arm.qcow2.previous"
+      info "the previous one is kept at $W/vm/omarchy-arm.qcow2.previous"
     fi
   fi
   rm -f "$W/vm/efi-vars.fd"
@@ -5066,6 +5273,13 @@ ph_utm() {
     else
       VM_NAME="$VM_NAME $(date +%H%M)"
       info "it will be registered as '$VM_NAME'"
+      # Written down, or it lives only in this process. save_answers is called
+      # from the questionnaire, which has already finished by the time we get
+      # here, so a later `--from sanitize` reloaded the OLD name from
+      # answers.env and looked for the bundle under it. VM_NAME is not in
+      # SET_BY_ENV either, so exporting it by hand did not help: load_answers
+      # overwrote that too. The rename has to survive the process that made it.
+      save_answers
     fi
   fi
   local ulog="$W/logs/make-utm.log"
@@ -5208,10 +5422,25 @@ ph_sanitize() {
   [[ $("$UTMCTL" status "$VM_NAME" 2>/dev/null) == started ]] \
     && die "'$VM_NAME' will not stop; sanitising a running disk would copy an inconsistent filesystem"
 
-  local src; src=$(find "$DOCS/$VM_NAME.utm/Data" -name '*.qcow2' | head -1)
-  [[ -s $src ]] || src="$W/vm/omarchy-arm.qcow2"
+  # The two disks are NOT interchangeable. make-utm.sh copies the built image
+  # into the bundle, so $W/vm/omarchy-arm.qcow2 is the state BEFORE first boot
+  # -- not the disk ph_verify booted and approved. Falling back to it silently
+  # meant sanitising and shipping an image nothing had ever verified, and the
+  # only line printed said a working copy had been made. The path is reachable:
+  # ph_verify's own error message advertises `--from sanitize`, which skips the
+  # check that the bundle exists.
+  local src; src=$(find "$DOCS/$VM_NAME.utm/Data" -name '*.qcow2' 2>/dev/null | head -1)
+  if [[ -s $src ]]; then
+    info "source: the disk registered in UTM as '$VM_NAME'"
+  else
+    die "there is no UTM bundle called '$VM_NAME' to sanitize.
+       The disk at $W/vm/omarchy-arm.qcow2 is the state before first boot, which
+       no phase has verified, so it is not used as a substitute. Run the utm and
+       verify phases, or pass --from utm."
+  fi
   rm -f "$W/dist/dist.qcow2"
   cp -c "$src" "$W/dist/dist.qcow2" 2>/dev/null || cp "$src" "$W/dist/dist.qcow2"
+  [[ -s "$W/dist/dist.qcow2" ]] || die "the working copy of $src could not be made"
   ok "working copy made (the original VM is untouched)"
 
   make_iso "$W/provision/repair.iso" "$W/provision/repair.sh" "$W/provision/sanitize.sh" \
@@ -5242,6 +5471,12 @@ ph_sanitize() {
 # ────────────────────────────── phase: package ─────────────────────────────
 ph_package() {
   phase "package - compact and compress"
+  # Every other phase that runs something out of $W deploys it first; this one
+  # did not, and it runs $W/scripts/make-utm.sh. `git pull` a newer builder and
+  # then `--only package` on an existing $W and the bundle that ships is
+  # written by the PREVIOUS version of make-utm.sh, while the plist check below
+  # can only inspect what that old script produced.
+  write_payloads
   [[ -s $W/dist/dist.qcow2 ]] || die "there is no sanitized image; run the sanitize phase"
   info "compacting and compressing the qcow2's clusters..."
   rm -f "$W/dist/slim.qcow2"
@@ -5262,8 +5497,17 @@ ph_package() {
   # lands, and it is the same name announced in the UTM gallery.
   local DNAME="${DIST_VM_NAME:-Omarchy 4 ARM64}"
   rm -rf "$W/dist/$DNAME.utm"
+  # The seed that makes the shipped bundle reproducible. Derived from what
+  # actually ships -- the compacted image and the name on the bundle -- so the
+  # same image packages to the same UUIDs, the same MAC and therefore the same
+  # zip. Without it the sha256 changed on every run and the gate at the end of
+  # this phase asked for something no operator could deliver.
+  info "hashing the image to seed the bundle's identifiers..."
+  local SEED; SEED=$(shasum -a 256 "$W/dist/slim.qcow2" | cut -d' ' -f1)
+  [ ${#SEED} -eq 64 ] || die "could not hash $W/dist/slim.qcow2"
   SRC_QCOW="$W/dist/slim.qcow2" DEST_DIR="$W/dist" UTM_CPUS=$UTM_CPUS UTM_MEM=$UTM_MEM \
     NOTES_USER="$DIST_NEW_USER" NOTES_PASS="$DIST_NEW_USER" \
+    UTM_SEED="$SEED/$DNAME" \
     bash "$W/scripts/make-utm.sh" "$DNAME" >/dev/null \
     || die "could not create the distributable bundle"
   # Last safety net: neither the plist nor the bundle's NAME may carry a trace
@@ -5279,10 +5523,27 @@ ph_package() {
   write_readme "$W/dist/README.md"
 
   info "compressing..."
-  ( cd "$W/dist" && rm -f "$DIST_ZIP" \
-      && zip -r -q -1 "$DIST_ZIP" "$DNAME.utm" README.md \
-      && shasum -a 256 "$DIST_ZIP" > "$DIST_ZIP.sha256" )
-  rm -f "$W/dist/dist.qcow2" "$W/dist/slim.qcow2"
+  # The `|| die` is the point. This was a bare subshell under a script with no
+  # `set -e`, so a full disk or a zip that never ran left the next line printing
+  # "ready:" over nothing -- and the line after that deleted both source images
+  # and the intermediate VM, so a failed package ended with no artifact, no
+  # sanitized qcow2, no build VM, and a green line.
+  #
+  # The stale .sha256 goes with the stale zip. Removing only the zip left the
+  # previous run's checksum on disk, which the gate below then read as if it
+  # described the image just built.
+  # Timestamps are normalised and -X drops the extra attribute blocks, because
+  # a zip records the mtime of every file it stores: without this the bundle's
+  # contents could be byte-identical and the archive still hash differently on
+  # every run. UTM does not read mtimes.
+  find "$W/dist/$DNAME.utm" -exec touch -t 202601010000 {} + 2>/dev/null || true
+  touch -t 202601010000 "$W/dist/README.md" 2>/dev/null || true
+  ( cd "$W/dist" && rm -f "$DIST_ZIP" "$DIST_ZIP.sha256" \
+      && zip -r -q -X -1 "$DIST_ZIP" "$DNAME.utm" README.md \
+      && shasum -a 256 "$DIST_ZIP" > "$DIST_ZIP.sha256" ) \
+    || die "could not create $DIST_ZIP (no space in $W/dist?)"
+  [ -s "$W/dist/$DIST_ZIP" ] || die "$DIST_ZIP came out empty"
+  [ -s "$W/dist/$DIST_ZIP.sha256" ] || die "$DIST_ZIP.sha256 was not written"
   ok "ready: $W/dist/$DIST_ZIP ($(du -h "$W/dist/$DIST_ZIP" | cut -f1))"
   cat "$W/dist/$DIST_ZIP.sha256"
 
@@ -5310,18 +5571,43 @@ ph_package() {
   # something that looked plausible, carried the right prefix, and pointed at
   # nothing. The prose legitimately abbreviates, so a short match still counts
   # there -- scripts/check-published-hash.py is what polices the abbreviations.
-  local DESYNC=0 SRC
+  # An empty NEWSUM is what `cut` leaves when the .sha256 is missing, and
+  # `grep -q ""` matches every file that has a line in it -- so the gate below
+  # returned "agrees everywhere" after comparing nothing at all. It is checked
+  # for shape before it is used, not trusted because a command ran.
+  case "$NEWSUM" in
+    [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) : ;;
+    *) die "the sha256 just computed does not look like one: '$NEWSUM'" ;;
+  esac
+  [ ${#NEWSUM} -eq 64 ] || die "the sha256 just computed is ${#NEWSUM} characters, not 64: '$NEWSUM'"
+
+  local DESYNC=0 SRC SEEN=0
   for SRC in dist/omarchy-arm-utm-v2.zip.sha256 dist/VERSIONS.md \
              README.md README.es.md EMPEZAR.md dist/README.md; do
     [ -f "$REPO/$SRC" ] || continue
+    SEEN=$((SEEN+1))
     grep -q "$NEWSUM" "$REPO/$SRC" || grep -q "${NEWSUM:0:16}" "$REPO/$SRC" || {
       warn "$SRC does not carry this image's sha256"; DESYNC=1; }
   done
-  if [ "$DESYNC" = 0 ]; then
-    ok "the published sha256 agrees everywhere it is stated"
+  # The second way this gate passed without doing anything. README.md tells the
+  # reader they can copy this one file to another Mac and run it there; in that
+  # mode none of the six documents exists, every iteration hits the `continue`,
+  # and the green line below described six comparisons that never happened.
+  if [ "$SEEN" -eq 0 ]; then
+    warn "none of the six documents that publish the sha256 is next to this script;"
+    warn "nothing was compared. The image is at $W/dist/$DIST_ZIP with sha256:"
+    warn "  $NEWSUM"
+  elif [ "$DESYNC" = 0 ]; then
+    ok "the published sha256 agrees in the $SEEN document(s) that state it"
   else
     die "the documentation names a different artifact than the one just built. Put $NEWSUM in the files above and package again."
   fi
+
+  # Only now. These were deleted immediately after the zip, above the gate that
+  # dies -- and ph_package will not start without dist.qcow2, so the recovery
+  # its own error message asks for ("package again") was impossible: the inputs
+  # were gone. They are kept until the phase has actually succeeded.
+  rm -f "$W/dist/dist.qcow2" "$W/dist/slim.qcow2"
 
   # The VM the `utm` phase registered is an intermediate: it serves `verify`
   # and nothing else, because what ships is the sanitized bundle from dist/. It
@@ -5782,7 +6068,7 @@ __PAYLOAD_README_HYPRLOCAL_MD__
   fi
 }
 
-# ──────────────────────────────────── preguntas ────────────────────────────
+# ──────────────────────────────────── questions ────────────────────────────
 # Only what is genuinely a decision, and expensive to get wrong, is asked.
 # Everything else (Alpine version, rootfs URL, Omarchy branch, disk size,
 # locales) stays an environment variable: they are details of
@@ -5808,7 +6094,7 @@ questionnaire() {
   info "Enter accepts the value in brackets. Detected from your Mac."
   echo
 
-  ask VM_TIMEZONE "Zona horaria"                     "$VM_TIMEZONE"
+  ask VM_TIMEZONE "Time zone"                        "$VM_TIMEZONE"
   ask VM_KEYMAP   "Keyboard (console)"                "$VM_KEYMAP"
   ask VM_XKB      "Keyboard (Hyprland/Wayland)"       "$VM_XKB"
   echo
@@ -5850,12 +6136,12 @@ questionnaire() {
   else
     BUILD_DIST=no
     ask VM_USER     "User of the VM"     "$VM_USER"
-    ask VM_PASSWORD "Contrasena"           "$VM_PASSWORD"
+    ask VM_PASSWORD "Password"             "$VM_PASSWORD"
     ask VM_FULLNAME "Full name"           "$VM_FULLNAME"
   fi
   echo
   info "summary: $VM_KEYMAP/$VM_XKB · $VM_TIMEZONE · ${UTM_CPUS} cores - ${UTM_MEM} MiB - disk $DISK_SIZE"
-  info "         herramientas: $BUILD_TOOLS · OBS+Pinta: $BUILD_FREE_APPS · distribute: $BUILD_DIST"
+  info "         tools: $BUILD_TOOLS · OBS+Pinta: $BUILD_FREE_APPS · distribute: $BUILD_DIST"
   confirm "Start?" yes || die "cancelled"
   save_answers
 }
@@ -5873,6 +6159,9 @@ while (($#)); do
     --from) run_from="${2:-}"; [[ -n $run_from ]] || { usage; die "--from needs a phase (${PHASES[*]})"; }; shift 2 ;;
     --only) run_only="${2:-}"; [[ -n $run_only ]] || { usage; die "--only needs a phase (${PHASES[*]})"; }; shift 2 ;;
     --list) printf '%s\n' "${PHASES[@]}"; exit 0 ;;
+    # --sin-preguntas stays as an undocumented alias: it is what the
+    # operator's own notes and shell history say, and removing it would break
+    # those for no gain. --yes is the documented spelling.
     --yes|-y|--sin-preguntas) ASSUME_YES=1; INTERACTIVE=0; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown option: $1" ;;

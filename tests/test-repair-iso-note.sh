@@ -22,11 +22,20 @@ check() { # basename
   [ -n "$row" ] || { echo "  !! $DOC has no table row for $1"; fail=$((fail+1)); return; }
   want_here=$(echo "$row" | awk -F'|' '{print $3}' | tr -dc '0-9')
   want_live=$(echo "$row" | awk -F'|' '{print $4}' | tr -dc '0-9')
-  if [ "$here" = "$want_here" ] && [ "$live" = "$want_live" ]; then
-    echo "  ok  $1: $here here, $live live, as the table says"
-  else
-    echo "  !! $1: the table says $want_here/$want_live, the files are $here/$live"
+  # Exact for the snapshot, which is frozen; a floor for the live file, which
+  # only grows. Written the other way this test went red on every unrelated
+  # edit to sanitize.sh, which trains a reader to update the number without
+  # reading the page -- the opposite of what it is for. A live file that has
+  # SHRUNK below the figure is the case that makes the warning wrong, and that
+  # still fails here.
+  if [ "$here" != "$want_here" ]; then
+    echo "  !! $1: the table says $want_here lines in the snapshot, the file has $here"
     fail=$((fail+1))
+  elif [ "$live" -lt "$want_live" ]; then
+    echo "  !! $1: the table claims at least $want_live lines live, the file has $live"
+    fail=$((fail+1))
+  else
+    echo "  ok  $1: $here here (exact), $live live (>= $want_live)"
   fi
 }
 check sanitize.sh

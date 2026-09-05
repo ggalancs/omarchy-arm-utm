@@ -10,8 +10,8 @@
 #  Almost all of them have an official arm64 build. The ones already inside the
 #  image (free software) are marked as installed and skipped.
 #
-#  Uso:
-#    omarchy-arm-extras                    menu interactivo
+#  Usage:
+#    omarchy-arm-extras                    interactive menu
 #    omarchy-arm-extras --list             see what it can install
 #    omarchy-arm-extras 1password obsidian install specific items
 #    omarchy-arm-extras --all              everything still missing

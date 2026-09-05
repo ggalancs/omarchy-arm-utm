@@ -127,3 +127,5 @@ efibootmgr
 spice-vdagent
 qemu-guest-agent
 ufw
+phodav
+davfs2

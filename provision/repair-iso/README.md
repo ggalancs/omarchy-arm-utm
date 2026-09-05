@@ -11,13 +11,19 @@ The gap is not cosmetic. As of 2026-09-05:
 
 | file | here | `provision/src/` |
 |---|---|---|
-| `sanitize.sh` | 260 lines | 756 lines |
-| `repair.sh` | 76 lines | 78 lines |
+| `sanitize.sh` | 260 lines | 824 lines or more |
+| `repair.sh` | 76 lines | 78 lines or more |
 
 Those figures are checked, not remembered: `tests/test-repair-iso-note.sh`
 recounts both files and fails if this table has drifted. The table said 583
 lines for four days after the file had grown past 700, which is the same class
 of stale claim the directory itself is being warned about.
+
+The snapshot column is exact — these files are frozen and will not move. The
+live column is a floor, because those files only grow, and the claim this page
+makes is about the size of the gap, not about a particular number. A live file
+that has grown does not make the warning stale; one that has *shrunk* below the
+figure here would, and that is what the test catches.
 
 The `sanitize.sh` in this directory ends with an unconditional
 `echo "==> SANITIZE_OK"`. It has no invariants: **it reports success whatever

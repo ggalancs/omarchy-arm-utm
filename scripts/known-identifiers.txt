@@ -440,3 +440,8 @@ warn_override
 code
 def
 first
+SEEN
+UTM_SEED
+_bg
+_pkg
+_seeded_uuid

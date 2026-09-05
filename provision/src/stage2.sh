@@ -52,7 +52,7 @@ log "updating the system (the tarball is from August, the repos are current)"
 pacman -Syu --noconfirm --needed --disable-download-timeout \
   || pacman -Syu --noconfirm --needed --disable-download-timeout
 
-log "sistema base"
+log "base system"
 # linux-firmware is left out on purpose: ~800 MB of no use in a VM
 pac base base-devel linux-aarch64 \
   sudo git vim networkmanager openssh which man-db man-pages less \
@@ -108,7 +108,7 @@ install -m 0440 /dev/stdin /etc/sudoers.d/10-wheel <<<'%wheel ALL=(ALL:ALL) ALL'
 install -m 0440 /dev/stdin /etc/sudoers.d/99-install <<<"$VM_USER ALL=(ALL:ALL) NOPASSWD: ALL"
 
 # ---------------------------------------------------------------- initramfs
-log "mkinitcpio (modulos virtio + btrfs)"
+log "mkinitcpio (virtio + btrfs modules)"
 sed -i 's/^MODULES=.*/MODULES=(virtio virtio_pci virtio_blk virtio_scsi virtio_net virtio_gpu 9p 9pnet 9pnet_virtio btrfs ext4)/' /etc/mkinitcpio.conf
 grep -q '^MODULES=' /etc/mkinitcpio.conf || echo 'MODULES=(virtio virtio_pci virtio_blk virtio_gpu 9p 9pnet_virtio btrfs)' >> /etc/mkinitcpio.conf
 mkinitcpio -P
@@ -323,7 +323,12 @@ else
     # so the distribution's own rebuild will replace ours the moment it lands.
     for _spec in "hyprtoolkit $HYPR_TK_VER" "hyprland $HYPR_HL_VER"; do
       _p=${_spec%% *}; _v=${_spec#* }
-      _e=$(pacman -Si "extra/$_p" 2>/dev/null | awk '/^Version/{print $3; exit}')
+      # `|| _e=""` is what makes the next line reachable. Under `set -e` plus
+      # pipefail a pacman that cannot find the package takes the whole stage
+      # down on THIS line, so the guard below -- and its specific message --
+      # could never run: the operator got "stage2 failed at line 326" instead
+      # of being told the index does not carry the package.
+      _e=$(pacman -Si "extra/$_p" 2>/dev/null | awk '/^Version/{print $3; exit}') || _e=""
       [ -n "$_e" ] || { warn "extra/$_p is not in the index at all; refusing to guess"; exit 1; }
       if [ "$(vercmp "$_v" "$_e")" -le 0 ]; then
         warn "extra/$_p is now $_e, which is not below the pinned $_v."
@@ -409,7 +414,22 @@ else
         # forty-five minutes and fails identically.
         case "$rc" in
           6|8) warn "$pkg: retrying once (that code is transient)"
-               su - "$VM_USER" -c "cd '$dir' && PATH='$HYPR_SHIM:\$PATH' PACKAGER='$HYPR_PACKAGER' PKGDEST='$HYPR_LOCALREPO' CMAKE_BUILD_PARALLEL_LEVEL=$HYPR_J MAKEFLAGS=-j$HYPR_J timeout 5400 makepkg -s --noconfirm --noprogressbar --nocheck $extra" >>"$dir/build.log" 2>&1 || { warn "$pkg failed again"; exit 1; } ;;
+               # 1800, not 5400, and in the background with the same heartbeat
+               # as the first attempt. The retry used to run in the foreground
+               # with both streams redirected: nothing reached the console
+               # while it ran, which is precisely what build.exp kills after
+               # 5400 s of silence. A retry that burned its own 5400 s cap
+               # therefore lost the race with the harness, and the operator got
+               # "THE BUILD STALLED" instead of the makepkg exit code that says
+               # what actually happened. rc=6 is a mirror that will not serve
+               # the sources; half an hour is already generous for that.
+               su - "$VM_USER" -c "cd '$dir' && PATH='$HYPR_SHIM:\$PATH' PACKAGER='$HYPR_PACKAGER' PKGDEST='$HYPR_LOCALREPO' CMAKE_BUILD_PARALLEL_LEVEL=$HYPR_J MAKEFLAGS=-j$HYPR_J timeout 1800 makepkg -s --noconfirm --noprogressbar --nocheck $extra" >>"$dir/build.log" 2>&1 &
+               bg=$!; t=0
+               while kill -0 "$bg" 2>/dev/null; do
+                 sleep 60; t=$((t+60))
+                 echo "    [$pkg retry] ${t}s  $(tail -1 "$dir/build.log" 2>/dev/null | cut -c1-80)"
+               done
+               wait "$bg" || { warn "$pkg failed again"; exit 1; } ;;
           *)   exit 1 ;;
         esac
       fi
@@ -526,8 +546,16 @@ echo "  spice-vdagentd with -X (required under Hyprland)"
 #   SPICE WebDAV -> the org.spice-space.webdav.0 virtio port, served by
 #     spice-webdavd (phodav package) at http://localhost:9843/
 # Both are prepared: each only activates if its device exists.
-systemctl enable spice-webdavd.service 2>/dev/null || true
-echo "  spice-webdavd enabled (UTM SPICE WebDAV mode)"
+# Reported, not asserted. The enable is tolerated because the unit only exists
+# when phodav is installed -- but the line under it used to claim success
+# either way, which made it a statement that could not be wrong. The image can
+# legitimately ship without SPICE WebDAV; what it must not do is say it has it.
+if systemctl enable spice-webdavd.service 2>/dev/null; then
+  echo "  spice-webdavd enabled (UTM SPICE WebDAV mode)"
+else
+  echo "  !! spice-webdavd not enabled: the phodav package is not installed,"
+  echo "     so the SPICE WebDAV route to the shared folder will not work"
+fi
 
 # UTM's shared folder. The bundle declares DirectoryShareMode=VirtFS, but that
 # only exposes the device: the guest has to mount it. The tag is
@@ -752,12 +780,12 @@ sed -i '/-auth.*pam_gnome_keyring\.so/d;/-password.*pam_gnome_keyring\.so/d' /et
 echo "  session=$SESSION"
 ls /usr/local/share/wayland-sessions /usr/share/wayland-sessions 2>/dev/null
 
-# ---------------------------------------------------------------- ajustes VM
+# --------------------------------------------------------- VM-specific bits
 log "virtual-machine specific settings"
 # Hardware cursors and DRM modifiers misbehave on virtio-gpu
 mkdir -p /etc/environment.d
 cat > /etc/environment.d/90-vm-graphics.conf <<'EOF'
-# virtio-gpu (virgl) bajo UTM/QEMU
+# virtio-gpu (virgl) under UTM/QEMU
 WLR_NO_HARDWARE_CURSORS=1
 AQ_NO_MODIFIERS=1
 WLR_RENDERER_ALLOW_SOFTWARE=1
@@ -813,7 +841,7 @@ pacman -Sy --noconfirm >/dev/null 2>&1 || true
 paccache -rk1 2>/dev/null || true
 rm -rf /var/cache/pacman/pkg/* 2>/dev/null || true
 
-log "resumen"
+log "summary"
 echo "  kernel:    $(pacman -Q linux-aarch64 2>/dev/null || echo '?')"
 echo "  hyprland:  $(pacman -Q hyprland 2>/dev/null || echo 'NOT INSTALLED')"
 echo "  sddm:      $(pacman -Q sddm 2>/dev/null || echo 'NOT INSTALLED')"

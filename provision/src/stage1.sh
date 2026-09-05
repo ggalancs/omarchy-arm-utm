@@ -47,7 +47,7 @@ else
   fi
 fi
 
-log "repositorios y herramientas de Alpine"
+log "Alpine repositories and tools"
 V=$(cut -d. -f1,2 < /etc/alpine-release)
 cat > /etc/apk/repositories <<EOF
 https://dl-cdn.alpinelinux.org/alpine/v$V/main
@@ -68,7 +68,7 @@ else
   ROOTFS=ext4
 fi
 grep -qw vfat /proc/filesystems || warn "vfat not listed in /proc/filesystems"
-echo "  raiz: $ROOTFS   filesystems: $(tr '\n' ' ' < /proc/filesystems | tr -s ' ')"
+echo "  root: $ROOTFS   filesystems: $(tr '\n' ' ' < /proc/filesystems | tr -s ' ')"
 
 log "partitioning $DISK (GPT: ESP 1GiB + root $ROOTFS)"
 umount -R /mnt 2>/dev/null || true
@@ -111,7 +111,7 @@ log "unpacking the Arch Linux ARM rootfs (bsdtar -xpf, preserves xattr/ACL)"
 # tarball. pacman repopulates the kernel in stage2 onto the mounted ESP.
 bsdtar -xpf "$PROV/alarm-rootfs.tgz" -C /mnt
 echo "  contents: $(ls /mnt | tr '\n' ' ')"
-[ -d /mnt/etc ] && [ -d /mnt/usr ] || { warn "rootfs incompleto"; exit 1; }
+[ -d /mnt/etc ] && [ -d /mnt/usr ] || { warn "the unpacked rootfs is incomplete: /mnt/etc or /mnt/usr is missing"; exit 1; }
 
 log "mounting the ESP at /boot"
 rm -rf /mnt/boot
@@ -145,23 +145,37 @@ log "copying payload"
 mkdir -p /mnt/root/prov
 cp "$PROV/stage2.sh" "$PROV/stage3.sh" "$PROV/config.env" \
    "$PROV/packages-core.txt" "$PROV/packages-extra.txt" /mnt/root/prov/
-[ -f "$PROV/extras.sh" ] && cp "$PROV/extras.sh" /mnt/root/prov/omarchy-arm-extras
-[ -f "$PROV/armsync.sh" ] && cp "$PROV/armsync.sh" /mnt/root/prov/10-arm-sync
-[ -f "$PROV/clipbrd.sh" ] && cp "$PROV/clipbrd.sh" /mnt/root/prov/omarchy-arm-clipboard
-[ -f "$PROV/vdagent.py" ] && cp "$PROV/vdagent.py" /mnt/root/prov/omarchy-arm-vdagent
-[ -f "$PROV/share.sh" ] && cp "$PROV/share.sh" /mnt/root/prov/omarchy-arm-share
-# No silent `&&`: if it is missing, say so. The quiet guard on this line
-# shipped a whole image without the command and nobody noticed until boot.
-if [ -f "$PROV/user.sh" ]; then cp "$PROV/user.sh" /mnt/root/prov/omarchy-arm-user
-else echo "  !! user.sh missing from the ISO: the image will ship without omarchy-arm-user"; fi
-if [ -f "$PROV/gpu.sh" ]; then cp "$PROV/gpu.sh" /mnt/root/prov/omarchy-arm-gpu
-else echo "  !! gpu.sh missing from the ISO: the image will ship without omarchy-arm-gpu"; fi
-if [ -f "$PROV/hyprcheck.sh" ]; then cp "$PROV/hyprcheck.sh" /mnt/root/prov/omarchy-arm-hypr-check
-else echo "  !! hyprcheck.sh missing from the ISO: the image will ship without omarchy-arm-hypr-check"; fi
-if [ -f "$PROV/display.sh" ]; then cp "$PROV/display.sh" /mnt/root/prov/omarchy-arm-display
-else echo "  !! display.sh missing from the ISO: the image will ship without omarchy-arm-display"; fi
-if [ -f "$PROV/hyprlocal.sh" ]; then cp "$PROV/hyprlocal.sh" /mnt/root/prov/omarchy-arm-hypr-local
-else echo "  !! hyprlocal.sh missing from the ISO: the image will ship without omarchy-arm-hypr-local"; fi
+# No silent `&&` anywhere in this table. Five of these lines used to be
+# `[ -f x ] && cp x y`, which under `set -eu` is a skip that says nothing --
+# and the comment that used to sit here recorded exactly what that costs:
+# user.sh was added to the payload generator but not to the hand-maintained
+# copy list, stage1 found no file, the guard swallowed it, and eighty-two
+# minutes of build ended with an image missing the command. The five loud
+# lines were added afterwards and the five quiet ones were left alone, so the
+# same trap stayed open next to its own warning. One table, one rule.
+#
+# It is still a hand-maintained list: adding a payload means adding a line
+# here AND in build-omarchy-arm.sh's cp list. The difference is that
+# forgetting now prints a warning instead of nothing.
+while IFS='|' read -r _src _dst; do
+  [ -n "$_src" ] || continue
+  if [ -f "$PROV/$_src" ]; then
+    cp "$PROV/$_src" "/mnt/root/prov/$_dst"
+  else
+    echo "  !! $_src missing from the ISO: the image will ship without $_dst"
+  fi
+done <<'PAYLOADS'
+extras.sh|omarchy-arm-extras
+armsync.sh|10-arm-sync
+clipbrd.sh|omarchy-arm-clipboard
+vdagent.py|omarchy-arm-vdagent
+share.sh|omarchy-arm-share
+user.sh|omarchy-arm-user
+gpu.sh|omarchy-arm-gpu
+hyprcheck.sh|omarchy-arm-hypr-check
+display.sh|omarchy-arm-display
+hyprlocal.sh|omarchy-arm-hypr-local
+PAYLOADS
 cat > /mnt/root/prov/fsinfo.env <<EOF
 ROOTFS=$ROOTFS
 ROOT_MOUNT_OPTS=$MOPT_ROOT

@@ -133,6 +133,20 @@ codegrep build-omarchy-arm.sh "grep -qx 'ufw' .*packages-core.txt" \
   && ok "the builder asserts ufw reached the generated core list" \
   || bad "build-omarchy-arm.sh does not check that ufw reached the core list"
 
+# The committed snapshot under provision/src is what scripts/run-build.sh uses,
+# and it drifts from the generator silently. ufw was in extras for months while
+# a comment said otherwise; phodav and davfs2 were in neither list at all, so
+# every run-build.sh image enabled spice-webdavd for a unit that did not exist
+# and told the user to run omarchy-arm-share, whose `mount -t davfs` could not
+# work. Each name here is one the image makes a promise about.
+for _pkg in ufw phodav davfs2 spice-vdagent qemu-guest-agent networkmanager sddm; do
+  if grep -qx "$_pkg" provision/src/packages-core.txt 2>/dev/null; then
+    ok "$_pkg is in the committed core list"
+  else
+    bad "$_pkg is missing from provision/src/packages-core.txt, which run-build.sh ships"
+  fi
+done
+
 # The greeter must not be told to start a session by a name nobody checked.
 # sanitize.sh writes 20-autologin.conf AFTER stage2's file and therefore has
 # the last word; it used to write Session=omarchy unconditionally, while
