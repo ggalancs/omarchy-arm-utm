@@ -363,6 +363,16 @@ ph_prepare() {
     warn "branch '$OMARCHY_REF' no longer exists in Omarchy; using '$defref'"
     warn "check the structure has not changed: this build assumes Omarchy 4"
     OMARCHY_REF="$defref"
+    # Written down. OMARCHY_REF is in ANSWER_VARS but save_answers was never
+    # called from here, so a later `--from build` -- which skips this phase --
+    # reloaded the branch that no longer exists, regenerated config.env with
+    # it, and stage3's `git clone --branch` failed after the rootfs, the
+    # partitioning and a full -Syu. Only this line changes; the rest of
+    # answers.env is left alone, for the reason ph_utm's rename records.
+    if [ -f "$W/answers.env" ]; then
+      sed -i '' "/^OMARCHY_REF=/d" "$W/answers.env" 2>/dev/null || true
+      printf "OMARCHY_REF='%s'\n" "$(shq "$OMARCHY_REF")" >> "$W/answers.env"
+    fi
   fi
   # The list is computed against Omarchy's LIVE branch, intersected with what
   # exists in Arch Linux ARM. Doing it here rather than from a fixed list keeps
@@ -5391,6 +5401,15 @@ DIST_OLD_USER='$(cfgq "$VM_USER")'
 DIST_NEW_USER='$(cfgq "$DIST_NEW_USER")'
 BUILD_TOOLS='$(cfgq "$BUILD_TOOLS")'
 BUILD_FREE_APPS='$(cfgq "$BUILD_FREE_APPS")'
+# Two escape hatches the guest scripts print at the operator and that had no way
+# of reaching the guest. stage2 says "to refuse the local Hyprland build and
+# stop instead: OMARCHY_ARM_NO_LOCAL_HYPR=1", and stage3 says to set
+# ALLOW_PARTIAL_TOOLS=yes to ship without a tool that failed -- and neither name
+# was ever assigned anywhere, in any file. The guest sources only this file, so
+# both guards were permanently false and both instructions were dead letters.
+# They are host environment variables, carried in here.
+OMARCHY_ARM_NO_LOCAL_HYPR='$(cfgq "${OMARCHY_ARM_NO_LOCAL_HYPR:-}")'
+ALLOW_PARTIAL_TOOLS='$(cfgq "${ALLOW_PARTIAL_TOOLS:-}")'
 CFGEOF
   # The harnesses carry the root as the marker @OMARM_ROOT@, substituted when
   # they are deployed. It used to be the literal path of the Mac they were
@@ -6459,17 +6478,25 @@ done
 # The build account's name ends up in a `find ... -regex` during sanitization
 # and in paths all over the guest. An odd or too-short name turns that sweep
 # into a shotgun: it is required to be a real username, and not a substring of
-# the distributable image's account.
-[[ $VM_USER =~ ^[a-z_][a-z0-9_-]{2,31}$ ]] \
-  || die "VM_USER='$VM_USER' is not valid: lowercase, digits, '-' and '_', starting with a letter, 3-32 characters"
-# The same shape is required of DIST_NEW_USER. It was not, and it is used
-# unquoted-in-effect by sanitize.sh to build about fifteen paths under
-# /home/<name>, several of them arguments to `rm -rf`, as root. A value like
-# '../../etc' would have walked straight out of /home.
-[[ $DIST_NEW_USER =~ ^[a-z_][a-z0-9_-]{2,31}$ ]] \
-  || die "DIST_NEW_USER='$DIST_NEW_USER' is not valid: lowercase, digits, '-' and '_', starting with a letter, 3-32 characters"
-[[ $DIST_NEW_USER == *"$VM_USER"* ]] \
-  && die "VM_USER='$VM_USER' is a substring of DIST_NEW_USER='$DIST_NEW_USER'; pick another"
+# the distributable image's account. DIST_NEW_USER gets the same treatment: it
+# builds about fifteen paths under /home/<name> in sanitize.sh, several of them
+# arguments to `rm -rf`, as root, and a value like '../../etc' would have
+# walked straight out of /home.
+#
+# A FUNCTION, called after the answers are in. These ran at this point in the
+# file, which is before load_answers and before the questionnaire -- so they
+# only ever validated the DEFAULTS, and a name typed at the prompt or restored
+# from answers.env went through unchecked. The failure landed fifteen minutes
+# into the build, inside useradd.
+validate_accounts() {
+  [[ $VM_USER =~ ^[a-z_][a-z0-9_-]{2,31}$ ]] \
+    || die "VM_USER='$VM_USER' is not valid: lowercase, digits, '-' and '_', starting with a letter, 3-32 characters"
+  [[ $DIST_NEW_USER =~ ^[a-z_][a-z0-9_-]{2,31}$ ]] \
+    || die "DIST_NEW_USER='$DIST_NEW_USER' is not valid: lowercase, digits, '-' and '_', starting with a letter, 3-32 characters"
+  [[ $DIST_NEW_USER == *"$VM_USER"* ]] \
+    && die "VM_USER='$VM_USER' is a substring of DIST_NEW_USER='$DIST_NEW_USER'; pick another"
+  return 0
+}
 
 # Combining the two runs nothing: if --only's phase comes BEFORE --from's in
 # the array, the loop never gets to set started=1 and the script ended
@@ -6497,6 +6524,10 @@ else
     warn "no $W/answers.env: the defaults will be used, which may not be what you chose"
   fi
 fi
+
+# NOW, with the final values: whatever was typed, whatever was restored, or the
+# defaults. Checking them any earlier checks nothing that a person chose.
+validate_accounts
 
 # The phase trim is decided HERE: after the questionnaire and after loading
 # the answers, with BUILD_DIST's final value, and never when the user has named
