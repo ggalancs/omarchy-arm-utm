@@ -83,9 +83,15 @@ ln -sf /does/not/exist/anywhere /usr/bin/test-broken-link \
 touch /root/failed-packages.txt \
   && { echo "   + /root/failed-packages.txt"; EXPECTED+=("/root/failed-packages.txt left behind"); }
 
-# `git config --global` of whoever runs the list, which here is root.
-git config --global user.name "Negative Test" 2>/dev/null \
-  && { echo "   + git identity"; EXPECTED+=("git user.name:"); }
+# The IMAGE ACCOUNT's gitconfig, not root's. This planted /root/.gitconfig,
+# which is the file guest-check used to read and the one the build never
+# writes -- so the sabotage and the check agreed with each other about a file
+# irrelevant to the artifact. The identity that can actually leak is the
+# builder's, and it travels in /home/<account>/.gitconfig.
+if [ -d "/home/$USER_IMG" ]; then
+  git config --file "/home/$USER_IMG/.gitconfig" user.name "Negative Test" 2>/dev/null \
+    && { echo "   + git identity in /home/$USER_IMG/.gitconfig"; EXPECTED+=("git identity left behind"); }
+fi
 
 systemctl stop spice-vdagentd 2>/dev/null \
   && { echo "   + clipboard daemon stopped"; EXPECTED+=("daemon inactive"); }
