@@ -1,7 +1,7 @@
 #!/bin/bash
 # Runs EVERY negative-test batch against a packaged image, one boot each.
 #
-#   scripts/run-negative-tests.sh "path/to/Omarchy ARM.utm" [build-account]
+#   scripts/run-negative-tests.sh "path/to/Omarchy ARM.utm" [build-account] [image-account]
 #
 # It exists because the batches were invisible. Nothing in the repository
 # referenced scripts/negative-test*.sh -- not CI, not the README, not another

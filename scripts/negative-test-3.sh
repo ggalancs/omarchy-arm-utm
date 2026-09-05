@@ -52,7 +52,7 @@ done
 
 # autostart launching the stock agent, which is what broke the clipboard on
 # reboot: the line was there, commented out.
-A=/home/omarchy/.config/hypr/autostart.lua
+A=/home/$USER_IMG/.config/hypr/autostart.lua
 [ -f "$A" ] && { echo 'hl.exec_cmd("spice-vdagent")' >> "$A"; \
   echo "   + autostart launching the stock agent"; EXPECTED+=("autostart launches the stock agent"); }
 

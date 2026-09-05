@@ -521,3 +521,6 @@ dst
 FILES
 RESTART_TS
 autologin_files
+GITID
+_gc
+UOUT

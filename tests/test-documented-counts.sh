@@ -79,6 +79,10 @@ else:
     print(0)
 COUNT
 )
+# The builder's own comment above the verdict block said "Six conditions" while
+# thirteen were ANDed one screen below it -- the same class of stale count this
+# file exists for, in the file that computes the number.
+claim build-omarchy-arm.sh "$(word "$N_COND") conditions" "build-omarchy-arm.sh states the $N_COND verify conditions"
 claim EMPEZAR.md "**$(es_word "$N_COND")** condiciones" "EMPEZAR.md states the $N_COND verify conditions"
 claim guia.html  "$(es_word "$N_COND") condiciones"     "guia.html states the $N_COND verify conditions"
 

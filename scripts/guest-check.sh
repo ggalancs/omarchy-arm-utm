@@ -18,7 +18,19 @@ getent passwd "$NEW" >/dev/null && ok_ "user $NEW exists" || bad "no $NEW user"
 getent passwd "$OLD" >/dev/null && bad "build account '$OLD' is still there" \
                                 || ok_ "no build account"
 [ "$(getent passwd "$NEW" | cut -d: -f5)" = "Omarchy" ] && ok_ "neutral GECOS" || bad "GECOS: $(getent passwd "$NEW" | cut -d: -f5)"
-[ -z "$(git config --global user.name 2>/dev/null)" ] && ok_ "no git identity" || bad "git user.name: $(git config --global user.name)"
+# The ACCOUNT's files, not root's. This list runs as root over the serial
+# console, and `git config --global` then reads /root/.gitconfig -- which
+# nothing in the build ever writes. The identity stage3 sets goes into the
+# build user's home and travels to /home/$NEW through the rename, so this check
+# was green by construction on every real image, and the leak it exists to
+# catch is the builder's real name and e-mail.
+GITID=""
+for _gc in "/home/$NEW/.gitconfig" "/home/$NEW/.config/git/config" /etc/gitconfig; do
+  [ -f "$_gc" ] || continue
+  _v=$(git config --file "$_gc" user.name 2>/dev/null)
+  [ -n "$_v" ] && GITID="$_gc: $_v"
+done
+[ -z "$GITID" ] && ok_ "no git identity in the image" || bad "git identity left behind -- $GITID"
 
 echo "== desktop =="
 [ "$(pgrep -c Hyprland)" -ge 1 ]   && ok_ "Hyprland up"   || bad "Hyprland not running"
@@ -170,9 +182,21 @@ P=$(find "/home/$NEW" /etc /usr/local /opt -xdev -mindepth 1 -regextype posix-ex
 [ "$P" -eq 0 ] && ok_ "no filename mentions the build account" || bad "$P files mention it"
 
 echo "== system health =="
-F=$(systemctl --failed --no-legend | wc -l); U=$(systemctl --user --failed --no-legend | wc -l)
+F=$(systemctl --failed --no-legend | wc -l)
 [ "$F" -eq 0 ] && ok_ "no failed system units" || { bad "$F failed units"; systemctl --failed --no-legend | sed 's/^/         /'; }
-[ "$U" -eq 0 ] && ok_ "no failed user units" || { bad "$U failed user units"; systemctl --user --failed --no-legend | sed 's/^/         /'; }
+# The IMAGE ACCOUNT's manager, and a failed query is a failure. This list runs
+# as root, so `systemctl --user` addressed user@0.service -- root's session,
+# which has no graphical-session.target and none of the units that matter, so U
+# was 0 on a healthy image and on a broken one alike. And when the query itself
+# errored, stdout was empty, `wc -l` said 0, and the line printed ok: the same
+# count-an-error-as-zero shape this file already rejects for the journal.
+if UOUT=$(systemctl --user -M "$NEW@" --failed --no-legend 2>&1); then
+  U=$(printf '%s' "$UOUT" | grep -c . || true)
+  [ "$U" -eq 0 ] && ok_ "no failed user units in $NEW's session" \
+                 || { bad "$U failed user units in $NEW's session"; printf '%s\n' "$UOUT" | sed 's/^/         /'; }
+else
+  bad "could not query $NEW's user manager: $(printf '%s' "$UOUT" | head -1)"
+fi
 # A dangling link is acceptable only if a distribution package left it that way.
 # read -r, not `for l in $(find ...)`: a path with a space became two tokens
 # and both were then reported as dangling links that do not exist.
@@ -203,7 +227,11 @@ else
   bad "hyprland bootstrap guard missing (command or profile.d hook)"
 fi
 # And the config it guards must itself be intact in the shipped image.
-if grep -qs 'bootstrap\.lua' "/home/$NEW/.config/hypr/hyprland.lua"; then
+# A CALL, not a mention: a Lua-commented `-- dofile(... bootstrap.lua)` matched
+# the bare pattern, so an image whose desktop loads nothing was declared clean.
+# omarchy-arm-hypr-check already uses this pattern; the audit that judges the
+# packaged artifact was the looser of the two.
+if grep -qsE '^[[:space:]]*[^-[:space:]].*bootstrap\.lua' "/home/$NEW/.config/hypr/hyprland.lua"; then
   ok_ "hyprland.lua loads Omarchy's bootstrap"
 else
   bad "hyprland.lua has no bootstrap line: the desktop would ship with no binds"

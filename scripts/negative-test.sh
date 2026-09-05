@@ -64,8 +64,11 @@ declare -a EXPECTED=()
 # guest-check.sh. The first attempt made them up from memory, and the test
 # would have said "blind" over a mistake of mine, not the check's.
 
-useradd -m builder 2>/dev/null \
-  && { echo "   + builder account"; EXPECTED+=("build account"); }
+# The account the image was BUILT with, not the literal 'builder': the check
+# this sabotages greps for the name the harness was told about, so planting a
+# different one proved only that guest-check reacts to a name nobody used.
+useradd -m "$OLD_USER" 2>/dev/null \
+  && { echo "   + $OLD_USER account"; EXPECTED+=("build account"); }
 
 ssh-keygen -q -t ed25519 -N "" -f /etc/ssh/ssh_host_ed25519_key >/dev/null 2>&1 \
   && { echo "   + ssh host key"; EXPECTED+=("ssh host keys left behind"); }

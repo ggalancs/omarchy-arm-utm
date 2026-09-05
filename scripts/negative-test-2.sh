@@ -53,18 +53,18 @@ for c in htop wget rsync; do
 done
 
 # The build path inside a binary in /usr/local/bin.
-printf '#!/bin/sh\n# /home/builder/something\n' > /usr/local/bin/fake-with-path
+printf '#!/bin/sh\n# /home/%s/something\n' "$OLD_USER" > /usr/local/bin/fake-with-path
 chmod +x /usr/local/bin/fake-with-path
-echo "   + binary mentioning /home/builder"
+echo "   + binary mentioning /home/$OLD_USER"
 EXPECTED+=("binaries carrying the build path")
 
 # A filename that mentions the build account.
-touch /etc/config-builder.conf
+touch "/etc/config-$OLD_USER.conf"
 echo "   + file whose name mentions the build account"
 EXPECTED+=("files mention it")
 
 # GECOS carrying an identity.
-usermod -c "Gabriel Real" omarchy 2>/dev/null \
+usermod -c "Gabriel Real" "$USER_IMG" 2>/dev/null \
   && { echo "   + GECOS carrying a real name"; EXPECTED+=("GECOS:"); }
 
 echo
