@@ -1123,9 +1123,12 @@ else
       echo "  $pkg $newver: compiling (this is the slow part)"
       su - "$VM_USER" -c "cd '$dir' && PATH=\"$HYPR_SHIM:\$PATH\" PACKAGER='$HYPR_PACKAGER' PKGDEST='$HYPR_LOCALREPO' CMAKE_BUILD_PARALLEL_LEVEL=$HYPR_J MAKEFLAGS=-j$HYPR_J timeout 5400 makepkg -s --noconfirm --noprogressbar --nocheck $extra" >"$dir/build.log" 2>&1 &
       bg=$!
-      # A silent build and a stalled one look the same from outside, and
-      # build.exp kills anything that says nothing for 5400 s. One line a
-      # minute keeps it alive and makes a hung compile visible.
+      # A silent build and a stalled one look the same from outside. One line
+      # a minute makes a hung compile visible AND re-arms build.exp's clock --
+      # the second half only became true on 2026-09-05: expect's timeout is a
+      # budget for the whole command, not an inactivity timer, so until that
+      # harness grew a catch-all with exp_continue this heartbeat bought
+      # nothing at all, whatever this comment used to claim.
       while kill -0 "$bg" 2>/dev/null; do
         sleep 60; t=$((t+60))
         echo "    [$pkg] ${t}s  free=$(awk '/^MemAvailable/{print $2}' /proc/meminfo)kB  $(tail -1 "$dir/build.log" 2>/dev/null | cut -c1-80)"
@@ -1952,7 +1955,20 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
   # dependencies inherits it too. Passing it through the PACMAN variable does
   # not work, because makepkg invokes it quoted and a string with arguments is
   # looked up as if it were the executable's name.
-  if ( cd "$dir" && makepkg -s --noconfirm --needed --noprogressbar --nocheck ) >"$dir/build.log" 2>&1; then
+  # A heartbeat, for the same reason stage2 has one -- and now for a reason
+  # that is actually true. The whole of makepkg goes into a file, so this loop
+  # said nothing for as long as a tool took to compile; the run of 2026-09-05
+  # was killed by build.exp during exactly this phase. That harness now re-arms
+  # its clock on every line it receives, which is what makes a line a minute
+  # worth printing: it is the difference between a slow compile and a hang.
+  local _t=0 _bg
+  ( cd "$dir" && makepkg -s --noconfirm --needed --noprogressbar --nocheck ) >"$dir/build.log" 2>&1 &
+  _bg=$!
+  while kill -0 "$_bg" 2>/dev/null; do
+    sleep 60; _t=$((_t+60))
+    echo "    [$pkg] ${_t}s  free=$(awk '/^MemAvailable/{print $2}' /proc/meminfo)kB  $(tail -1 "$dir/build.log" 2>/dev/null | cut -c1-70)"
+  done
+  if wait "$_bg"; then
     local built
     built=$(ls "$dir/$pkg"-*.pkg.tar.* 2>/dev/null | head -1)
     [ -n "$built" ] || built=$(ls "$dir"/*.pkg.tar.* 2>/dev/null | head -1)
@@ -5019,6 +5035,24 @@ set timeout 5400
 # the return code).
 send "export DISK=/dev/vda; sh /media/prov/stage1.sh 2>&1 | tee /tmp/build.log\r"
 
+# A TRUE inactivity timer, which this was not. Measured on 2026-09-05 with a
+# five-line expect script: `set timeout 5` against a process printing every two
+# seconds expires at five seconds anyway. expect's timeout is a budget for the
+# whole `expect` command; incoming output does not reset it.
+#
+# So this was "the three stages have 90 minutes in total", not "90 minutes of
+# silence" -- and the run that found it was killed at 22:49 while stage3 was
+# quietly compiling Omarchy's tools, with the guest perfectly healthy. Adding
+# the local Hyprland compile (~30 min) is what pushed the total past the
+# budget; the heartbeat stage2 prints once a minute did nothing to prevent it,
+# although its comment says it does.
+#
+# The catch-all at the end is what fixes it: exp_continue resets the timeout
+# timer, so any output re-arms the 5400 s. It matches a NEWLINE rather than
+# `.+` on purpose -- expect consumes what it matches, and `.+` can eat a buffer
+# ending in a half-arrived "TOK_BUI" so the token never matches. Matching \n
+# consumes only up to the first line break and leaves the rest in the buffer.
+# The token patterns are listed first, so a chunk carrying one still wins.
 expect {
     timeout {
         puts "\n\n!!!!!! THE BUILD STALLED !!!!!!"
@@ -5047,6 +5081,9 @@ expect {
         exit 20
     }
     eof { die 16 "EOF during the build" }
+    # Any other line: keep waiting, and re-arm the clock. See the block comment
+    # above -- without this the timeout is a total budget for the whole build.
+    -re {\n} { exp_continue }
 }
 
 # --- verification of the resulting disk
@@ -5133,6 +5170,12 @@ wait_for "TOK_PROV_0" 13 "provisioning ISO" 120
 #
 # 3600 s is generous for a phase that takes about three minutes, and it is a
 # number. A run that reaches it has hung.
+#
+# And it is 3600 s of SILENCE, which needed the catch-all below to be true:
+# expect's timeout is a budget for the whole command, not an inactivity timer.
+# Measured, not assumed -- `set timeout 5` against a process printing every two
+# seconds expires at five. build.exp carried the same mistake and it killed a
+# healthy build at the ninety-minute mark on 2026-09-05.
 set timeout 3600
 send "export FIXSCRIPT=$FIX; sh /media/prov/repair.sh 2>&1 | tee /tmp/repair.log\r"
 expect {
@@ -5140,6 +5183,10 @@ expect {
     -re {TOK_REPAIR_[1-9][0-9]*} { puts "\n\n!!!!! THE REPAIR FAILED !!!!!\n"; exit 20 }
     timeout { puts "\n!! the repair produced nothing for 3600 s: it has hung, not stalled"; exit 21 }
     eof { puts "\n!! EOF"; exit 16 }
+    # Any other line re-arms the clock. A newline, not `.+`: expect consumes
+    # what it matches, and `.+` can eat a buffer ending in a half-arrived
+    # "TOK_REPAI" so the token never matches afterwards.
+    -re {\n} { exp_continue }
 }
 set timeout 300
 send "sync; poweroff -f\r"

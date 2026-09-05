@@ -425,9 +425,12 @@ else
       echo "  $pkg $newver: compiling (this is the slow part)"
       su - "$VM_USER" -c "cd '$dir' && PATH=\"$HYPR_SHIM:\$PATH\" PACKAGER='$HYPR_PACKAGER' PKGDEST='$HYPR_LOCALREPO' CMAKE_BUILD_PARALLEL_LEVEL=$HYPR_J MAKEFLAGS=-j$HYPR_J timeout 5400 makepkg -s --noconfirm --noprogressbar --nocheck $extra" >"$dir/build.log" 2>&1 &
       bg=$!
-      # A silent build and a stalled one look the same from outside, and
-      # build.exp kills anything that says nothing for 5400 s. One line a
-      # minute keeps it alive and makes a hung compile visible.
+      # A silent build and a stalled one look the same from outside. One line
+      # a minute makes a hung compile visible AND re-arms build.exp's clock --
+      # the second half only became true on 2026-09-05: expect's timeout is a
+      # budget for the whole command, not an inactivity timer, so until that
+      # harness grew a catch-all with exp_continue this heartbeat bought
+      # nothing at all, whatever this comment used to claim.
       while kill -0 "$bg" 2>/dev/null; do
         sleep 60; t=$((t+60))
         echo "    [$pkg] ${t}s  free=$(awk '/^MemAvailable/{print $2}' /proc/meminfo)kB  $(tail -1 "$dir/build.log" 2>/dev/null | cut -c1-80)"

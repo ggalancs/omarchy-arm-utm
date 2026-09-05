@@ -40,6 +40,12 @@ wait_for "TOK_PROV_0" 13 "provisioning ISO" 120
 #
 # 3600 s is generous for a phase that takes about three minutes, and it is a
 # number. A run that reaches it has hung.
+#
+# And it is 3600 s of SILENCE, which needed the catch-all below to be true:
+# expect's timeout is a budget for the whole command, not an inactivity timer.
+# Measured, not assumed -- `set timeout 5` against a process printing every two
+# seconds expires at five. build.exp carried the same mistake and it killed a
+# healthy build at the ninety-minute mark on 2026-09-05.
 set timeout 3600
 send "export FIXSCRIPT=$FIX; sh /media/prov/repair.sh 2>&1 | tee /tmp/repair.log\r"
 expect {
@@ -47,6 +53,10 @@ expect {
     -re {TOK_REPAIR_[1-9][0-9]*} { puts "\n\n!!!!! THE REPAIR FAILED !!!!!\n"; exit 20 }
     timeout { puts "\n!! the repair produced nothing for 3600 s: it has hung, not stalled"; exit 21 }
     eof { puts "\n!! EOF"; exit 16 }
+    # Any other line re-arms the clock. A newline, not `.+`: expect consumes
+    # what it matches, and `.+` can eat a buffer ending in a half-arrived
+    # "TOK_REPAI" so the token never matches afterwards.
+    -re {\n} { exp_continue }
 }
 set timeout 300
 send "sync; poweroff -f\r"

@@ -86,6 +86,24 @@ set timeout 5400
 # the return code).
 send "export DISK=/dev/vda; sh /media/prov/stage1.sh 2>&1 | tee /tmp/build.log\r"
 
+# A TRUE inactivity timer, which this was not. Measured on 2026-09-05 with a
+# five-line expect script: `set timeout 5` against a process printing every two
+# seconds expires at five seconds anyway. expect's timeout is a budget for the
+# whole `expect` command; incoming output does not reset it.
+#
+# So this was "the three stages have 90 minutes in total", not "90 minutes of
+# silence" -- and the run that found it was killed at 22:49 while stage3 was
+# quietly compiling Omarchy's tools, with the guest perfectly healthy. Adding
+# the local Hyprland compile (~30 min) is what pushed the total past the
+# budget; the heartbeat stage2 prints once a minute did nothing to prevent it,
+# although its comment says it does.
+#
+# The catch-all at the end is what fixes it: exp_continue resets the timeout
+# timer, so any output re-arms the 5400 s. It matches a NEWLINE rather than
+# `.+` on purpose -- expect consumes what it matches, and `.+` can eat a buffer
+# ending in a half-arrived "TOK_BUI" so the token never matches. Matching \n
+# consumes only up to the first line break and leaves the rest in the buffer.
+# The token patterns are listed first, so a chunk carrying one still wins.
 expect {
     timeout {
         puts "\n\n!!!!!! THE BUILD STALLED !!!!!!"
@@ -114,6 +132,9 @@ expect {
         exit 20
     }
     eof { die 16 "EOF during the build" }
+    # Any other line: keep waiting, and re-arm the clock. See the block comment
+    # above -- without this the timeout is a total budget for the whole build.
+    -re {\n} { exp_continue }
 }
 
 # --- verification of the resulting disk

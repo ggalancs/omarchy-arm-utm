@@ -345,7 +345,20 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
   # dependencies inherits it too. Passing it through the PACMAN variable does
   # not work, because makepkg invokes it quoted and a string with arguments is
   # looked up as if it were the executable's name.
-  if ( cd "$dir" && makepkg -s --noconfirm --needed --noprogressbar --nocheck ) >"$dir/build.log" 2>&1; then
+  # A heartbeat, for the same reason stage2 has one -- and now for a reason
+  # that is actually true. The whole of makepkg goes into a file, so this loop
+  # said nothing for as long as a tool took to compile; the run of 2026-09-05
+  # was killed by build.exp during exactly this phase. That harness now re-arms
+  # its clock on every line it receives, which is what makes a line a minute
+  # worth printing: it is the difference between a slow compile and a hang.
+  local _t=0 _bg
+  ( cd "$dir" && makepkg -s --noconfirm --needed --noprogressbar --nocheck ) >"$dir/build.log" 2>&1 &
+  _bg=$!
+  while kill -0 "$_bg" 2>/dev/null; do
+    sleep 60; _t=$((_t+60))
+    echo "    [$pkg] ${_t}s  free=$(awk '/^MemAvailable/{print $2}' /proc/meminfo)kB  $(tail -1 "$dir/build.log" 2>/dev/null | cut -c1-70)"
+  done
+  if wait "$_bg"; then
     local built
     built=$(ls "$dir/$pkg"-*.pkg.tar.* 2>/dev/null | head -1)
     [ -n "$built" ] || built=$(ls "$dir"/*.pkg.tar.* 2>/dev/null | head -1)
