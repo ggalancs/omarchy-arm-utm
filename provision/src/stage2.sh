@@ -815,8 +815,8 @@ rm -rf /var/cache/pacman/pkg/* 2>/dev/null || true
 
 log "resumen"
 echo "  kernel:    $(pacman -Q linux-aarch64 2>/dev/null || echo '?')"
-echo "  hyprland:  $(pacman -Q hyprland 2>/dev/null || echo 'NO INSTALADO')"
-echo "  sddm:      $(pacman -Q sddm 2>/dev/null || echo 'NO INSTALADO')"
+echo "  hyprland:  $(pacman -Q hyprland 2>/dev/null || echo 'NOT INSTALLED')"
+echo "  sddm:      $(pacman -Q sddm 2>/dev/null || echo 'NOT INSTALLED')"
 echo "  mesa:      $(pacman -Q mesa 2>/dev/null || echo '?')"
 echo "  user:      $(id "$VM_USER")"
 echo "  dotfiles:  $(ls -d /home/$VM_USER/.config/hypr 2>/dev/null || echo 'MISSING')"

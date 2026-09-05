@@ -25,6 +25,13 @@ sudo pacman -S --noconfirm --needed dust 2>&1 | tail -3
 pacman -Q dust 2>&1
 
 log "3/5 hardening omarchy-pkg-add against packages that do not exist on ARM"
+# `tee` alone was a bug waiting to fire. /usr/local/bin/omarchy-pkg-add is a
+# SYMLINK into /usr/share/omarchy, so tee follows it and overwrites Omarchy's
+# own script with this wrapper -- whose REAL then points at itself, an infinite
+# loop. On an image this fix has already been run against the link is gone and
+# nothing happens; on a freshly downloaded one it destroys the original. It is
+# the same trap stage3.sh documents, and this file walked straight into it.
+sudo rm -f /usr/local/bin/omarchy-pkg-add
 sudo tee /usr/local/bin/omarchy-pkg-add >/dev/null <<'WRAP'
 #!/bin/bash
 # A wrapper for Arch Linux ARM.
@@ -35,16 +42,29 @@ sudo tee /usr/local/bin/omarchy-pkg-add >/dev/null <<'WRAP'
 # leaves the migrations half applied. This wrapper skips the ones in no
 # repository, reports which, and installs the rest with the original script.
 REAL=/usr/share/omarchy/bin/omarchy-pkg-add
+# Without this the failure is a bare "exec: not found" from inside a wrapper
+# the user never installed knowingly, in the middle of omarchy-update.
+[ -x "$REAL" ] || { printf 'omarchy-pkg-add: %s is missing\n' "$REAL" >&2; exit 127; }
+# The AUR counts as existing. pacman knows nothing about it, so every AUR
+# package was reported as "does not exist in Arch Linux ARM" and skipped --
+# ollama-bin among them, which does have an aarch64 build and which the user
+# then had to discover by hand. The script this wraps installs through yay, so
+# the question being asked is "can the helper get this?", not "is this in a
+# pacman repository?".
+HELPER=""
+for h in yay paru; do command -v "$h" >/dev/null 2>&1 && { HELPER=$h; break; }; done
 avail=(); skip=()
 for p in "$@"; do
   if pacman -Q "$p" &>/dev/null || pacman -Si "$p" &>/dev/null; then
+    avail+=("$p")
+  elif [ -n "$HELPER" ] && "$HELPER" -Si "$p" &>/dev/null; then
     avail+=("$p")
   else
     skip+=("$p")
   fi
 done
 if ((${#skip[@]})); then
-  printf '\033[33mSkipped, does not exist in Arch Linux ARM: %s\033[0m\n' "${skip[*]}" >&2
+  printf '\033[33mSkipped, not in Arch Linux ARM nor the AUR: %s\033[0m\n' "${skip[*]}" >&2
 fi
 ((${#avail[@]})) || exit 0
 exec "$REAL" "${avail[@]}"

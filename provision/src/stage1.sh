@@ -15,6 +15,38 @@ ip link set eth0 up 2>/dev/null || true
 udhcpc -i eth0 -q -n -t 15 >/dev/null 2>&1 || true
 ip -4 addr show eth0 | grep -o 'inet [0-9.]*' || echo "  (no IPv4)"
 
+# Name resolution, probed rather than assumed. This is issue #9, and the first
+# answer to it -- adding `dns=10.0.2.3` to the QEMU command line -- was inert:
+# 10.0.2.3 is already slirp's default, which QEMU itself proves by rejecting
+# `host=10.0.2.3` with "DNS must be different from host". That option sets the
+# address ADVERTISED to the guest; the upstream slirp forwards to comes from
+# the host's own resolv.conf and cannot be chosen from the command line.
+#
+# On a dual-stack Mac that list starts with IPv6 nameservers, which a guest
+# with no IPv6 route cannot reach: DHCP succeeds, `inet 10.0.2.15` comes up,
+# and every lookup fails. Diagnosed by wouter1981.
+#
+# slirp NATs outbound UDP, so a resolver named here is reachable directly.
+# OM_DNS4 carries the host's own IPv4 resolvers, computed per build.
+[ -f "$PROV/config.env" ] && . "$PROV/config.env"
+dns_works() { nslookup dl-cdn.alpinelinux.org >/dev/null 2>&1; }
+if dns_works; then
+  echo "  resolution works with what DHCP handed down"
+else
+  warn "name resolution failed with the DHCP resolver (issue #9); rewriting"
+  : > /etc/resolv.conf
+  for _ns in ${OM_DNS4:-} 1.1.1.1 8.8.8.8 9.9.9.9; do
+    case "$_ns" in *[!0-9.]*|"") continue ;; esac
+    echo "nameserver $_ns" >> /etc/resolv.conf
+  done
+  sed 's/^/    /' /etc/resolv.conf
+  if dns_works; then
+    echo "  resolution works now"
+  else
+    warn "still cannot resolve: this is not the IPv6-first case, look further"
+  fi
+fi
+
 log "repositorios y herramientas de Alpine"
 V=$(cut -d. -f1,2 < /etc/alpine-release)
 cat > /etc/apk/repositories <<EOF
@@ -98,8 +130,16 @@ mount -t tmpfs -o size=4G none /mnt/tmp
 mkdir -p /mnt/dev/pts && mount -t devpts none /mnt/dev/pts 2>/dev/null || true
 
 log "DNS inside the chroot"
+# For the CHROOT only. This file used to survive into the shipped image, so
+# every copy went out carrying two hardcoded public resolvers that nobody chose
+# and nothing removed. sanitize clears it now, and asserts that it did.
 rm -f /mnt/etc/resolv.conf
-printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /mnt/etc/resolv.conf
+{ echo "# Temporary, for the build chroot. Cleared before the image ships."
+  for _ns in ${OM_DNS4:-} 1.1.1.1 8.8.8.8; do
+    case "$_ns" in *[!0-9.]*|"") continue ;; esac
+    echo "nameserver $_ns"
+  done
+} > /mnt/etc/resolv.conf
 
 log "copying payload"
 mkdir -p /mnt/root/prov

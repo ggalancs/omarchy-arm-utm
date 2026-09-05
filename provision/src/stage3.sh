@@ -194,9 +194,12 @@ cat > ~/.config/hypr/monitors.lua <<'LUA'
 --  1. Scale 1 (Omarchy assumes 2x retina panels; in a VM that is huge).
 --  2. Fixed 1920x1200 instead of "preferred", which negotiates 1280x800.
 --
--- IMPORTANT: changing the mode HOT (hyprctl / config reload) breaks
--- rendering under virgl: the desktop stays blank until you restart.
--- Applied from boot it works fine. If you change this, restart the VM.
+-- Changing the mode with `hyprctl reload` works: measured on the packaged
+-- image under UTM 4.7.5, the session survives with every binding intact. This
+-- comment used to say the opposite -- that a hot change blanks the desktop
+-- under virgl -- three lines from `omarchy-arm-display`, a shipped command
+-- whose entire method is that reload. Two statements in one image, one of them
+-- wrong. Corrected 2026-09-05.
 --
 -- To make the resolution follow the size of the UTM window:
 --   hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
@@ -245,15 +248,28 @@ sudo install -Dm755 /dev/stdin /usr/local/bin/omarchy-pkg-add <<'WRAP'
 # leaves the migrations half applied. Here they are skipped with a warning and
 # the rest is installed.
 REAL=/usr/share/omarchy/bin/omarchy-pkg-add
+# Without this the failure is a bare "exec: not found" from inside a wrapper
+# the user never installed knowingly, in the middle of omarchy-update.
+[ -x "$REAL" ] || { printf 'omarchy-pkg-add: %s is missing\n' "$REAL" >&2; exit 127; }
+# The AUR counts as existing. pacman knows nothing about it, so every AUR
+# package was reported as "does not exist in Arch Linux ARM" and skipped --
+# ollama-bin among them, which does have an aarch64 build and which the user
+# then had to discover by hand. The script this wraps installs through yay, so
+# the question being asked is "can the helper get this?", not "is this in a
+# pacman repository?".
+HELPER=""
+for h in yay paru; do command -v "$h" >/dev/null 2>&1 && { HELPER=$h; break; }; done
 avail=(); skip=()
 for p in "$@"; do
   if pacman -Q "$p" &>/dev/null || pacman -Si "$p" &>/dev/null; then
+    avail+=("$p")
+  elif [ -n "$HELPER" ] && "$HELPER" -Si "$p" &>/dev/null; then
     avail+=("$p")
   else
     skip+=("$p")
   fi
 done
-((${#skip[@]})) && printf '\033[33mSkipped, does not exist in Arch Linux ARM: %s\033[0m\n' "${skip[*]}" >&2
+((${#skip[@]})) && printf '\033[33mSkipped, not in Arch Linux ARM nor the AUR: %s\033[0m\n' "${skip[*]}" >&2
 ((${#avail[@]})) || exit 0
 exec "$REAL" "${avail[@]}"
 WRAP
@@ -379,19 +395,23 @@ for spec in \
 done
 echo "  built: ${TOOLS_OK[*]:-none}"
 [ ${#TOOLS_KO[@]} -gt 0 ] && warn "failed to build: ${TOOLS_KO[*]}"
-# Recorded at a FIXED system path, not in $HOME. The ~/.omarchy-arm-prov one
-# did not survive: the distributable image renames the build account and that
-# trace is lost along the way. The check that read it was therefore a check
-# that could never fail -- exactly what has been letting things through all
-# week. This is written always, even when empty: a missing file must not be
-# mistaken for "nothing failed".
-sudo install -d -m755 /usr/local/share/omarchy-arm
-printf '%s\n' "${TOOLS_KO[@]:-}" | sed '/^$/d' \
-  | sudo tee /usr/local/share/omarchy-arm/build-failures.txt >/dev/null
-echo "  failure record: /usr/local/share/omarchy-arm/build-failures.txt ($((${#TOOLS_KO[@]})) entries)"
 rm -rf "$HOME/.cache/omabuild"
 
 fi
+
+# Recorded at a FIXED system path, not in $HOME: the distributable image renames
+# the build account, so a trace left there vanishes and the check that read it
+# could never fail.
+#
+# And OUTSIDE the BUILD_TOOLS guard, which is what makes "written always" true.
+# It used to sit inside the else-branch, so a build with BUILD_TOOLS=no produced
+# no file at all -- and a missing file is precisely what this record exists to
+# stop anyone reading as "nothing failed". TOOLS_KO is unset on that path, so
+# the expansion below writes an empty file, which is the healthy state.
+sudo install -d -m755 /usr/local/share/omarchy-arm
+printf '%s\n' "${TOOLS_KO[@]:-}" | sed '/^$/d' \
+  | sudo tee /usr/local/share/omarchy-arm/build-failures.txt >/dev/null
+echo "  failure record: /usr/local/share/omarchy-arm/build-failures.txt ($(( ${#TOOLS_KO[@]:-0} )) entries)"
 # Omarchy deliberately swaps two Yaru icons for the Adwaita ones; if Yaru has
 # just been installed, that has to be applied again.
 sudo bash "$OMARCHY_PATH/install/config/theme-system.sh" >/dev/null 2>&1 || true
@@ -544,7 +564,7 @@ mkdir -p ~/Pictures/Screenshots ~/Videos ~/Desktop ~/Documents ~/Downloads
 # gets redistributed would mean redistributing third-party binaries. The
 # installer is left behind instead.
 if [ -f "$HOME/.omarchy-arm-prov/omarchy-arm-extras" ]; then
-  log "instalador de apps opcionales (omarchy-arm-extras)"
+  log "optional-app installer (omarchy-arm-extras)"
   sudo install -Dm755 "$HOME/.omarchy-arm-prov/omarchy-arm-extras" /usr/local/bin/omarchy-arm-extras
   sudo install -Dm644 /dev/stdin /usr/local/share/applications/omarchy-arm-extras.desktop <<'DESK'
 [Desktop Entry]

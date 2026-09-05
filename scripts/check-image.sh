@@ -13,7 +13,10 @@ set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 
 BUNDLE="${1:-}"; OLD="${2:-builder}"
-[ -d "$BUNDLE" ] || { echo "usage: $0 <bundle.utm> [build-account]"; exit 2; }
+# The account the image is expected to ship. guest-check no longer hardcodes it,
+# so it has to arrive from here; the default matches DIST_NEW_USER's default.
+NEWU="${3:-omarchy}"
+[ -d "$BUNDLE" ] || { echo "usage: $0 <bundle.utm> [build-account] [image-account]"; exit 2; }
 DISK=$(find "$BUNDLE/Data" -name '*.qcow2' | head -1)
 [ -s "$DISK" ] || { echo "cannot find the qcow2 in $BUNDLE"; exit 2; }
 
@@ -77,7 +80,7 @@ expect {
 expect -re {[❯#] $|[❯#]$|\$ $} { }
 # Headroom for SDDM to bring up the graphical session and start its services.
 sleep 75
-send "mkdir -p /media; mount -o ro /dev/vdb /media 2>/dev/null || mount -o ro /dev/vdc /media; bash /media/check.sh '$env(OLDUSER)' > /tmp/report.txt 2>&1; true\r"
+send "mkdir -p /media; mount -o ro /dev/vdb /media 2>/dev/null || mount -o ro /dev/vdc /media; bash /media/check.sh '$env(OLDUSER)' '$env(NEWUSER)' > /tmp/report.txt 2>&1; true\r"
 expect -re {[❯#] $|[❯#]$|\$ $} { }
 sleep 3
 send "cat /tmp/report.txt\r"
@@ -91,7 +94,7 @@ echo "  starting $(basename "$BUNDLE") ... (~4 min)"
 # it is the only thing that says where. It has been lost twice already by
 # writing it inside the temporary directory that gets deleted on exit.
 echo "  transcript: $TR"
-EFI="$TMP/efi.fd" DISK="$DISK" ISO="$TMP/check.iso" OLDUSER="$OLD" TRANSCRIPT="$TR" \
+EFI="$TMP/efi.fd" DISK="$DISK" ISO="$TMP/check.iso" OLDUSER="$OLD" NEWUSER="$NEWU" TRANSCRIPT="$TR" \
 FW="$(brew --prefix qemu)/share/qemu/edk2-aarch64-code.fd" \
   expect "$TMP/t.exp" >/dev/null 2>&1
 

@@ -75,7 +75,7 @@ touch /root/failed-packages.txt \
   && { echo "   + /root/failed-packages.txt"; EXPECTED+=("/root/failed-packages.txt left behind"); }
 
 # `git config --global` of whoever runs the list, which here is root.
-git config --global user.name "Prueba Negativa" 2>/dev/null \
+git config --global user.name "Negative Test" 2>/dev/null \
   && { echo "   + git identity"; EXPECTED+=("git user.name:"); }
 
 systemctl stop spice-vdagentd 2>/dev/null \

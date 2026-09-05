@@ -296,7 +296,7 @@ ph_fetch() {
   ok "Alpine $(du -h "$iso" | cut -f1)"
 
   if [[ ! -s $tgz ]]; then
-    info "rootfs de Arch Linux ARM (~800 MB)"
+    info "Arch Linux ARM rootfs (~800 MB)"
     aria2c -x8 -s8 -c --file-allocation=none -q -d "$W/dl" -o "$(basename "$tgz")" \
       "$ALARM_URL" || die "could not download the ALARM rootfs"
   fi
@@ -341,8 +341,8 @@ ph_prepare() {
   curl -fsSL --max-time 60 \
     "https://raw.githubusercontent.com/basecamp/omarchy/$OMARCHY_REF/install/omarchy-base.packages" \
     -o "$base" || die "could not read Omarchy's package list"
-  curl -fsSL --max-time 120 http://mirror.archlinuxarm.org/aarch64/core/core.db   -o "$core"  || die "mirror ALARM no responde"
-  curl -fsSL --max-time 180 http://mirror.archlinuxarm.org/aarch64/extra/extra.db -o "$extra" || die "mirror ALARM no responde"
+  curl -fsSL --max-time 120 http://mirror.archlinuxarm.org/aarch64/core/core.db   -o "$core"  || die "the Arch Linux ARM mirror is not responding"
+  curl -fsSL --max-time 180 http://mirror.archlinuxarm.org/aarch64/extra/extra.db -o "$extra" || die "the Arch Linux ARM mirror is not responding"
 
   local d=/tmp/alarmdb.$$; rm -rf "$d"; mkdir -p "$d"; ( cd "$d" && tar -xzf "$core"; tar -xzf "$extra" )
   ls -1 "$d" | sed -E 's/-[^-]+-[^-]+$//' | sort -u > /tmp/alarm-pkgs.$$
@@ -393,6 +393,14 @@ PYEOF
   # Without this a write failure would go unnoticed and the build would die
   # late, far from the cause.
   [ -s "$W/provision/packages-core.txt" ] || die "the package lists could not be written"
+  # The comment above says ufw is deliberately not "heavy" so that it lands in
+  # core and a build that cannot install it stops early. That is a claim about
+  # generated output, so check the output rather than trusting the claim: the
+  # committed snapshot in provision/src had ufw in extras for months while the
+  # comment said otherwise, which made the firewall best-effort in every run
+  # that went through scripts/run-build.sh.
+  grep -qx 'ufw' "$W/provision/packages-core.txt" \
+    || die "ufw is not in the core list: the firewall would be best-effort (found in extras: $(grep -qx 'ufw' "$W/provision/packages-extra.txt" && echo yes || echo no))"
   ok "lists generated against branch '$OMARCHY_REF': $(grep -cvE '^#|^$' "$W/provision/packages-core.txt") in core, $(grep -cvE '^#|^$' "$W/provision/packages-extra.txt") extras"
 
   # Ten seconds here against forty minutes there. On 2026-09-04 a build got as
@@ -450,6 +458,38 @@ log "network"
 ip link set eth0 up 2>/dev/null || true
 udhcpc -i eth0 -q -n -t 15 >/dev/null 2>&1 || true
 ip -4 addr show eth0 | grep -o 'inet [0-9.]*' || echo "  (no IPv4)"
+
+# Name resolution, probed rather than assumed. This is issue #9, and the first
+# answer to it -- adding `dns=10.0.2.3` to the QEMU command line -- was inert:
+# 10.0.2.3 is already slirp's default, which QEMU itself proves by rejecting
+# `host=10.0.2.3` with "DNS must be different from host". That option sets the
+# address ADVERTISED to the guest; the upstream slirp forwards to comes from
+# the host's own resolv.conf and cannot be chosen from the command line.
+#
+# On a dual-stack Mac that list starts with IPv6 nameservers, which a guest
+# with no IPv6 route cannot reach: DHCP succeeds, `inet 10.0.2.15` comes up,
+# and every lookup fails. Diagnosed by wouter1981.
+#
+# slirp NATs outbound UDP, so a resolver named here is reachable directly.
+# OM_DNS4 carries the host's own IPv4 resolvers, computed per build.
+[ -f "$PROV/config.env" ] && . "$PROV/config.env"
+dns_works() { nslookup dl-cdn.alpinelinux.org >/dev/null 2>&1; }
+if dns_works; then
+  echo "  resolution works with what DHCP handed down"
+else
+  warn "name resolution failed with the DHCP resolver (issue #9); rewriting"
+  : > /etc/resolv.conf
+  for _ns in ${OM_DNS4:-} 1.1.1.1 8.8.8.8 9.9.9.9; do
+    case "$_ns" in *[!0-9.]*|"") continue ;; esac
+    echo "nameserver $_ns" >> /etc/resolv.conf
+  done
+  sed 's/^/    /' /etc/resolv.conf
+  if dns_works; then
+    echo "  resolution works now"
+  else
+    warn "still cannot resolve: this is not the IPv6-first case, look further"
+  fi
+fi
 
 log "repositorios y herramientas de Alpine"
 V=$(cut -d. -f1,2 < /etc/alpine-release)
@@ -534,8 +574,16 @@ mount -t tmpfs -o size=4G none /mnt/tmp
 mkdir -p /mnt/dev/pts && mount -t devpts none /mnt/dev/pts 2>/dev/null || true
 
 log "DNS inside the chroot"
+# For the CHROOT only. This file used to survive into the shipped image, so
+# every copy went out carrying two hardcoded public resolvers that nobody chose
+# and nothing removed. sanitize clears it now, and asserts that it did.
 rm -f /mnt/etc/resolv.conf
-printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /mnt/etc/resolv.conf
+{ echo "# Temporary, for the build chroot. Cleared before the image ships."
+  for _ns in ${OM_DNS4:-} 1.1.1.1 8.8.8.8; do
+    case "$_ns" in *[!0-9.]*|"") continue ;; esac
+    echo "nameserver $_ns"
+  done
+} > /mnt/etc/resolv.conf
 
 log "copying payload"
 mkdir -p /mnt/root/prov
@@ -1402,8 +1450,8 @@ rm -rf /var/cache/pacman/pkg/* 2>/dev/null || true
 
 log "resumen"
 echo "  kernel:    $(pacman -Q linux-aarch64 2>/dev/null || echo '?')"
-echo "  hyprland:  $(pacman -Q hyprland 2>/dev/null || echo 'NO INSTALADO')"
-echo "  sddm:      $(pacman -Q sddm 2>/dev/null || echo 'NO INSTALADO')"
+echo "  hyprland:  $(pacman -Q hyprland 2>/dev/null || echo 'NOT INSTALLED')"
+echo "  sddm:      $(pacman -Q sddm 2>/dev/null || echo 'NOT INSTALLED')"
 echo "  mesa:      $(pacman -Q mesa 2>/dev/null || echo '?')"
 echo "  user:      $(id "$VM_USER")"
 echo "  dotfiles:  $(ls -d /home/$VM_USER/.config/hypr 2>/dev/null || echo 'MISSING')"
@@ -1612,9 +1660,12 @@ cat > ~/.config/hypr/monitors.lua <<'LUA'
 --  1. Scale 1 (Omarchy assumes 2x retina panels; in a VM that is huge).
 --  2. Fixed 1920x1200 instead of "preferred", which negotiates 1280x800.
 --
--- IMPORTANT: changing the mode HOT (hyprctl / config reload) breaks
--- rendering under virgl: the desktop stays blank until you restart.
--- Applied from boot it works fine. If you change this, restart the VM.
+-- Changing the mode with `hyprctl reload` works: measured on the packaged
+-- image under UTM 4.7.5, the session survives with every binding intact. This
+-- comment used to say the opposite -- that a hot change blanks the desktop
+-- under virgl -- three lines from `omarchy-arm-display`, a shipped command
+-- whose entire method is that reload. Two statements in one image, one of them
+-- wrong. Corrected 2026-09-05.
 --
 -- To make the resolution follow the size of the UTM window:
 --   hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
@@ -1663,15 +1714,28 @@ sudo install -Dm755 /dev/stdin /usr/local/bin/omarchy-pkg-add <<'WRAP'
 # leaves the migrations half applied. Here they are skipped with a warning and
 # the rest is installed.
 REAL=/usr/share/omarchy/bin/omarchy-pkg-add
+# Without this the failure is a bare "exec: not found" from inside a wrapper
+# the user never installed knowingly, in the middle of omarchy-update.
+[ -x "$REAL" ] || { printf 'omarchy-pkg-add: %s is missing\n' "$REAL" >&2; exit 127; }
+# The AUR counts as existing. pacman knows nothing about it, so every AUR
+# package was reported as "does not exist in Arch Linux ARM" and skipped --
+# ollama-bin among them, which does have an aarch64 build and which the user
+# then had to discover by hand. The script this wraps installs through yay, so
+# the question being asked is "can the helper get this?", not "is this in a
+# pacman repository?".
+HELPER=""
+for h in yay paru; do command -v "$h" >/dev/null 2>&1 && { HELPER=$h; break; }; done
 avail=(); skip=()
 for p in "$@"; do
   if pacman -Q "$p" &>/dev/null || pacman -Si "$p" &>/dev/null; then
+    avail+=("$p")
+  elif [ -n "$HELPER" ] && "$HELPER" -Si "$p" &>/dev/null; then
     avail+=("$p")
   else
     skip+=("$p")
   fi
 done
-((${#skip[@]})) && printf '\033[33mSkipped, does not exist in Arch Linux ARM: %s\033[0m\n' "${skip[*]}" >&2
+((${#skip[@]})) && printf '\033[33mSkipped, not in Arch Linux ARM nor the AUR: %s\033[0m\n' "${skip[*]}" >&2
 ((${#avail[@]})) || exit 0
 exec "$REAL" "${avail[@]}"
 WRAP
@@ -1797,19 +1861,23 @@ for spec in \
 done
 echo "  built: ${TOOLS_OK[*]:-none}"
 [ ${#TOOLS_KO[@]} -gt 0 ] && warn "failed to build: ${TOOLS_KO[*]}"
-# Recorded at a FIXED system path, not in $HOME. The ~/.omarchy-arm-prov one
-# did not survive: the distributable image renames the build account and that
-# trace is lost along the way. The check that read it was therefore a check
-# that could never fail -- exactly what has been letting things through all
-# week. This is written always, even when empty: a missing file must not be
-# mistaken for "nothing failed".
-sudo install -d -m755 /usr/local/share/omarchy-arm
-printf '%s\n' "${TOOLS_KO[@]:-}" | sed '/^$/d' \
-  | sudo tee /usr/local/share/omarchy-arm/build-failures.txt >/dev/null
-echo "  failure record: /usr/local/share/omarchy-arm/build-failures.txt ($((${#TOOLS_KO[@]})) entries)"
 rm -rf "$HOME/.cache/omabuild"
 
 fi
+
+# Recorded at a FIXED system path, not in $HOME: the distributable image renames
+# the build account, so a trace left there vanishes and the check that read it
+# could never fail.
+#
+# And OUTSIDE the BUILD_TOOLS guard, which is what makes "written always" true.
+# It used to sit inside the else-branch, so a build with BUILD_TOOLS=no produced
+# no file at all -- and a missing file is precisely what this record exists to
+# stop anyone reading as "nothing failed". TOOLS_KO is unset on that path, so
+# the expansion below writes an empty file, which is the healthy state.
+sudo install -d -m755 /usr/local/share/omarchy-arm
+printf '%s\n' "${TOOLS_KO[@]:-}" | sed '/^$/d' \
+  | sudo tee /usr/local/share/omarchy-arm/build-failures.txt >/dev/null
+echo "  failure record: /usr/local/share/omarchy-arm/build-failures.txt ($(( ${#TOOLS_KO[@]:-0} )) entries)"
 # Omarchy deliberately swaps two Yaru icons for the Adwaita ones; if Yaru has
 # just been installed, that has to be applied again.
 sudo bash "$OMARCHY_PATH/install/config/theme-system.sh" >/dev/null 2>&1 || true
@@ -1962,7 +2030,7 @@ mkdir -p ~/Pictures/Screenshots ~/Videos ~/Desktop ~/Documents ~/Downloads
 # gets redistributed would mean redistributing third-party binaries. The
 # installer is left behind instead.
 if [ -f "$HOME/.omarchy-arm-prov/omarchy-arm-extras" ]; then
-  log "instalador de apps opcionales (omarchy-arm-extras)"
+  log "optional-app installer (omarchy-arm-extras)"
   sudo install -Dm755 "$HOME/.omarchy-arm-prov/omarchy-arm-extras" /usr/local/bin/omarchy-arm-extras
   sudo install -Dm644 /dev/stdin /usr/local/share/applications/omarchy-arm-extras.desktop <<'DESK'
 [Desktop Entry]
@@ -2251,10 +2319,23 @@ ln -sfn /usr/share/omarchy "/home/$NEW/.local/share/omarchy"
 chown -h "$NEW:$NEW" "/home/$NEW/.local/share/omarchy"
 
 log "3/10 SDDM: autologin as the generic user"
+# The session name is READ, not assumed. stage2 deliberately falls back to
+# hyprland-uwsm when omarchy.desktop is absent, and this file sorts AFTER the
+# one stage2 wrote, so hardcoding "omarchy" here can name a session that does
+# not exist. SDDM then accepts the password and returns to the greeter -- which
+# is the symptom reported in issue #2, and the diagnosis given there (a Spanish
+# keyboard layout) cannot explain it, because the greeter has always been us.
+SESSION_NAME=omarchy
+if [ ! -f /usr/local/share/wayland-sessions/omarchy.desktop ] \
+   && [ ! -f /usr/share/wayland-sessions/omarchy.desktop ]; then
+  SESSION_NAME=$(grep -h '^Session=' /etc/sddm.conf.d/*.conf 2>/dev/null | tail -1 | cut -d= -f2)
+  [ -n "$SESSION_NAME" ] || SESSION_NAME=hyprland-uwsm
+  warn "omarchy.desktop is not installed; autologin will name '$SESSION_NAME'"
+fi
 cat > /etc/sddm.conf.d/20-autologin.conf <<EOF
 [Autologin]
 User=$NEW
-Session=omarchy
+Session=$SESSION_NAME
 EOF
 grep -rl "$OLD" /etc/sddm.conf.d/ 2>/dev/null | while read -r f; do sed -i "s/\b$OLD\b/$NEW/g" "$f"; done
 cat /etc/sddm.conf.d/20-autologin.conf
@@ -2267,6 +2348,15 @@ rm -f /etc/systemd/system/multi-user.target.wants/sshd.service
 rm -f /etc/sudoers.d/99-fix /etc/sudoers.d/99-install
 rm -rf "/home/$NEW/.gnupg" "/home/$NEW/.local/share/keyrings" "/home/$NEW/.password-store"
 echo "  sshd: $(systemctl is-enabled sshd 2>&1)"
+
+log "4b/10 the resolver the build used"
+# stage1 writes nameservers into the chroot so the build can resolve anything.
+# They are the BUILD's resolvers, not the recipient's, and every image shipped
+# so far carried them. NetworkManager rewrites this file on first boot, so
+# clearing it costs nothing and stops the image asserting a DNS choice nobody
+# made. The invariant below checks it stayed clear.
+: > /etc/resolv.conf
+echo "  /etc/resolv.conf emptied ($(wc -c < /etc/resolv.conf) bytes)"
 
 log "5/10 machine identity"
 : > /etc/machine-id
@@ -2429,6 +2519,16 @@ if [ -f "$HYPR_REC" ] && grep -qvE '^#|^[[:space:]]*$' "$HYPR_REC"; then
 
 MOTDEOF
   echo "  motd records the locally compiled packages"
+  # The motd has just told the user to run a command. stage2's failure path for
+  # that command is a bare `echo`, so the image can reach here having printed a
+  # warning nobody reads and shipped without it. A notice pointing at a missing
+  # binary is worse than no notice: it makes the image look broken at first
+  # login, exactly when it is trying to explain itself.
+  if [ -x /usr/local/bin/omarchy-arm-hypr-local ]; then
+    ok_ "the motd points at omarchy-arm-hypr-local, and it is installed"
+  else
+    bad "the motd tells the user to run omarchy-arm-hypr-local, which is not installed"
+  fi
 fi
 cp /etc/motd "/home/$NEW/Desktop/README.txt"
 chown "$NEW:$NEW" "/home/$NEW/Desktop/README.txt"
@@ -2446,7 +2546,7 @@ git -C /usr/share/omarchy config core.fileMode false 2>/dev/null || true
 git -C /usr/share/omarchy checkout -- . 2>/dev/null || true
 echo "  clean checkout: $(git -C /usr/share/omarchy status --porcelain 2>/dev/null | wc -l) files"
 
-log "8b/10 instalador de apps opcionales"
+log "8b/10 optional-app installer"
 # repair.sh copies extras.sh as omarchy-arm-extras, but if that copy did not
 # happen the whole block was skipped in silence and the image shipped without
 # the menu entry. Both names are accepted, and a missing one is reported.
@@ -2692,6 +2792,22 @@ else
 fi
 
 [ "$(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l)" -eq 0 ] && ok_ "no ssh host keys" || bad "ssh host keys left behind"
+# The build's own resolvers must not travel. Every image so far shipped the two
+# public nameservers stage1 wrote for the chroot.
+# The session the greeter will start must exist as a file. A greeter that
+# accepts the password and returns to itself is what issue #2 reported, and a
+# named-but-absent session produces exactly that.
+SESS=$(grep -h '^Session=' /etc/sddm.conf.d/*.conf 2>/dev/null | tail -1 | cut -d= -f2)
+if [ -z "$SESS" ]; then
+  bad "no Session= in /etc/sddm.conf.d: the greeter has nothing to start"
+elif [ -f "/usr/local/share/wayland-sessions/$SESS.desktop" ] \
+  || [ -f "/usr/share/wayland-sessions/$SESS.desktop" ]; then
+  ok_ "the autologin session '$SESS' exists as a desktop file"
+else
+  bad "autologin names session '$SESS', and no such .desktop file is installed"
+fi
+[ ! -s /etc/resolv.conf ] && ok_ "no resolver baked into the image" \
+  || bad "/etc/resolv.conf still carries the build's nameservers: $(tr '\n' ' ' < /etc/resolv.conf)"
 
 # ---- the desktop itself. Promoted from an echo further up, and placed AFTER
 # ---- the orphan sweep so it can actually catch that sweep removing something.
@@ -2798,9 +2914,17 @@ if [ -d /etc/ufw ]; then
   # The policy itself, not just that ufw runs. `ufw default ...` is called with
   # its failure tolerated, so this is the line that decides whether the image
   # actually denies anything.
+  # DEFAULT_INPUT_POLICY="DROP" is what the ufw PACKAGE already ships, so
+  # asserting it proves nothing about whether our `ufw default deny incoming`
+  # ran -- it reads identically on a pristine install and on a failed one.
+  # The LocalSend rules do not exist unless `ufw allow 53317` actually
+  # executed, so they are the evidence that the configuration step ran.
   grep -qs '^DEFAULT_INPUT_POLICY="DROP"' /etc/default/ufw \
     && ok_ "ufw denies incoming by default" \
     || bad "ufw does not deny incoming: the firewall would run and allow everything"
+  grep -qs '53317' /etc/ufw/user.rules \
+    && ok_ "the LocalSend rules are present, so ufw was configured here" \
+    || bad "no LocalSend rule in /etc/ufw/user.rules: the ufw configuration step did not run"
 else
   bad "ufw is not installed: the image would ship with no firewall"
 fi
@@ -2809,6 +2933,19 @@ unit_enabled systemd-resolved.service && ok_ "systemd-resolved enabled" \
 # The layout that ships. Not a cosmetic detail: with the builder's layout, a
 # user could not type ':' in nvim to fix it, and another could not type his own
 # password. Both cost hours and both were silent.
+# Not just the file the sed above rewrote: EVERY file in the image that names a
+# layout. Checking only input.lua meant checking our own sed, which passes by
+# construction. The console keymap and any other hypr config are what a user
+# actually meets, and they are covered here too.
+NONUS=$(grep -rlsE 'kb_layout[[:space:]]*=[[:space:]]*"(?!us)' --include='*.lua' \
+          "/home/$NEW/.config" 2>/dev/null || \
+        grep -rls 'kb_layout' --include='*.lua' "/home/$NEW/.config" 2>/dev/null \
+          | while read -r f; do grep -q 'kb_layout[^,]*"us"' "$f" || echo "$f"; done)
+[ -z "$NONUS" ] && ok_ "no config in the home names a layout other than us" \
+                || bad "these still name a non-us layout: $NONUS"
+grep -qs '^KEYMAP=us$' /etc/vconsole.conf \
+  && ok_ "the text console keymap is us" \
+  || bad "/etc/vconsole.conf does not say KEYMAP=us: $(grep -s KEYMAP /etc/vconsole.conf)"
 KBL=$(grep -o 'kb_layout[^,]*' "/home/$NEW/.config/hypr/input.lua" 2>/dev/null | head -1)
 case "$KBL" in
   *'"us"'*) ok_ "neutral keyboard layout (us)" ;;
@@ -3825,7 +3962,70 @@ cat > "$W/provision/gpu.sh" <<'__PAYLOAD_PROVISION_GPU_SH__'
 set -uo pipefail
 CONF=/etc/environment.d/90-vm-graphics.conf
 
-state() { grep -q '^LIBGL_ALWAYS_SOFTWARE=1' "$CONF" 2>/dev/null && echo software || echo hardware; }
+# systemd's environment.d is NOT one file. Every *.conf across four directories
+# is applied in lexical order by BASENAME, so ~/.config/environment.d/99-gl.conf
+# overrides the file this command edits, and the same basename in a
+# higher-priority directory replaces the lower one outright. Reading only $CONF
+# meant `--off` could print "software rendering restored" while the session
+# still came up on hardware GL -- and the user, told the machine was in the
+# safe state, had no reason to look anywhere else. That is the shape of issue
+# #7: black windows with the tool reporting everything as it should be.
+#
+# Priority order for identical basenames, highest first (systemd.environment-
+# generator(7)); across different basenames the LAST one lexically wins.
+ENVDIRS=("${XDG_CONFIG_HOME:-$HOME/.config}/environment.d" /etc/environment.d /run/environment.d /usr/lib/environment.d)
+
+# Every *.conf that will actually be read, in the order systemd reads them.
+# Deliberately without an associative array: it must stay runnable on bash 3.2 so
+# it can be tested on the machine that builds the image, not only inside it.
+env_files() {
+  local d b
+  for b in $(for d in "${ENVDIRS[@]}"; do
+               [ -d "$d" ] || continue
+               find "$d" -maxdepth 1 -name '*.conf' -type f -exec basename {} \; 2>/dev/null
+             done | sort -u); do
+    # First directory in priority order to offer that basename owns it; the
+    # copies below are shadowed outright, not merged.
+    for d in "${ENVDIRS[@]}"; do
+      [ -f "$d/$b" ] && { printf '%s\n' "$d/$b"; break; }
+    done
+  done
+}
+
+# The file that has the last word on LIBGL_ALWAYS_SOFTWARE, and what it says.
+# Empty output means nothing sets it anywhere.
+decider() {
+  local f last=""
+  while read -r f; do
+    grep -qE '^[[:space:]]*LIBGL_ALWAYS_SOFTWARE=' "$f" 2>/dev/null && last=$f
+  done < <(env_files)
+  [ -n "$last" ] || return 1
+  printf '%s\t%s\n' "$last" \
+    "$(grep -E '^[[:space:]]*LIBGL_ALWAYS_SOFTWARE=' "$last" | tail -1 | cut -d= -f2- | tr -d '\"'"'"' ')"
+}
+
+state() {
+  local d v
+  if d=$(decider); then
+    v=${d#*$'\t'}
+    case "$v" in 1|true|yes) echo software ;; *) echo hardware ;; esac
+  else
+    echo hardware
+  fi
+}
+
+# Says nothing when $CONF is the decider, which is the normal case. When it is
+# not, it names the file that wins, because editing $CONF will not help.
+warn_override() {
+  local d f
+  d=$(decider) || return 0
+  f=${d%%$'\t'*}
+  [ "$f" = "$CONF" ] && return 0
+  echo
+  echo "  NOTE: $CONF is not what decides this."
+  echo "        $f is read later and wins. Edit that one,"
+  echo "        or remove its LIBGL_ALWAYS_SOFTWARE line."
+}
 
 case "${1:-}" in
   -h|--help) sed -n '3,23p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 0 ;;
@@ -3841,6 +4041,7 @@ case "${1:-}" in
       echo "  Hardware GL through virgl. If terminal or browser windows come up"
       echo "  black, your UTM is too old for it:  omarchy-arm-gpu --off"
     fi
+    warn_override
     ;;
 
   --on)
@@ -3854,6 +4055,7 @@ case "${1:-}" in
     echo "  open a terminal and a browser                 # neither should be black"
     echo
     echo "If anything renders black, undo it:  omarchy-arm-gpu --off"
+    warn_override
     ;;
 
   --off)
@@ -3861,6 +4063,12 @@ case "${1:-}" in
     grep -q '^LIBGL_ALWAYS_SOFTWARE=1' "$CONF" \
       || printf 'LIBGL_ALWAYS_SOFTWARE=1\n' | sudo tee -a "$CONF" >/dev/null
     echo "Software rendering restored. Log out and back in for it to apply."
+    # Checked, not assumed: --off is the escape hatch from a black screen, and
+    # an escape hatch that reports success without working is worse than none.
+    if [ "$(state)" != software ]; then
+      echo "  !! and yet the effective setting is still hardware GL."
+    fi
+    warn_override
     ;;
 
   *) echo "unknown option: $1" >&2; exit 1 ;;
@@ -4349,7 +4557,12 @@ expect {
 # --- verification of the resulting disk
 set timeout 600
 send "mount -o subvol=@ /dev/vda2 /mnt 2>/dev/null || mount /dev/vda2 /mnt; mount /dev/vda1 /mnt/boot 2>/dev/null; echo '==== VERIFICATION ===='; echo '-- ESP --'; find /mnt/boot -maxdepth 3 | head -40; echo '-- kernel --'; ls -la /mnt/boot/Image* /mnt/boot/initramfs* 2>/dev/null; echo '-- user --'; ls -la /mnt/home/; echo '-- dotfiles --'; for h in /mnt/home/*/; do echo \"  \$h:\"; ls \"\$h/.config\" 2>/dev/null | tr '\\n' ' '; echo; done; echo; echo '-- hyprland --'; ls -la /mnt/usr/bin/Hyprland 2>/dev/null; echo TOK_VERIFY_\$?\r"
-catch { wait_for "TOK_VERIFY_" 17 "verification" 600 }
+# TOK_VERIFY_0, not the prefix. `wait_for "TOK_VERIFY_"` matched TOK_VERIFY_2
+# -- Hyprland absent from the installed system -- exactly as happily as
+# TOK_VERIFY_0, so the one post-install probe for the compositor binary could
+# never report its absence. The catch stays: this is a report, not a gate, and
+# the gate is ph_verify on the booted image.
+catch { wait_for "TOK_VERIFY_0" 17 "verification" 600 }
 
 send "sync; umount -R /mnt 2>/dev/null; poweroff -f\r"
 expect eof
@@ -4725,7 +4938,22 @@ chmod +x "$W/scripts/make-utm.sh"
   # or a backtick arrived altered (or executed something). With single quotes,
   # and ' escaped as '\'', the value travels literally.
   cfgq() { printf "%s" "${1-}" | sed "s/'/'\\\\''/g"; }
+  # The host's own IPv4 resolvers, for issue #9. slirp forwards guest DNS to
+  # whatever the Mac lists in resolv.conf, and on a dual-stack ISP macOS puts
+  # IPv6 nameservers first -- which a guest with no IPv6 route cannot reach.
+  # `-netdev user,dns=...` cannot fix that: it sets the address ADVERTISED to
+  # the guest, and 10.0.2.3 is already its default (QEMU rejects host=10.0.2.3
+  # with "DNS must be different from host", which can only fire because dns
+  # already holds that value). The upstream slirp forwards to is not settable
+  # from the command line, so the guest is handed resolvers it can reach.
+  local OM_DNS4
+  OM_DNS4=$(scutil --dns 2>/dev/null \
+            | awk '/nameserver\[[0-9]+\]/{print $3}' \
+            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | sort -u | head -3 | tr '\n' ' ')
+  [ -n "$OM_DNS4" ] && info "host IPv4 resolvers passed to the guest: $OM_DNS4" \
+                    || info "no IPv4 resolver on this Mac; the guest uses public ones"
   cat > "$W/provision/config.env" <<CFGEOF
+OM_DNS4='$(cfgq "$OM_DNS4")'
 VM_USER='$(cfgq "$VM_USER")'
 VM_PASSWORD='$(cfgq "$VM_PASSWORD")'
 VM_FULLNAME='$(cfgq "$VM_FULLNAME")'
@@ -5063,14 +5291,29 @@ ph_package() {
   # The repository this script was run from, not $W: that is where the files
   # that publish the checksum live.
   local REPO; REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+  # This warned and carried on, so a build could finish happily with the
+  # documentation naming a different artifact -- which is the reported defect,
+  # not a milder version of it: a reader who runs `shasum -c` against a perfectly
+  # good download is told the file is corrupt. It fails the phase now.
+  #
+  # And the full 64 characters where they are available, not only the first 16.
+  # The corruption that prompted all of this shared its first sixteen with the
+  # good hash: a sed rewrote the short form inside the long one, leaving
+  # something that looked plausible, carried the right prefix, and pointed at
+  # nothing. The prose legitimately abbreviates, so a short match still counts
+  # there -- scripts/check-published-hash.py is what polices the abbreviations.
   local DESYNC=0 SRC
-  for SRC in dist/omarchy-arm-utm-v2.zip.sha256 dist/VERSIONS.md README.md EMPEZAR.md; do
+  for SRC in dist/omarchy-arm-utm-v2.zip.sha256 dist/VERSIONS.md \
+             README.md README.es.md EMPEZAR.md dist/README.md; do
     [ -f "$REPO/$SRC" ] || continue
-    grep -q "${NEWSUM:0:16}" "$REPO/$SRC" || {
+    grep -q "$NEWSUM" "$REPO/$SRC" || grep -q "${NEWSUM:0:16}" "$REPO/$SRC" || {
       warn "$SRC does not carry this image's sha256"; DESYNC=1; }
   done
-  [ "$DESYNC" = 0 ] && ok "the published sha256 agrees everywhere it is stated" \
-    || warn "update the sha256 in the files above before publishing: ${NEWSUM:0:16}..."
+  if [ "$DESYNC" = 0 ]; then
+    ok "the published sha256 agrees everywhere it is stated"
+  else
+    die "the documentation names a different artifact than the one just built. Put $NEWSUM in the files above and package again."
+  fi
 
   # The VM the `utm` phase registered is an intermediate: it serves `verify`
   # and nothing else, because what ships is the sanitized bundle from dist/. It
@@ -5483,10 +5726,10 @@ The two are **not** symmetrical:
   happens, `omarchy-arm-hypr-local --replace` is the one command that puts the
   distribution's package back.
 
-Do not read that as a schedule. The Hypr stack is in active rotation, so this is
-likely to be repaired soon — but the same index carries 21 unmet versioned
-sonames today, the oldest since 2015, so there is no deadline and no version of
-this image can promise you one. `omarchy-arm-hypr-local` tells you where things
+Do not read that as a schedule. The Hypr stack is in active rotation, which is
+a reason to expect it to be repaired rather than a date — the same index carries
+21 unmet versioned sonames today, the oldest since 2015. There is no deadline,
+and no version of this image can give you one. `omarchy-arm-hypr-local` tells you where things
 stand, including how long ago these were built.
 
 ### Checking it yourself

@@ -71,10 +71,23 @@ ln -sfn /usr/share/omarchy "/home/$NEW/.local/share/omarchy"
 chown -h "$NEW:$NEW" "/home/$NEW/.local/share/omarchy"
 
 log "3/10 SDDM: autologin as the generic user"
+# The session name is READ, not assumed. stage2 deliberately falls back to
+# hyprland-uwsm when omarchy.desktop is absent, and this file sorts AFTER the
+# one stage2 wrote, so hardcoding "omarchy" here can name a session that does
+# not exist. SDDM then accepts the password and returns to the greeter -- which
+# is the symptom reported in issue #2, and the diagnosis given there (a Spanish
+# keyboard layout) cannot explain it, because the greeter has always been us.
+SESSION_NAME=omarchy
+if [ ! -f /usr/local/share/wayland-sessions/omarchy.desktop ] \
+   && [ ! -f /usr/share/wayland-sessions/omarchy.desktop ]; then
+  SESSION_NAME=$(grep -h '^Session=' /etc/sddm.conf.d/*.conf 2>/dev/null | tail -1 | cut -d= -f2)
+  [ -n "$SESSION_NAME" ] || SESSION_NAME=hyprland-uwsm
+  warn "omarchy.desktop is not installed; autologin will name '$SESSION_NAME'"
+fi
 cat > /etc/sddm.conf.d/20-autologin.conf <<EOF
 [Autologin]
 User=$NEW
-Session=omarchy
+Session=$SESSION_NAME
 EOF
 grep -rl "$OLD" /etc/sddm.conf.d/ 2>/dev/null | while read -r f; do sed -i "s/\b$OLD\b/$NEW/g" "$f"; done
 cat /etc/sddm.conf.d/20-autologin.conf
@@ -87,6 +100,15 @@ rm -f /etc/systemd/system/multi-user.target.wants/sshd.service
 rm -f /etc/sudoers.d/99-fix /etc/sudoers.d/99-install
 rm -rf "/home/$NEW/.gnupg" "/home/$NEW/.local/share/keyrings" "/home/$NEW/.password-store"
 echo "  sshd: $(systemctl is-enabled sshd 2>&1)"
+
+log "4b/10 the resolver the build used"
+# stage1 writes nameservers into the chroot so the build can resolve anything.
+# They are the BUILD's resolvers, not the recipient's, and every image shipped
+# so far carried them. NetworkManager rewrites this file on first boot, so
+# clearing it costs nothing and stops the image asserting a DNS choice nobody
+# made. The invariant below checks it stayed clear.
+: > /etc/resolv.conf
+echo "  /etc/resolv.conf emptied ($(wc -c < /etc/resolv.conf) bytes)"
 
 log "5/10 machine identity"
 : > /etc/machine-id
@@ -249,6 +271,16 @@ if [ -f "$HYPR_REC" ] && grep -qvE '^#|^[[:space:]]*$' "$HYPR_REC"; then
 
 MOTDEOF
   echo "  motd records the locally compiled packages"
+  # The motd has just told the user to run a command. stage2's failure path for
+  # that command is a bare `echo`, so the image can reach here having printed a
+  # warning nobody reads and shipped without it. A notice pointing at a missing
+  # binary is worse than no notice: it makes the image look broken at first
+  # login, exactly when it is trying to explain itself.
+  if [ -x /usr/local/bin/omarchy-arm-hypr-local ]; then
+    ok_ "the motd points at omarchy-arm-hypr-local, and it is installed"
+  else
+    bad "the motd tells the user to run omarchy-arm-hypr-local, which is not installed"
+  fi
 fi
 cp /etc/motd "/home/$NEW/Desktop/README.txt"
 chown "$NEW:$NEW" "/home/$NEW/Desktop/README.txt"
@@ -266,7 +298,7 @@ git -C /usr/share/omarchy config core.fileMode false 2>/dev/null || true
 git -C /usr/share/omarchy checkout -- . 2>/dev/null || true
 echo "  clean checkout: $(git -C /usr/share/omarchy status --porcelain 2>/dev/null | wc -l) files"
 
-log "8b/10 instalador de apps opcionales"
+log "8b/10 optional-app installer"
 # repair.sh copies extras.sh as omarchy-arm-extras, but if that copy did not
 # happen the whole block was skipped in silence and the image shipped without
 # the menu entry. Both names are accepted, and a missing one is reported.
@@ -512,6 +544,22 @@ else
 fi
 
 [ "$(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l)" -eq 0 ] && ok_ "no ssh host keys" || bad "ssh host keys left behind"
+# The build's own resolvers must not travel. Every image so far shipped the two
+# public nameservers stage1 wrote for the chroot.
+# The session the greeter will start must exist as a file. A greeter that
+# accepts the password and returns to itself is what issue #2 reported, and a
+# named-but-absent session produces exactly that.
+SESS=$(grep -h '^Session=' /etc/sddm.conf.d/*.conf 2>/dev/null | tail -1 | cut -d= -f2)
+if [ -z "$SESS" ]; then
+  bad "no Session= in /etc/sddm.conf.d: the greeter has nothing to start"
+elif [ -f "/usr/local/share/wayland-sessions/$SESS.desktop" ] \
+  || [ -f "/usr/share/wayland-sessions/$SESS.desktop" ]; then
+  ok_ "the autologin session '$SESS' exists as a desktop file"
+else
+  bad "autologin names session '$SESS', and no such .desktop file is installed"
+fi
+[ ! -s /etc/resolv.conf ] && ok_ "no resolver baked into the image" \
+  || bad "/etc/resolv.conf still carries the build's nameservers: $(tr '\n' ' ' < /etc/resolv.conf)"
 
 # ---- the desktop itself. Promoted from an echo further up, and placed AFTER
 # ---- the orphan sweep so it can actually catch that sweep removing something.
@@ -618,9 +666,17 @@ if [ -d /etc/ufw ]; then
   # The policy itself, not just that ufw runs. `ufw default ...` is called with
   # its failure tolerated, so this is the line that decides whether the image
   # actually denies anything.
+  # DEFAULT_INPUT_POLICY="DROP" is what the ufw PACKAGE already ships, so
+  # asserting it proves nothing about whether our `ufw default deny incoming`
+  # ran -- it reads identically on a pristine install and on a failed one.
+  # The LocalSend rules do not exist unless `ufw allow 53317` actually
+  # executed, so they are the evidence that the configuration step ran.
   grep -qs '^DEFAULT_INPUT_POLICY="DROP"' /etc/default/ufw \
     && ok_ "ufw denies incoming by default" \
     || bad "ufw does not deny incoming: the firewall would run and allow everything"
+  grep -qs '53317' /etc/ufw/user.rules \
+    && ok_ "the LocalSend rules are present, so ufw was configured here" \
+    || bad "no LocalSend rule in /etc/ufw/user.rules: the ufw configuration step did not run"
 else
   bad "ufw is not installed: the image would ship with no firewall"
 fi
@@ -629,6 +685,19 @@ unit_enabled systemd-resolved.service && ok_ "systemd-resolved enabled" \
 # The layout that ships. Not a cosmetic detail: with the builder's layout, a
 # user could not type ':' in nvim to fix it, and another could not type his own
 # password. Both cost hours and both were silent.
+# Not just the file the sed above rewrote: EVERY file in the image that names a
+# layout. Checking only input.lua meant checking our own sed, which passes by
+# construction. The console keymap and any other hypr config are what a user
+# actually meets, and they are covered here too.
+NONUS=$(grep -rlsE 'kb_layout[[:space:]]*=[[:space:]]*"(?!us)' --include='*.lua' \
+          "/home/$NEW/.config" 2>/dev/null || \
+        grep -rls 'kb_layout' --include='*.lua' "/home/$NEW/.config" 2>/dev/null \
+          | while read -r f; do grep -q 'kb_layout[^,]*"us"' "$f" || echo "$f"; done)
+[ -z "$NONUS" ] && ok_ "no config in the home names a layout other than us" \
+                || bad "these still name a non-us layout: $NONUS"
+grep -qs '^KEYMAP=us$' /etc/vconsole.conf \
+  && ok_ "the text console keymap is us" \
+  || bad "/etc/vconsole.conf does not say KEYMAP=us: $(grep -s KEYMAP /etc/vconsole.conf)"
 KBL=$(grep -o 'kb_layout[^,]*' "/home/$NEW/.config/hypr/input.lua" 2>/dev/null | head -1)
 case "$KBL" in
   *'"us"'*) ok_ "neutral keyboard layout (us)" ;;

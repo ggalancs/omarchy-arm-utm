@@ -162,9 +162,15 @@ def lint_continuations(paths):
             continue
         cont = False
         for i, l in enumerate(p.read_text(errors="ignore").splitlines(), 1):
-            if cont and l.lstrip().startswith("#"):
-                print(f"  {f}:{i}: comment inside a continued command")
-                print(f"    {l.strip()[:76]}")
+            # A BLANK line inside a continuation truncates the command exactly
+            # as a comment does, and `bash -n` accepts both. Keying only on "#"
+            # left half the failure class undetected: demonstrated by inserting
+            # an empty line into a continued command, which parses, lints clean
+            # and runs truncated.
+            if cont and (l.lstrip().startswith("#") or not l.strip()):
+                what = "comment" if l.strip() else "blank line"
+                print(f"  {f}:{i}: {what} inside a continued command")
+                print(f"    {l.strip()[:76] or '(empty)'}")
                 bad += 1
             cont = l.rstrip().endswith("\\")
     if not bad:

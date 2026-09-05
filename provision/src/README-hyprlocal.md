@@ -52,10 +52,10 @@ The two are **not** symmetrical:
   happens, `omarchy-arm-hypr-local --replace` is the one command that puts the
   distribution's package back.
 
-Do not read that as a schedule. The Hypr stack is in active rotation, so this is
-likely to be repaired soon — but the same index carries 21 unmet versioned
-sonames today, the oldest since 2015, so there is no deadline and no version of
-this image can promise you one. `omarchy-arm-hypr-local` tells you where things
+Do not read that as a schedule. The Hypr stack is in active rotation, which is
+a reason to expect it to be repaired rather than a date — the same index carries
+21 unmet versioned sonames today, the oldest since 2015. There is no deadline,
+and no version of this image can give you one. `omarchy-arm-hypr-local` tells you where things
 stand, including how long ago these were built.
 
 ### Checking it yourself

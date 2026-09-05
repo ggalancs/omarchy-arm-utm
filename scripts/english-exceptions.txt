@@ -17,6 +17,7 @@ available
 avocado
 commando
 compression
+configurable
 decision
 disable
 discussion
@@ -44,6 +45,7 @@ reliable
 reproducible
 resumable
 reversible
+runnable
 session
 settable
 similar

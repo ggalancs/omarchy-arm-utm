@@ -16,6 +16,16 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 fail=0
 bad() { echo "  !! $*"; fail=1; }
 ok()  { echo "  ok  $*"; }
+# Only the lines that DO something. Half the weakness in the first version of
+# this file was matching the prose that explains why we do NOT do a thing.
+#
+# Process substitution, NOT a pipe. Piping into `grep -q` is wrong under the
+# `set -o pipefail` above: grep -q exits on the first match, the upstream grep
+# takes SIGPIPE and returns 141, and pipefail reports the whole pipeline as
+# failed. It showed up as this test claiming build-omarchy-arm.sh never enables
+# ufw while line 1264 does exactly that -- and it passed for the smaller file
+# and failed for the larger one, which is a race, not a check.
+codegrep() { grep -qE "$2" < <(grep -vE '^[[:space:]]*#' "$1"); }
 
 # The source and the copy embedded in the builder both have to hold, or the
 # defect comes back the moment somebody edits one and not the other.
@@ -23,18 +33,27 @@ for f in provision/src/stage2.sh build-omarchy-arm.sh; do
   [ -f "$f" ] || { bad "missing: $f"; continue; }
 
   # 1. the docker group is never granted
-  if grep -qE '^[[:space:]]*usermod .*-aG .*docker' "$f"; then
+  # Every spelling. The first version matched one form of `usermod -aG` and
+  # let `usermod -a -G`, `gpasswd -a` and a sudo-prefixed variant through.
+  if codegrep "$f" '(usermod.*(-aG|-a +-G).*docker|gpasswd +-a +[^ ]+ +docker)'; then
     bad "$f grants the docker group (passwordless root; upstream refuses it)"
   else
     ok "$f does not grant the docker group"
   fi
 
   # 2. the firewall is configured and switched on
-  if grep -q 'systemctl enable ufw' "$f"; then
-    ok "$f enables ufw"
+  # In CODE, not in a comment, and not disabled anywhere. Plus the LocalSend
+  # rules, which are the only evidence the configuration step ran rather than
+  # the service merely being switched on.
+  if codegrep "$f" 'systemctl enable ufw'; then
+    ok "$f enables ufw in code"
   else
-    bad "$f never enables ufw: the image would ship with no firewall"
+    bad "$f never enables ufw in code: the image would ship with no firewall"
   fi
+  codegrep "$f" 'systemctl disable ufw' && bad "$f disables ufw somewhere"
+  codegrep "$f" 53317 \
+    && ok "$f opens the LocalSend ports, so the ufw step really runs" \
+    || bad "$f never opens 53317: the ufw configuration step is not there"
   if grep -q 'ENABLED=yes' "$f"; then
     ok "$f writes ENABLED=yes into ufw.conf"
   else
@@ -54,8 +73,16 @@ for f in provision/src/stage2.sh build-omarchy-arm.sh; do
   fi
 
   # 4. the services install/config/enable-services.sh turns on
+  # "mentions" is not a check: a comment naming the service satisfied it, and
+  # so did flipping `enable` to `disable`.
   for svc in cups.service avahi-daemon.service power-profiles-daemon.service; do
-    grep -q "$svc" "$f" && ok "$f mentions $svc" || bad "$f never enables $svc"
+    if codegrep "$f" "systemctl disable .*$svc"; then
+      bad "$f DISABLES $svc"
+    elif codegrep "$f" "$svc" && codegrep "$f" 'systemctl enable "\$_svc"'; then
+      ok "$f enables $svc in code"
+    else
+      bad "$f never enables $svc in code"
+    fi
   done
 done
 
@@ -84,6 +111,43 @@ elif [ "$link" -gt "$pkgs" ] && [ "$link" -gt "$st3" ]; then
   ok "$S: DNS handover at line $link, after packages ($pkgs) and stage3 ($st3)"
 else
   bad "$S: the DNS handover (line $link) runs before something that needs DNS"
+fi
+
+# The firewall has to be a FATAL package, not a best-effort one. The builder's
+# generator has a comment explaining that ufw is deliberately kept out of the
+# `heavy` list so it lands in core -- and the committed snapshot under
+# provision/src had it in extras anyway, which is the list whose failures are
+# tolerated. Every run through scripts/run-build.sh therefore installed the
+# firewall on a best-effort basis while a comment two files away insisted
+# otherwise. Both the snapshot and the generator are checked, because either
+# one alone can bring the defect back.
+if grep -qx 'ufw' provision/src/packages-core.txt 2>/dev/null; then
+  ok "ufw is in the core list, so a build that cannot install it stops"
+else
+  bad "ufw is not in provision/src/packages-core.txt: the firewall is best-effort"
+fi
+grep -qx 'ufw' provision/src/packages-extra.txt 2>/dev/null \
+  && bad "ufw is in packages-extra.txt, where a failed install is tolerated" \
+  || ok "ufw is not in the best-effort list"
+codegrep build-omarchy-arm.sh "grep -qx 'ufw' .*packages-core.txt" \
+  && ok "the builder asserts ufw reached the generated core list" \
+  || bad "build-omarchy-arm.sh does not check that ufw reached the core list"
+
+# The greeter must not be told to start a session by a name nobody checked.
+# sanitize.sh writes 20-autologin.conf AFTER stage2's file and therefore has
+# the last word; it used to write Session=omarchy unconditionally, while
+# stage2 deliberately falls back to hyprland-uwsm when omarchy.desktop is
+# absent. The result is a login that accepts the password and returns to the
+# greeter, which is what issue #2 reports.
+if codegrep provision/src/sanitize.sh 'Session=\$SESSION_NAME'; then
+  ok "sanitize.sh writes the session name it resolved, not a literal"
+else
+  bad "provision/src/sanitize.sh hardcodes the autologin session name"
+fi
+if codegrep provision/src/sanitize.sh 'autologin names session'; then
+  ok "sanitize.sh fails the image when the autologin session does not exist"
+else
+  bad "nothing checks that the autologin session is actually installed"
 fi
 
 echo

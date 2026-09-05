@@ -126,3 +126,4 @@ btrfs-progs
 efibootmgr
 spice-vdagent
 qemu-guest-agent
+ufw

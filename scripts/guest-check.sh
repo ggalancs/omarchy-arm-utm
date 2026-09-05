@@ -2,15 +2,22 @@
 # Runs INSIDE the sanitized image. scripts/check-image.sh ships it in.
 # Every line here exists because something once broke with nobody watching.
 OLD="${1:-builder}"
+# The account of the distributable image. It is DIST_NEW_USER in the builder and
+# it is configurable, and cannot be spelled out here. Under a different name,
+# `getent passwd omarchy` failed once and the seven checks that used the literal
+# went on reading /home/omarchy -- a directory that did not exist -- which made
+# every one of them pass by finding nothing. Declared, not discovered: reading
+# it back out of the image would make the first check tautological.
+NEW="${2:-omarchy}"
 failures=0
 bad()  { echo "  FAIL   $*"; failures=$((failures+1)); }
 ok_()  { echo "  ok     $*"; }
 
 echo "== identity =="
-getent passwd omarchy >/dev/null && ok_ "user omarchy exists" || bad "no omarchy user"
+getent passwd "$NEW" >/dev/null && ok_ "user $NEW exists" || bad "no $NEW user"
 getent passwd "$OLD" >/dev/null && bad "build account '$OLD' is still there" \
                                 || ok_ "no build account"
-[ "$(getent passwd omarchy | cut -d: -f5)" = "Omarchy" ] && ok_ "neutral GECOS" || bad "GECOS: $(getent passwd omarchy | cut -d: -f5)"
+[ "$(getent passwd "$NEW" | cut -d: -f5)" = "Omarchy" ] && ok_ "neutral GECOS" || bad "GECOS: $(getent passwd "$NEW" | cut -d: -f5)"
 [ -z "$(git config --global user.name 2>/dev/null)" ] && ok_ "no git identity" || bad "git user.name: $(git config --global user.name)"
 
 echo "== desktop =="
@@ -59,8 +66,48 @@ else
   ok_ "no uinput errors"
 fi
 pgrep -af python3 | grep -q omarchy-arm-vdagent && ok_ "agent running" || bad "agent not running"
-grep -vs -- '^[[:space:]]*--' /home/omarchy/.config/hypr/autostart.lua 2>/dev/null | grep -qs spice-vdagent \
+grep -vs -- '^[[:space:]]*--' "/home/$NEW/.config/hypr/autostart.lua" 2>/dev/null | grep -qs spice-vdagent \
   && bad "autostart launches the stock agent" || ok_ "autostart clean"
+
+# The login path, end to end. Issue #2 is somebody who types the right password
+# and lands back on the greeter, and NONE of the four things that produces was
+# checked anywhere: whether a session file exists, whether autologin names that
+# same session, whether the display manager is even enabled, and whether the
+# session it names is one SDDM can find. The diagnosis offered on that issue was
+# a keyboard layout, which cannot return you to a greeter.
+echo "== login path =="
+SESSDIRS="/usr/local/share/wayland-sessions /usr/share/wayland-sessions"
+SESSFILES=$(find $SESSDIRS -maxdepth 1 -name '*.desktop' 2>/dev/null)
+[ -n "$SESSFILES" ] && ok_ "wayland sessions installed: $(echo "$SESSFILES" | xargs -n1 basename 2>/dev/null | tr '\n' ' ')" \
+                    || bad "no .desktop in $SESSDIRS: the greeter has nothing to offer"
+AUTOCONF=$(grep -ls '^\[Autologin\]' /etc/sddm.conf.d/*.conf 2>/dev/null | tail -1)
+if [ -z "$AUTOCONF" ]; then
+  bad "no [Autologin] section under /etc/sddm.conf.d"
+else
+  AU=$(grep -h '^User=' "$AUTOCONF" | tail -1 | cut -d= -f2)
+  AS=$(grep -h '^Session=' "$AUTOCONF" | tail -1 | cut -d= -f2)
+  [ "$AU" = "$NEW" ] && ok_ "autologin user is $NEW" \
+                     || bad "autologin logs in '$AU', and the image ships '$NEW'"
+  if [ -z "$AS" ]; then
+    bad "$AUTOCONF names no Session=: SDDM has nothing to start"
+  # SDDM accepts the entry with or without the .desktop suffix, so both are
+  # tried rather than assuming the form we happen to write today.
+  elif [ -f "/usr/local/share/wayland-sessions/${AS%.desktop}.desktop" ] \
+    || [ -f "/usr/share/wayland-sessions/${AS%.desktop}.desktop" ]; then
+    ok_ "autologin session '$AS' exists as a desktop file"
+  else
+    bad "autologin names session '$AS', which is not installed: the greeter will bounce back"
+  fi
+fi
+[ "$(systemctl is-enabled sddm 2>&1)" = enabled ] && ok_ "sddm enabled" \
+                                                  || bad "sddm: $(systemctl is-enabled sddm 2>&1)"
+# A .desktop whose Exec is not on PATH fails exactly like a missing session.
+for f in $SESSFILES; do
+  E=$(grep -m1 '^Exec=' "$f" 2>/dev/null | cut -d= -f2- | awk '{print $1}')
+  [ -n "$E" ] || { bad "$(basename "$f") has no Exec="; continue; }
+  command -v "$E" >/dev/null 2>&1 && ok_ "$(basename "$f") -> $E is on PATH" \
+                                  || bad "$(basename "$f") runs '$E', which is not on PATH"
+done
 
 echo "== hygiene =="
 [ "$(systemctl is-enabled sshd 2>&1)" = disabled ] && ok_ "sshd disabled" || bad "sshd: $(systemctl is-enabled sshd 2>&1)"
@@ -71,9 +118,9 @@ echo "== hygiene =="
 # firewall was ever switched on. Checked here as well as in sanitize, because
 # this is the script that reads a FINISHED image rather than a chroot.
 if getent group docker >/dev/null 2>&1; then
-  getent group docker | cut -d: -f4 | tr "," "\n" | grep -qx omarchy \
-    && bad "omarchy is in the docker group: that is passwordless root" \
-    || ok_ "omarchy is not in the docker group"
+  getent group docker | cut -d: -f4 | tr "," "\n" | grep -qx "$NEW" \
+    && bad "$NEW is in the docker group: that is passwordless root" \
+    || ok_ "$NEW is not in the docker group"
   [ "$(systemctl is-enabled docker.socket 2>&1)" = enabled ] \
     && ok_ "docker on socket activation" \
     || bad "docker.socket not enabled (upstream enables the socket, not the service)"
@@ -118,7 +165,7 @@ H=$(pacman -Qtdq 2>/dev/null | wc -l)
 S=""; for b in /usr/local/bin/*; do [ -f "$b" ] || continue
   strings "$b" 2>/dev/null | grep -q "/home/$OLD" && S="$S $(basename "$b")"; done
 [ -z "$S" ] && ok_ "no binary mentions the build account" || bad "binaries carrying the build path:$S"
-P=$(find /home/omarchy /etc /usr/local /opt -xdev -mindepth 1 -regextype posix-extended \
+P=$(find "/home/$NEW" /etc /usr/local /opt -xdev -mindepth 1 -regextype posix-extended \
      -regex ".*/([^/]*[^[:alnum:]])?$OLD([^[:alnum:]][^/]*)?" 2>/dev/null | wc -l)
 [ "$P" -eq 0 ] && ok_ "no filename mentions the build account" || bad "$P files mention it"
 
@@ -140,7 +187,7 @@ done < <(find /usr/bin /usr/local/bin -xtype l -print0 2>/dev/null)
 # Europe/Madrid in every release until mphaxise reported it (#14). This file
 # inspects the packaged artifact, so this is where the question belongs --
 # sanitize can only promise that it did the work.
-KBL=$(grep -o 'kb_layout[^,]*' /home/omarchy/.config/hypr/input.lua 2>/dev/null | head -1)
+KBL=$(grep -o 'kb_layout[^,]*' "/home/$NEW/.config/hypr/input.lua" 2>/dev/null | head -1)
 case "$KBL" in
   *'"us"'*) ok_ "neutral keyboard layout (us)" ;;
   "")       bad "input.lua has no kb_layout: cannot tell what ships" ;;
@@ -156,7 +203,7 @@ else
   bad "hyprland bootstrap guard missing (command or profile.d hook)"
 fi
 # And the config it guards must itself be intact in the shipped image.
-if grep -qs 'bootstrap\.lua' /home/omarchy/.config/hypr/hyprland.lua; then
+if grep -qs 'bootstrap\.lua' "/home/$NEW/.config/hypr/hyprland.lua"; then
   ok_ "hyprland.lua loads Omarchy's bootstrap"
 else
   bad "hyprland.lua has no bootstrap line: the desktop would ship with no binds"

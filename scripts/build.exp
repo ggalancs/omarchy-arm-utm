@@ -116,7 +116,12 @@ expect {
 # --- verification of the resulting disk
 set timeout 600
 send "mount -o subvol=@ /dev/vda2 /mnt 2>/dev/null || mount /dev/vda2 /mnt; mount /dev/vda1 /mnt/boot 2>/dev/null; echo '==== VERIFICATION ===='; echo '-- ESP --'; find /mnt/boot -maxdepth 3 | head -40; echo '-- kernel --'; ls -la /mnt/boot/Image* /mnt/boot/initramfs* 2>/dev/null; echo '-- user --'; ls -la /mnt/home/; echo '-- dotfiles --'; for h in /mnt/home/*/; do echo \"  \$h:\"; ls \"\$h/.config\" 2>/dev/null | tr '\\n' ' '; echo; done; echo; echo '-- hyprland --'; ls -la /mnt/usr/bin/Hyprland 2>/dev/null; echo TOK_VERIFY_\$?\r"
-catch { wait_for "TOK_VERIFY_" 17 "verification" 600 }
+# TOK_VERIFY_0, not the prefix. `wait_for "TOK_VERIFY_"` matched TOK_VERIFY_2
+# -- Hyprland absent from the installed system -- exactly as happily as
+# TOK_VERIFY_0, so the one post-install probe for the compositor binary could
+# never report its absence. The catch stays: this is a report, not a gate, and
+# the gate is ph_verify on the booted image.
+catch { wait_for "TOK_VERIFY_0" 17 "verification" 600 }
 
 send "sync; umount -R /mnt 2>/dev/null; poweroff -f\r"
 expect eof

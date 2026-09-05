@@ -11,8 +11,13 @@ The gap is not cosmetic. As of 2026-09-05:
 
 | file | here | `provision/src/` |
 |---|---|---|
-| `sanitize.sh` | 260 lines | 583 lines |
+| `sanitize.sh` | 260 lines | 748 lines |
 | `repair.sh` | 76 lines | 78 lines |
+
+Those figures are checked, not remembered: `tests/test-repair-iso-note.sh`
+recounts both files and fails if this table has drifted. The table said 583
+lines for four days after the file had grown past 700, which is the same class
+of stale claim the directory itself is being warned about.
 
 The `sanitize.sh` in this directory ends with an unconditional
 `echo "==> SANITIZE_OK"`. It has no invariants: **it reports success whatever

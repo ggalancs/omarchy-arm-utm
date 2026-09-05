@@ -23,7 +23,70 @@
 set -uo pipefail
 CONF=/etc/environment.d/90-vm-graphics.conf
 
-state() { grep -q '^LIBGL_ALWAYS_SOFTWARE=1' "$CONF" 2>/dev/null && echo software || echo hardware; }
+# systemd's environment.d is NOT one file. Every *.conf across four directories
+# is applied in lexical order by BASENAME, so ~/.config/environment.d/99-gl.conf
+# overrides the file this command edits, and the same basename in a
+# higher-priority directory replaces the lower one outright. Reading only $CONF
+# meant `--off` could print "software rendering restored" while the session
+# still came up on hardware GL -- and the user, told the machine was in the
+# safe state, had no reason to look anywhere else. That is the shape of issue
+# #7: black windows with the tool reporting everything as it should be.
+#
+# Priority order for identical basenames, highest first (systemd.environment-
+# generator(7)); across different basenames the LAST one lexically wins.
+ENVDIRS=("${XDG_CONFIG_HOME:-$HOME/.config}/environment.d" /etc/environment.d /run/environment.d /usr/lib/environment.d)
+
+# Every *.conf that will actually be read, in the order systemd reads them.
+# Deliberately without an associative array: it must stay runnable on bash 3.2 so
+# it can be tested on the machine that builds the image, not only inside it.
+env_files() {
+  local d b
+  for b in $(for d in "${ENVDIRS[@]}"; do
+               [ -d "$d" ] || continue
+               find "$d" -maxdepth 1 -name '*.conf' -type f -exec basename {} \; 2>/dev/null
+             done | sort -u); do
+    # First directory in priority order to offer that basename owns it; the
+    # copies below are shadowed outright, not merged.
+    for d in "${ENVDIRS[@]}"; do
+      [ -f "$d/$b" ] && { printf '%s\n' "$d/$b"; break; }
+    done
+  done
+}
+
+# The file that has the last word on LIBGL_ALWAYS_SOFTWARE, and what it says.
+# Empty output means nothing sets it anywhere.
+decider() {
+  local f last=""
+  while read -r f; do
+    grep -qE '^[[:space:]]*LIBGL_ALWAYS_SOFTWARE=' "$f" 2>/dev/null && last=$f
+  done < <(env_files)
+  [ -n "$last" ] || return 1
+  printf '%s\t%s\n' "$last" \
+    "$(grep -E '^[[:space:]]*LIBGL_ALWAYS_SOFTWARE=' "$last" | tail -1 | cut -d= -f2- | tr -d '\"'"'"' ')"
+}
+
+state() {
+  local d v
+  if d=$(decider); then
+    v=${d#*$'\t'}
+    case "$v" in 1|true|yes) echo software ;; *) echo hardware ;; esac
+  else
+    echo hardware
+  fi
+}
+
+# Says nothing when $CONF is the decider, which is the normal case. When it is
+# not, it names the file that wins, because editing $CONF will not help.
+warn_override() {
+  local d f
+  d=$(decider) || return 0
+  f=${d%%$'\t'*}
+  [ "$f" = "$CONF" ] && return 0
+  echo
+  echo "  NOTE: $CONF is not what decides this."
+  echo "        $f is read later and wins. Edit that one,"
+  echo "        or remove its LIBGL_ALWAYS_SOFTWARE line."
+}
 
 case "${1:-}" in
   -h|--help) sed -n '3,23p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 0 ;;
@@ -39,6 +102,7 @@ case "${1:-}" in
       echo "  Hardware GL through virgl. If terminal or browser windows come up"
       echo "  black, your UTM is too old for it:  omarchy-arm-gpu --off"
     fi
+    warn_override
     ;;
 
   --on)
@@ -52,6 +116,7 @@ case "${1:-}" in
     echo "  open a terminal and a browser                 # neither should be black"
     echo
     echo "If anything renders black, undo it:  omarchy-arm-gpu --off"
+    warn_override
     ;;
 
   --off)
@@ -59,6 +124,12 @@ case "${1:-}" in
     grep -q '^LIBGL_ALWAYS_SOFTWARE=1' "$CONF" \
       || printf 'LIBGL_ALWAYS_SOFTWARE=1\n' | sudo tee -a "$CONF" >/dev/null
     echo "Software rendering restored. Log out and back in for it to apply."
+    # Checked, not assumed: --off is the escape hatch from a black screen, and
+    # an escape hatch that reports success without working is worse than none.
+    if [ "$(state)" != software ]; then
+      echo "  !! and yet the effective setting is still hardware GL."
+    fi
+    warn_override
     ;;
 
   *) echo "unknown option: $1" >&2; exit 1 ;;
