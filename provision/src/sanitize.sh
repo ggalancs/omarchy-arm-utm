@@ -164,7 +164,11 @@ rm -f  /usr/local/bin/walker
 orph=$(pacman -Qdtq 2>/dev/null | tr '\n' ' ')
 [ -n "${orph// /}" ] && { echo "  orphans: $orph"; pacman -Rns --noconfirm $orph >/dev/null 2>&1; }
 rm -rf "/home/$NEW/.cargo" "/home/$NEW/go" "/home/$NEW/.rustup" "/home/$NEW/.npm" 2>/dev/null
-echo "  essentials that must remain: $(for p in hyprland quickshell sddm; do printf '%s ' "$(pacman -Q $p 2>/dev/null || echo FALTA-$p)"; done)"
+# This line used to print a missing-package marker and carry straight on to
+# SANITIZE_OK: an echo dressed as a check, five lines after the orphan sweep
+# that could have removed the very thing it names. It is a real invariant now,
+# down in the block that can fail.
+echo "  desktop packages: $(for p in hyprland quickshell sddm; do printf '%s ' "$(pacman -Q "$p" 2>/dev/null | awk '{print $1"-"$2}' || echo "MISSING-$p")"; done)"
 
 log "7d/10 slimming: what a VM cannot possibly need"
 # Measured on a real image: 675 MiB of firmware for hardware that cannot exist
@@ -229,6 +233,23 @@ cat > /etc/motd <<'EOF'
 
 EOF
 install -d -o "$NEW" -g "$NEW" "/home/$NEW/Desktop"
+# If anything was compiled during this build, the image says so on the way in.
+# The guard is `grep -qvE '^#|^[[:space:]]*$'`, NOT `grep -qv '^#'`: a header
+# plus the single trailing blank line makes the latter return 0, so a build that
+# correctly compiled nothing would ship a motd claiming that it had.
+HYPR_REC=/usr/local/share/omarchy-arm/built-from-source.txt
+if [ -f "$HYPR_REC" ] && grep -qvE '^#|^[[:space:]]*$' "$HYPR_REC"; then
+  _when=$(grep -vE '^#|^[[:space:]]*$' "$HYPR_REC" | head -1 | cut -f7)
+  cat >> /etc/motd <<MOTDEOF
+
+  Hyprland and hyprtoolkit in this image were COMPILED during the build, on
+  ${_when%T*}, from Arch Linux's own recipes, because Arch Linux ARM could not
+  install them. See /usr/local/share/omarchy-arm/built-from-source.txt
+  and run: omarchy-arm-hypr-local
+
+MOTDEOF
+  echo "  motd records the locally compiled packages"
+fi
 cp /etc/motd "/home/$NEW/Desktop/README.txt"
 chown "$NEW:$NEW" "/home/$NEW/Desktop/README.txt"
 
@@ -491,6 +512,75 @@ else
 fi
 
 [ "$(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l)" -eq 0 ] && ok_ "no ssh host keys" || bad "ssh host keys left behind"
+
+# ---- the desktop itself. Promoted from an echo further up, and placed AFTER
+# ---- the orphan sweep so it can actually catch that sweep removing something.
+for _p in hyprland hyprtoolkit hyprland-guiutils hyprpaper quickshell sddm; do
+  pacman -Q "$_p" >/dev/null 2>&1 && ok_ "$_p installed" || bad "$_p is not installed"
+done
+
+# ---- packages compiled during the build rather than installed
+# The record must EXIST on every image. Its absence is a defect, not a silence:
+# with no file at all there is no way to tell it apart from a build that
+# compiled nothing.
+# CAREFUL: no entries below the header is the NORMAL case, which is the opposite
+# convention to build-failures.txt. Read it with -E and the blank-line pattern.
+HYPR_REC=/usr/local/share/omarchy-arm/built-from-source.txt
+if [ ! -f "$HYPR_REC" ]; then
+  bad "$HYPR_REC is missing: cannot tell whether anything was compiled here"
+else
+  ok_ "the built-from-source record exists"
+  HYPR_MARK='omarchy-arm-utm build <https://github.com/ggalancs/omarchy-arm-utm>'
+  mapfile -t HYPR_NAMES < <(grep -vE '^#|^[[:space:]]*$' "$HYPR_REC" | cut -f1)
+  if [ "${#HYPR_NAMES[@]}" -eq 0 ]; then
+    ok_ "nothing was compiled during this build (the healthy case)"
+    # Nothing may claim otherwise, either.
+    grep -qs 'COMPILED during the build' /etc/motd \
+      && bad "the motd claims packages were compiled, and the record lists none" \
+      || ok_ "the motd makes no claim about compiled packages"
+  else
+    ok_ "${#HYPR_NAMES[@]} package(s) compiled during the build: ${HYPR_NAMES[*]}"
+    # Both directions. Forward: everything the record names is installed and
+    # carries our marker. Reverse: nothing else carries the marker. One
+    # direction alone can pass while the image is wrong.
+    for _p in "${HYPR_NAMES[@]}"; do
+      if ! pacman -Q "$_p" >/dev/null 2>&1; then
+        bad "the record names $_p, which is not installed"
+      elif pacman -Qi "$_p" 2>/dev/null | grep -q "^Packager *: $HYPR_MARK"; then
+        ok_ "$_p carries the build marker"
+      else
+        bad "$_p is in the record but was not built here (packager does not match)"
+      fi
+    done
+    while IFS= read -r _p; do
+      printf '%s\n' "${HYPR_NAMES[@]}" | grep -qxF "$_p" \
+        || bad "$_p carries the build marker but is not in the record"
+    done < <(pacman -Qq | while read -r _q; do
+               pacman -Qi "$_q" 2>/dev/null | grep -q "^Packager *: $HYPR_MARK" && echo "$_q"
+             done)
+    grep -qs 'COMPILED during the build' /etc/motd \
+      && ok_ "the motd says packages were compiled here" \
+      || bad "packages were compiled here and the motd does not say so"
+  fi
+fi
+
+# ---- the package graph itself. `pacman -Dk` needs no root (needs_root()
+# ---- returns false for the database operation), and it is the one check that
+# ---- would notice a dependency broken by the orphan sweep or by a local build.
+if pacman -Dk >/dev/null 2>&1; then
+  ok_ "pacman -Dk: the package graph is consistent"
+else
+  bad "pacman -Dk reports a broken package graph:"
+  pacman -Dk 2>&1 | head -10 | sed 's/^/      /'
+fi
+
+# ---- nothing unsigned may remain configured
+grep -qs '^\[omarchy-arm-local\]' /etc/pacman.conf \
+  && bad "the build-time local repository is still configured in pacman.conf" \
+  || ok_ "no build-time repository left in pacman.conf"
+[ -e /var/lib/pacman/sync/omarchy-arm-local.db ] \
+  && bad "the build-time repository database is still in /var/lib/pacman/sync" \
+  || ok_ "no build-time repository database left"
 
 # The three decisions that separate this image from the one shipped before
 # 2026-09-04. Checked here, on the finished filesystem, and not only in the

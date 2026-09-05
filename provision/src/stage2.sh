@@ -205,7 +205,269 @@ install_list() {
   fi
   return 0
 }
+
+# ─────────────── hyprland and hyprtoolkit, compiled here ───────────────────
+#
+# Arch Linux ARM's own repository can, from time to time, be unable to install
+# its own desktop. On 2026-09-04 it rebuilt hyprtoolkit-0.5.4-5 at 06:14:39 UTC
+# against the aquamarine it still had, then published aquamarine-0.15.0-2 at
+# 06:45:49 UTC -- thirty-one minutes later. From that moment
+# extra/hyprland-0.56.1-3 and extra/hyprtoolkit-0.5.4-5 both require
+# libaquamarine.so=13-64 and the only aquamarine in the index provides
+# libaquamarine.so=14-64. pacman refuses, and there is no archive of older
+# aarch64 packages to fall back on.
+#
+# This block compiles those two from ARCH LINUX'S OWN RECIPES, pinned by tag and
+# by sha256, changing one line in each (the release number, so pacman can tell
+# our build from the distribution's). Arch already builds both against exactly
+# this aquamarine on x86_64, so the recipes are proven; what happens here is
+# compiling them for a processor hyprland already declares support for.
+#
+# EVERYTHING ABOUT IT IS CONDITIONAL. When the repository can resolve the core
+# list, none of this runs and nothing needs editing for that to happen. The test
+# is the resolution install_list is about to perform, asked of pacman itself.
+#
+# The order is not free: makepkg resolves `depends` BEFORE `makedepends`, and
+# hyprland depends on hyprland-guiutils, which needs the broken hyprtoolkit. So
+# hyprtoolkit is built and PUBLISHED first, or hyprland cannot even start.
+#
+# To refuse all of this and stop instead:  OMARCHY_ARM_NO_LOCAL_HYPR=1
+
+HYPR_RECORD=/usr/local/share/omarchy-arm/built-from-source.txt
+HYPR_WORK=/var/cache/omarchy-arm-build
+HYPR_LOCALREPO=/var/cache/omarchy-arm-localrepo
+HYPR_PACKAGER='omarchy-arm-utm build <https://github.com/ggalancs/omarchy-arm-utm>'
+
+# Written on EVERY build, before any guard, and this matters: sanitize makes the
+# file's absence fatal, so it must exist even when nothing is compiled.
+#
+# CAREFUL, the emptiness convention here is the OPPOSITE of
+# build-failures.txt. That file is written empty when all is well and any
+# content means failure. This one always carries a header, and no entries
+# below it is the normal, healthy case. Do not mirror guest-check's `[ -s ]`
+# idiom onto it or you write a check that is red for ever.
+install -d -m 0755 /usr/local/share/omarchy-arm
+cat > "$HYPR_RECORD" <<'RECHDR'
+# Packages compiled during this build instead of installed from Arch Linux ARM.
+#
+# NO ENTRIES BELOW THE HEADER IS THE NORMAL CASE. This file is written on every
+# build so that a missing file can never be mistaken for "nothing was compiled".
+# Read it with `grep -vE '^#|^[[:space:]]*$'`; a bare `grep -v '^#'` counts the
+# blank line and reports entries that are not there.
+#
+# name<TAB>version<TAB>recipe<TAB>tag<TAB>pkgbuild-sha256<TAB>source-sha256<TAB>built-utc<TAB>reason
+RECHDR
+
+log "checking whether Arch Linux ARM can install the core list"
+mapfile -t HYPR_CORE < <(grep -vE '^\s*#|^\s*$' /root/prov/packages-core.txt)
+# The resolution install_list is about to run, asked as a dry run. No downloads,
+# and the sync database is fresh from the -Syu above. It cannot pass vacuously
+# because it IS the resolver install_list uses.
+# --noconfirm is not optional: without it a multi-provider dependency prompts on
+# a serial console nobody is watching, and build.exp reports a stall 5400 s later.
+HYPR_DRY=$(pacman -Sp --noconfirm --print-format '%r/%n' --needed "${HYPR_CORE[@]}" 2>&1) && HYPR_RC=0 || HYPR_RC=$?
+
+if [ "$HYPR_RC" -eq 0 ]; then
+  echo "  the repository resolves the core list; nothing to compile"
+else
+  # `unable to satisfy dependency '<dep>' required by <pkg>` is pacman's exact
+  # wording (src/pacman/sync.c), and it prints every pair, not just the first.
+  HYPR_PAIRS=$(printf '%s\n' "$HYPR_DRY" \
+    | sed -n "s/.*unable to satisfy dependency '\([^']*\)' required by \(.*\)/\2 \1/p")
+  if printf '%s\n' "$HYPR_DRY" | grep -q 'target not found'; then
+    # A stale database or a sick mirror, NOT a resolution fault. install_list's
+    # one-at-a-time retry already recovers from this; aborting here would turn a
+    # condition the build survives today into a hard death.
+    warn "pacman reports a target not found: treating it as a mirror problem and letting install_list retry"
+  elif [ -z "$HYPR_PAIRS" ]; then
+    warn "the core list does not resolve, and pacman named no unsatisfied dependency:"
+    printf '%s\n' "$HYPR_DRY" | tail -20
+    warn "guessing here would attach a true symptom to the wrong cause"
+    exit 1
+  else
+    HYPR_FOREIGN=0
+    while read -r p d; do
+      case "$p" in hyprland|hyprtoolkit) ;; *) HYPR_FOREIGN=1 ;; esac
+      case "$d" in libaquamarine.so=*-64) ;; *) HYPR_FOREIGN=1 ;; esac
+    done <<< "$HYPR_PAIRS"
+    if [ "$HYPR_FOREIGN" = 1 ]; then
+      warn "the core list cannot be resolved, in a shape this build does not know how to work around:"
+      printf '%s\n' "$HYPR_PAIRS" | sed 's/^/      /'
+      exit 1
+    fi
+    if [ "${OMARCHY_ARM_NO_LOCAL_HYPR:-}" = 1 ]; then
+      warn "hyprland and hyprtoolkit cannot be installed from the repository, and"
+      warn "OMARCHY_ARM_NO_LOCAL_HYPR=1 refuses to compile them here. Stopping."
+      exit 1
+    fi
+
+    log "compiling hyprtoolkit and hyprland from Arch's recipes"
+    printf '%s\n' "$HYPR_PAIRS" | sed 's/^/      unmet: /'
+
+    # ---- the pinned recipes. A moved tag stops the build; it does not get
+    # ---- absorbed. The sha256 sums were fetched and verified by hand.
+    HYPR_BASE=https://gitlab.archlinux.org/archlinux/packaging/packages
+    HYPR_TK_TAG=0.5.4-5
+    HYPR_TK_SHA=f621f85f44ff74db690175b6bca5f0b4437922e8bba11f0a2c243ba4ba880856
+    HYPR_TK_SRC=2fb59789f231c1c4e9154ceffc1e7524c0cae154807c0d57e6166806255b570f
+    HYPR_TK_VER=0.5.4-5.1
+    HYPR_HL_TAG=0.56.2-2
+    HYPR_HL_SHA=284b4e4fe5f2f2806accd92b3f39db45832bc1d61284da744456f8ad8f43cf36
+    HYPR_HL_SRC=03ad3f5ef152ff44116ffd56fcf808486211ecabf4f0ba567108ee746ba5cd2e
+    HYPR_HL_VER=0.56.2-0.1
+
+    # ---- two gates, BEFORE any compilation, so a stale pin costs ten seconds
+    # ---- rather than forty-five minutes and a message naming the wrong cause.
+    # hyprtoolkit 0.5.4-5.1 sorts above extra's 0.5.4-5 and below a future -6.
+    # hyprland 0.56.2-0.1 sorts above extra's 0.56.1-3 and below any 0.56.2-N,
+    # so the distribution's own rebuild will replace ours the moment it lands.
+    for _spec in "hyprtoolkit $HYPR_TK_VER" "hyprland $HYPR_HL_VER"; do
+      _p=${_spec%% *}; _v=${_spec#* }
+      _e=$(pacman -Si "extra/$_p" 2>/dev/null | awk '/^Version/{print $3; exit}')
+      [ -n "$_e" ] || { warn "extra/$_p is not in the index at all; refusing to guess"; exit 1; }
+      if [ "$(vercmp "$_v" "$_e")" -le 0 ]; then
+        warn "extra/$_p is now $_e, which is not below the pinned $_v."
+        warn "The pinned recipe in stage2 is stale: bump the tag, or drop this workaround."
+        exit 1
+      fi
+      echo "  $_p: ours $_v sorts above extra's $_e"
+    done
+
+    # ---- workspace. Not /tmp (a 4 GB tmpfs out of the same 8 GB of RAM, and
+    # ---- stage3 already records a shared /tmp tree filling and killing an
+    # ---- unrelated build) and not $HOME (a source path carrying the builder's
+    # ---- username can survive into .rodata even after stripping).
+    rm -rf "$HYPR_WORK" "$HYPR_LOCALREPO"
+    install -d -m 0755 -o "$VM_USER" -g "$VM_USER" "$HYPR_WORK" "$HYPR_LOCALREPO"
+
+    # ---- cap the compiler. hyprland's `make release` passes an explicit -j
+    # ---- `nproc` that beats MAKEFLAGS, so the cap has to be nproc itself.
+    # ---- Eight concurrent C++26 translation units against 8 GB with no swap
+    # ---- is the shape of an out-of-memory kill.
+    HYPR_J=${OMARCHY_ARM_HYPR_JOBS:-$(n=$(nproc 2>/dev/null || echo 4); [ "$n" -lt 4 ] && echo "$n" || echo 4)}
+    HYPR_SHIM="$HYPR_WORK/shim"
+    install -d -m 0755 -o "$VM_USER" -g "$VM_USER" "$HYPR_SHIM"
+    printf '#!/bin/sh\necho %s\n' "$HYPR_J" > "$HYPR_SHIM/nproc"
+    chmod 0755 "$HYPR_SHIM/nproc"
+    echo "  building with $HYPR_J parallel jobs"
+
+    hypr_publish() {
+      repo-add --quiet "$HYPR_LOCALREPO/omarchy-arm-local.db.tar.gz" "$HYPR_LOCALREPO"/*.pkg.tar.* >/dev/null 2>&1 || true
+      if ! grep -q '^\[omarchy-arm-local\]' /etc/pacman.conf; then
+        # AHEAD of [core]: resolvedep() walks the configured databases in order
+        # and takes the first name match, which is what makes pacman choose ours
+        # over the repository's broken one.
+        awk '/^\[core\]/ && !done {
+               print "[omarchy-arm-local]";
+               print "SigLevel = Optional TrustAll";
+               print "Server = file:///var/cache/omarchy-arm-localrepo";
+               print ""; done=1 } { print }' /etc/pacman.conf > /etc/pacman.conf.new
+        mv /etc/pacman.conf.new /etc/pacman.conf
+        grep -q '^\[omarchy-arm-local\]' /etc/pacman.conf \
+          || { warn "could not add the local repository to pacman.conf"; exit 1; }
+      fi
+      pacman -Sy --noconfirm >/dev/null 2>&1 || true
+    }
+
+    hypr_build() {   # hypr_build <pkg> <tag> <pkgbuild-sha256> <sed-expr> <new-version> [extra makepkg args]
+      local pkg="$1" tag="$2" sha="$3" sedexpr="$4" newver="$5" extra="${6:-}"
+      local dir="$HYPR_WORK/$pkg" got rc=0 t=0 bg
+      install -d -m 0755 -o "$VM_USER" -g "$VM_USER" "$dir"
+      curl -fsSL --max-time 120 "$HYPR_BASE/$pkg/-/raw/$tag/PKGBUILD" -o "$dir/PKGBUILD" \
+        || { warn "could not fetch Arch's recipe for $pkg at tag $tag"; exit 1; }
+      got=$(sha256sum "$dir/PKGBUILD" | awk '{print $1}')
+      if [ "$got" != "$sha" ]; then
+        warn "Arch's recipe for $pkg at tag $tag is not the one this build was written against"
+        warn "  expected $sha"
+        warn "  got      $got"
+        exit 1
+      fi
+      # One line changed, and the change is verified: a sed that matched nothing
+      # is how a package ships carrying the wrong version.
+      sed -i "$sedexpr" "$dir/PKGBUILD"
+      grep -q "^pkgrel=${newver#*-}$" "$dir/PKGBUILD" \
+        || { warn "$pkg: the pkgrel edit did not take"; exit 1; }
+      chown -R "$VM_USER:$VM_USER" "$dir"
+
+      echo "  $pkg $newver: compiling (this is the slow part)"
+      su - "$VM_USER" -c "cd '$dir' && PATH='$HYPR_SHIM:\$PATH' PACKAGER='$HYPR_PACKAGER' PKGDEST='$HYPR_LOCALREPO' CMAKE_BUILD_PARALLEL_LEVEL=$HYPR_J MAKEFLAGS=-j$HYPR_J timeout 5400 makepkg -s --noconfirm --noprogressbar --nocheck $extra" >"$dir/build.log" 2>&1 &
+      bg=$!
+      # A silent build and a stalled one look the same from outside, and
+      # build.exp kills anything that says nothing for 5400 s. One line a
+      # minute keeps it alive and makes a hung compile visible.
+      while kill -0 "$bg" 2>/dev/null; do
+        sleep 60; t=$((t+60))
+        echo "    [$pkg] ${t}s  free=$(awk '/^MemAvailable/{print $2}' /proc/meminfo)kB  $(tail -1 "$dir/build.log" 2>/dev/null | cut -c1-80)"
+      done
+      wait "$bg" || rc=$?
+      if [ "$rc" -ne 0 ]; then
+        warn "$pkg failed to build (makepkg rc=$rc); last 20 lines:"
+        tail -20 "$dir/build.log" | sed 's/^/      /'
+        # Retry ONLY what a retry can fix: 6 is a source download or checksum,
+        # 8 is a dependency install, both usually a mirror. 4/5/12 are the build
+        # itself and 124 is the timeout -- retrying those costs another
+        # forty-five minutes and fails identically.
+        case "$rc" in
+          6|8) warn "$pkg: retrying once (that code is transient)"
+               su - "$VM_USER" -c "cd '$dir' && PATH='$HYPR_SHIM:\$PATH' PACKAGER='$HYPR_PACKAGER' PKGDEST='$HYPR_LOCALREPO' CMAKE_BUILD_PARALLEL_LEVEL=$HYPR_J MAKEFLAGS=-j$HYPR_J timeout 5400 makepkg -s --noconfirm --noprogressbar --nocheck $extra" >>"$dir/build.log" 2>&1 || { warn "$pkg failed again"; exit 1; } ;;
+          *)   exit 1 ;;
+        esac
+      fi
+      echo "  $pkg: built"
+    }
+
+    # THE ORDER. hyprtoolkit first and published immediately, because makepkg
+    # resolves hyprland's `depends` (which include hyprland-guiutils, which needs
+    # hyprtoolkit) before it ever looks at makedepends.
+    hypr_build hyprtoolkit "$HYPR_TK_TAG" "$HYPR_TK_SHA" 's/^pkgrel=5$/pkgrel=5.1/' "$HYPR_TK_VER" --ignorearch
+    hypr_publish
+    hypr_build hyprland    "$HYPR_HL_TAG" "$HYPR_HL_SHA" 's/^pkgrel=2$/pkgrel=0.1/' "$HYPR_HL_VER"
+    hypr_publish
+
+    # ---- the assertions that must hold before install_list is allowed to run
+    HYPR_DRY2=$(pacman -Sp --noconfirm --print-format '%r/%n' --needed "${HYPR_CORE[@]}" 2>&1) && HYPR_RC2=0 || HYPR_RC2=$?
+    [ "$HYPR_RC2" -eq 0 ] || { warn "the core list still does not resolve after the local build:"; printf '%s\n' "$HYPR_DRY2" | tail -20; exit 1; }
+    if printf '%s\n' "$HYPR_DRY2" | grep -qE '^(extra|core)/(hyprland|hyprtoolkit)$'; then
+      warn "pacman still intends to install the repository's broken hyprland or hyprtoolkit:"
+      printf '%s\n' "$HYPR_DRY2" | grep -E '/(hyprland|hyprtoolkit)$' | sed 's/^/      /'
+      exit 1
+    fi
+    printf '%s\n' "$HYPR_DRY2" | grep -q '^omarchy-arm-local/hyprland$' \
+      || { warn "pacman does not intend to take hyprland from the local repository"; exit 1; }
+    echo "  pacman will take hyprland and hyprtoolkit from the local build"
+
+    HYPR_WHEN=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    HYPR_WHY='extra/hyprland-0.56.1-3 and extra/hyprtoolkit-0.5.4-5 require libaquamarine.so=13-64; extra/aquamarine-0.15.0-2 provides libaquamarine.so=14-64'
+    for _spec in "hyprtoolkit $HYPR_TK_VER $HYPR_TK_TAG $HYPR_TK_SHA $HYPR_TK_SRC" \
+                 "hyprland $HYPR_HL_VER $HYPR_HL_TAG $HYPR_HL_SHA $HYPR_HL_SRC"; do
+      set -- $_spec
+      # Each built file must actually be where PKGDEST was told to put it: this
+      # is the loud detector for an environment variable lost across `su -`.
+      ls "$HYPR_LOCALREPO/$1-"*.pkg.tar.* >/dev/null 2>&1 \
+        || { warn "$1: nothing landed in the local repository (PKGDEST was lost?)"; exit 1; }
+      bsdtar -xOqf "$(ls "$HYPR_LOCALREPO/$1-"*.pkg.tar.* | head -1)" .PKGINFO 2>/dev/null \
+        | grep -q "^packager = $HYPR_PACKAGER" \
+        || { warn "$1: the built package does not carry our packager marker"; exit 1; }
+      printf '%s\t%s\t%s/%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$1" "$2" "$HYPR_BASE" "$1" "$3" "$4" "$5" "$HYPR_WHEN" "$HYPR_WHY" >> "$HYPR_RECORD"
+    done
+    echo "  recorded in $HYPR_RECORD"
+  fi
+fi
 install_list /root/prov/packages-core.txt  "core" fatal
+
+# The install reasons, repaired. libalpm returns from its `--needed` branch
+# BEFORE the line that marks a package explicit, so anything makepkg pulled in
+# with --asdeps stays a dependency even though the core list asks for it by
+# name. Left alone, a later orphan sweep can propose removing packages the
+# image needs.
+if [ -s "$HYPR_RECORD" ] && grep -qvE '^#|^[[:space:]]*$' "$HYPR_RECORD"; then
+  log "repairing install reasons after the local build"
+  HYPR_EXPL=()
+  for _p in "${HYPR_CORE[@]}"; do pacman -Q "$_p" >/dev/null 2>&1 && HYPR_EXPL+=("$_p"); done
+  [ ${#HYPR_EXPL[@]} -gt 0 ] && pacman -D --asexplicit "${HYPR_EXPL[@]}" >/dev/null 2>&1 || true
+  echo "  ${#HYPR_EXPL[@]} core packages marked explicit"
+fi
 set +e
 install_list /root/prov/packages-extra.txt "extras" soft
 set -e
@@ -464,6 +726,28 @@ HOOK
   chmod 644 /etc/profile.d/omarchy-arm-hypr-check.sh
   echo "  omarchy-arm-hypr-check installed"
 fi
+# The same shape, for the packages this build may have compiled itself. It goes
+# in /etc/profile.d and NOT in ~/.config/omarchy/hooks/post-update.d, and the
+# reason is specific rather than stylistic: omarchy-update-perform runs under
+# `set -e` and reaches its post-update hook only after
+# `omarchy-update-system-pkgs`, which is `pacman -Syyu`. Any failed sysupgrade
+# aborts the pipeline before the hook -- including the exact class of breakage
+# this notice exists for. A login shell is what the user still has.
+if [ -f /root/prov/omarchy-arm-hypr-local ]; then
+  install -Dm755 /root/prov/omarchy-arm-hypr-local /usr/local/bin/omarchy-arm-hypr-local
+  cat > /etc/profile.d/omarchy-arm-hypr-local.sh <<'HOOK'
+# Silent on an image that compiled nothing: the first test is one grep on a
+# record whose normal state is a header and no entries. It only ever reports;
+# it never runs pacman by itself.
+if [ -n "${PS1:-}" ] && [ -f /usr/local/share/omarchy-arm/built-from-source.txt ]    && grep -qvE '^#|^[[:space:]]*$' /usr/local/share/omarchy-arm/built-from-source.txt 2>/dev/null; then
+  command -v omarchy-arm-hypr-local >/dev/null 2>&1 && omarchy-arm-hypr-local || true
+fi
+HOOK
+  chmod 644 /etc/profile.d/omarchy-arm-hypr-local.sh
+  echo "  omarchy-arm-hypr-local installed"
+else
+  echo "  !! omarchy-arm-hypr-local missing from the ISO: the image ships without it"
+fi
 sed -i '/-auth.*pam_gnome_keyring\.so/d;/-password.*pam_gnome_keyring\.so/d' /etc/pam.d/sddm 2>/dev/null || true
 echo "  session=$SESSION"
 ls /usr/local/share/wayland-sessions /usr/share/wayland-sessions 2>/dev/null
@@ -510,6 +794,22 @@ echo "  systemd-resolved enabled; NetworkManager keeps managing /etc/resolv.conf
 
 log "cleanup"
 rm -f /etc/sudoers.d/99-install
+# The build-time repository goes where the build-time privilege goes. This also
+# deletes the compile logs, deliberately: what makes the build reproducible is
+# the pinned tag and the two recorded sha256 sums, not unsigned binaries left at
+# an odd path inside an image handed to someone else.
+if grep -q '^\[omarchy-arm-local\]' /etc/pacman.conf 2>/dev/null; then
+  sed -i '/^\[omarchy-arm-local\]/,/^$/d' /etc/pacman.conf
+  grep -q '^\[omarchy-arm-local\]' /etc/pacman.conf \
+    && warn "the local repository stanza is still in pacman.conf" \
+    || echo "  local repository removed from pacman.conf"
+fi
+rm -rf /var/cache/omarchy-arm-localrepo /var/cache/omarchy-arm-build
+# pacman -Sy refreshes what is configured; it does not delete the sync database
+# of a repository that has just been removed from pacman.conf. Without this the
+# image ships a database named after us while claiming nothing unsigned is left.
+rm -f /var/lib/pacman/sync/omarchy-arm-local.db*
+pacman -Sy --noconfirm >/dev/null 2>&1 || true
 paccache -rk1 2>/dev/null || true
 rm -rf /var/cache/pacman/pkg/* 2>/dev/null || true
 

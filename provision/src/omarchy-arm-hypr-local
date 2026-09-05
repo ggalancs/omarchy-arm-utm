@@ -1,0 +1,178 @@
+#!/bin/bash
+#
+#  omarchy-arm-hypr-local - reports on the packages this image compiled during
+#  its build instead of installing them, and puts the distribution's back.
+#  ────────────────────────────────────────────────────────────────────────────
+#  Arch Linux ARM's repository can be unable to install its own desktop. On
+#  2026-09-04 it rebuilt hyprtoolkit at 06:14:39 UTC against the aquamarine it
+#  still had, then published aquamarine 0.15.0-2 thirty-one minutes later. From
+#  that moment hyprland and hyprtoolkit both asked for libaquamarine.so=13-64
+#  and the only aquamarine in the index provided =14-64. There is no archive of
+#  older aarch64 packages to fall back on, so this image compiled the two of
+#  them from Arch Linux's own recipes.
+#
+#  The two are NOT symmetrical, and that is the thing worth understanding:
+#
+#    hyprland 0.56.2-0.1  sorts BELOW any 0.56.2-N the distribution could
+#                         publish, so an ordinary update replaces it by itself.
+#    hyprtoolkit 0.5.4-5.1 sorts ABOVE the 0.5.4-5 in the repository. The likely
+#                         repair upstream is a rebuild carrying that same
+#                         version string, and pacman does not act on an equal
+#                         version. That one waits for --replace.
+#
+#  This does NOT act on its own, for the same reason omarchy-arm-hypr-check does
+#  not: replacing the compositor and its toolkit under a live session, with
+#  hyprpaper and the dialogs running against the old library, is a logout, not
+#  an upgrade. It reports; --replace acts when you ask.
+#
+#  Usage:
+#    omarchy-arm-hypr-local            what is installed, what the repository
+#                                      has, and whether it can be resolved yet
+#    omarchy-arm-hypr-local --replace  put the distribution's packages back,
+#                                      for whichever of them is possible today
+#    omarchy-arm-hypr-local --force    with --replace, do it even inside a
+#                                      running Hyprland session
+#    omarchy-arm-hypr-local --recipe   print how these were built, so anyone
+#                                      can reproduce or repeat it
+#  ────────────────────────────────────────────────────────────────────────────
+set -uo pipefail
+
+REC=/usr/local/share/omarchy-arm/built-from-source.txt
+c_ok=$'\033[32m'; c_warn=$'\033[33m'; c_hi=$'\033[1;36m'; c_off=$'\033[0m'
+
+usage() { sed -n '3,36p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; }
+
+entries() { [ -f "$REC" ] && grep -vE '^#|^[[:space:]]*$' "$REC" || true; }
+
+if [ ! -f "$REC" ]; then
+  echo "  No record at $REC."
+  echo "  This image does not carry one, so nothing here was compiled locally."
+  exit 0
+fi
+if [ -z "$(entries)" ]; then
+  echo "  ${c_ok}Nothing was compiled during this build.${c_off}"
+  echo "  Every package came from Arch Linux ARM. There is nothing to replace."
+  exit 0
+fi
+
+MODE=report; FORCE=0
+while (($#)); do
+  case "$1" in
+    --replace) MODE=replace; shift ;;
+    --recipe)  MODE=recipe; shift ;;
+    --force)   FORCE=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "unknown option: $1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+if [ "$MODE" = recipe ]; then
+  echo
+  echo "  How these packages were built. Everything is pinned, so anyone can"
+  echo "  fetch the same bytes and check them."
+  echo
+  while IFS=$'\t' read -r name ver recipe tag pbsha srcsha when why; do
+    cat <<RECIPE
+  ${c_hi}$name $ver${c_off}
+    recipe   $recipe/-/raw/$tag/PKGBUILD
+    tag      $tag
+    PKGBUILD sha256  $pbsha
+    source   sha256  $srcsha
+    built    $when
+    reason   $why
+
+    curl -fsSL '$recipe/-/raw/$tag/PKGBUILD' -o PKGBUILD
+    sha256sum PKGBUILD          # must be $pbsha
+    # then the one line this build changed:
+    #   pkgrel -> ${ver#*-}
+    makepkg -s --noconfirm --nocheck$([ "$name" = hyprtoolkit ] && echo ' --ignorearch')
+
+RECIPE
+  done < <(entries)
+  exit 0
+fi
+
+# ---------------------------------------------------------------- report
+echo
+echo "  ${c_hi}Packages compiled during this image's build${c_off}"
+echo
+NOW=$(date -u +%s)
+HANDBACK=()
+while IFS=$'\t' read -r name ver recipe tag pbsha srcsha when why; do
+  inst=$(pacman -Q "$name" 2>/dev/null | awk '{print $2}')
+  repo=$(pacman -Si "extra/$name" 2>/dev/null | awk '/^Version/{print $3; exit}')
+  # Age from the record, because "the repositories have not caught up" is the
+  # answer this will most often have to give, and a number makes it useful.
+  age=""
+  if built=$(date -u -d "$when" +%s 2>/dev/null) || built=$(date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$when" +%s 2>/dev/null); then
+    age=" ($(( (NOW - built) / 86400 )) days ago)"
+  fi
+  printf '  %-14s installed %-12s repository %-12s\n' "$name" "${inst:-none}" "${repo:-absent}"
+  printf '                 built %s%s\n' "$when" "$age"
+  # Two separate questions, and a package is only ready to hand back when both
+  # answer yes. Appending on the first and trying to remove on the second is how
+  # this was written first, and ${ARRAY[@]/x} rewrites a substring rather than
+  # dropping an element -- it left a mangled entry behind.
+  repo_ahead=0; pac_ok=0
+  if [ -z "$repo" ]; then
+    echo "                 ${c_warn}the repository does not carry it at all${c_off}"
+  elif [ "$(vercmp "${inst:-0}" "$repo")" -gt 0 ]; then
+    echo "                 ${c_warn}ours is still newer; an update will not replace it${c_off}"
+  else
+    echo "                 ${c_ok}the repository has caught up${c_off}"
+    repo_ahead=1
+  fi
+  # Whether it RESOLVES is a different question from whether a version exists:
+  # the original breakage was a version that existed and could not be installed.
+  if pacman -Sp --noconfirm "extra/$name" >/dev/null 2>&1; then
+    echo "                 pacman can resolve extra/$name today"
+    pac_ok=1
+  else
+    echo "                 ${c_warn}pacman still cannot resolve extra/$name${c_off}"
+  fi
+  [ "$repo_ahead" = 1 ] && [ "$pac_ok" = 1 ] && HANDBACK+=("$name")
+  echo
+done < <(entries)
+
+if [ "$MODE" = report ]; then
+  if [ "${#HANDBACK[@]}" -gt 0 ] && [ -n "${HANDBACK[0]:-}" ]; then
+    echo "  ${c_ok}Ready to hand back to the distribution:${c_off} ${HANDBACK[*]}"
+    echo "    omarchy-arm-hypr-local --replace"
+  else
+    echo "  Nothing can be handed back yet. Arch Linux ARM has not published a"
+    echo "  build that supersedes these, or still cannot resolve them."
+    echo "  There is no deadline: that index carries soname breaks years old."
+  fi
+  echo
+  echo "  Verify any of this yourself:"
+  echo "    pacman -Qi hyprland | grep -E 'Version|Packager|Validated'"
+  echo "    cat $REC"
+  echo "    pacman -Dk"
+  exit 0
+fi
+
+# ---------------------------------------------------------------- replace
+if [ "${#HANDBACK[@]}" -eq 0 ] || [ -z "${HANDBACK[0]:-}" ]; then
+  echo "  Nothing to replace: the repository has not superseded any of these yet."
+  exit 1
+fi
+if pgrep -x Hyprland >/dev/null 2>&1 && [ "$FORCE" != 1 ]; then
+  echo "  ${c_warn}Hyprland is running.${c_off}"
+  echo "  Replacing /usr/bin/Hyprland and /usr/lib/libhyprtoolkit.so.5 underneath a"
+  echo "  live session, with hyprpaper and the dialogs linked against the old"
+  echo "  library, is a logout rather than an upgrade. Log out to a TTY and run"
+  echo "  it there, or pass --force if you know what you are doing."
+  exit 1
+fi
+echo "  Syncing first: without it this can target a version the mirror no"
+echo "  longer carries."
+sudo pacman -Sy --noconfirm >/dev/null || { echo "  could not sync"; exit 1; }
+for p in "${HANDBACK[@]}"; do
+  echo "  $p: $(pacman -Q "$p" 2>/dev/null | awk '{print $2}') -> $(pacman -Si "extra/$p" 2>/dev/null | awk '/^Version/{print $3; exit}')"
+done
+# Explicit -S with no --needed: an equal version must still be replaced, which
+# is exactly the hyprtoolkit case this command exists for.
+sudo pacman -S --noconfirm "${HANDBACK[@]}" || { echo "  the replacement failed; nothing was changed for the rest"; exit 1; }
+echo
+echo "  ${c_ok}Done.${c_off} Log out and back in so the session picks up the new libraries."
+echo "  The record at $REC is left as it is: it documents what this image shipped."

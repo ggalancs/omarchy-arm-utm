@@ -17,10 +17,11 @@ COMMANDS = {
     'omarchy-arm-user':      'provision/src/omarchy-arm-user',
     'omarchy-arm-extras':    'provision/src/omarchy-arm-extras',
     'omarchy-arm-clipboard': 'provision/src/omarchy-arm-clipboard',
+    'omarchy-arm-hypr-local': 'provision/src/omarchy-arm-hypr-local',
     'my-apps.sh':            'scripts/my-apps.sh',
 }
 DOCS = ['README.md', 'EMPEZAR.md', 'dist/VERSIONS.md', 'dist/README.md',
-        'provision/src/README.md']
+        'provision/src/README.md', 'provision/src/README-hyprlocal.md']
 
 def main():
     accepted, missing = {}, []
