@@ -27,7 +27,7 @@
 #    fetch     download the Alpine ISO + ALARM rootfs (MD5 verified)
 #    prepare   compute the package list from Omarchy's live branch
 #    build     build the disk (headless, QEMU + HVF, three stages in a chroot)
-#    utm       crear el bundle .utm y registrarlo en UTM
+#    utm       create the .utm bundle and register it with UTM
 #    verify    boot and verify over the serial console
 #    sanitize  clean a copy for distribution
 #    package   compact, compress and sign with sha256
@@ -2519,16 +2519,13 @@ if [ -f "$HYPR_REC" ] && grep -qvE '^#|^[[:space:]]*$' "$HYPR_REC"; then
 
 MOTDEOF
   echo "  motd records the locally compiled packages"
-  # The motd has just told the user to run a command. stage2's failure path for
-  # that command is a bare `echo`, so the image can reach here having printed a
-  # warning nobody reads and shipped without it. A notice pointing at a missing
-  # binary is worse than no notice: it makes the image look broken at first
-  # login, exactly when it is trying to explain itself.
-  if [ -x /usr/local/bin/omarchy-arm-hypr-local ]; then
-    ok_ "the motd points at omarchy-arm-hypr-local, and it is installed"
-  else
-    bad "the motd tells the user to run omarchy-arm-hypr-local, which is not installed"
-  fi
+  # Only a warning here: ok_ and bad do not exist yet at this point in the file,
+  # and calling them would have printed "command not found" while leaving
+  # FAILURES untouched -- a check that cannot fail, which is the one thing this
+  # script is not allowed to contain. The invariant that can stop the image is
+  # in the block at the end, where those two are defined.
+  [ -x /usr/local/bin/omarchy-arm-hypr-local ] \
+    || warn "the motd points at omarchy-arm-hypr-local, which is not installed"
 fi
 cp /etc/motd "/home/$NEW/Desktop/README.txt"
 chown "$NEW:$NEW" "/home/$NEW/Desktop/README.txt"
@@ -2794,6 +2791,17 @@ fi
 [ "$(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l)" -eq 0 ] && ok_ "no ssh host keys" || bad "ssh host keys left behind"
 # The build's own resolvers must not travel. Every image so far shipped the two
 # public nameservers stage1 wrote for the chroot.
+# The motd tells the user to run omarchy-arm-hypr-local whenever anything was
+# compiled during the build. stage2's failure path for installing it is a bare
+# `echo`, so the image can reach here carrying a notice that points at a
+# command it does not have -- which makes it look broken at first login,
+# exactly when it is trying to explain itself.
+if grep -q 'omarchy-arm-hypr-local' /etc/motd 2>/dev/null; then
+  [ -x /usr/local/bin/omarchy-arm-hypr-local ] \
+    && ok_ "the motd points at omarchy-arm-hypr-local, and it is installed" \
+    || bad "the motd tells the user to run omarchy-arm-hypr-local, which is not installed"
+fi
+
 # The session the greeter will start must exist as a file. A greeter that
 # accepts the password and returns to itself is what issue #2 reported, and a
 # named-but-absent session produces exactly that.
@@ -3228,7 +3236,7 @@ do_chrome() {
   info "The repositories' Chromium does NOT carry it, and chromium-widevine is x86_64 only."
   aur_build google-chrome || return 1
   ok "$(pacman -Q google-chrome)"
-  info "${c_dim}Comprueba el DRM en chrome://components → 'Widevine Content Decryption Module'${c_off}"
+  info "${c_dim}Check DRM at chrome://components → 'Widevine Content Decryption Module'${c_off}"
 }
 
 do_spotify_web() {
@@ -3622,14 +3630,14 @@ VERSION               = 6
 CLIENT_DISCONNECTED   = 12
 
 SEL_CLIPBOARD = 0          # VD_AGENT_CLIPBOARD_SELECTION_CLIPBOARD
-TIPO_UTF8     = 1          # VD_AGENT_CLIPBOARD_UTF8_TEXT
+TYPE_UTF8     = 1          # VD_AGENT_CLIPBOARD_UTF8_TEXT
 
 DEBUG = bool(os.environ.get("VDAGENT_DEBUG"))
 def log(*a):
     if DEBUG: print("[vdagent]", *a, file=sys.stderr, flush=True)
 
 
-class Agente:
+class Agent:
     def __init__(self, sock):
         self.s = sock
         self.lock = threading.Lock()
@@ -3637,13 +3645,13 @@ class Agente:
         self.waiting = threading.Event()
         self.received = None
 
-    def enviar(self, tipo, arg1=0, arg2=0, datos=b""):
-        cab = struct.pack("<IIII", tipo, arg1, arg2, len(datos))
+    def send(self, kind, arg1=0, arg2=0, data=b""):
+        header = struct.pack("<IIII", kind, arg1, arg2, len(data))
         with self.lock:
-            self.s.sendall(cab + datos)
-        log("→", tipo, arg1, arg2, len(datos))
+            self.s.sendall(header + data)
+        log("→", kind, arg1, arg2, len(data))
 
-    def _leer(self, n):
+    def _read(self, n):
         b = b""
         while len(b) < n:
             t = self.s.recv(n - len(b))
@@ -3651,36 +3659,36 @@ class Agente:
             b += t
         return b
 
-    def bucle(self):
+    def loop(self):
         while True:
             try:
-                tipo, a1, a2, size = struct.unpack("<IIII", self._leer(16))
-                datos = self._leer(size) if size else b""
+                kind, a1, a2, size = struct.unpack("<IIII", self._read(16))
+                data = self._read(size) if size else b""
             except (EOFError, OSError) as e:
                 log("socket closed:", e); return
-            log("←", tipo, a1, a2, size)
+            log("←", kind, a1, a2, size)
 
-            if tipo == CLIPBOARD_GRAB:
+            if kind == CLIPBOARD_GRAB:
                 # the host is offering something: ask for it
-                self.enviar(CLIPBOARD_REQUEST, SEL_CLIPBOARD, TIPO_UTF8)
+                self.send(CLIPBOARD_REQUEST, SEL_CLIPBOARD, TYPE_UTF8)
 
-            elif tipo == CLIPBOARD_REQUEST:
-                texto = leer_portapapeles() or ""
-                self.enviar(CLIPBOARD_DATA, SEL_CLIPBOARD, TIPO_UTF8,
-                            texto.encode("utf-8"))
+            elif kind == CLIPBOARD_REQUEST:
+                text = read_clipboard() or ""
+                self.send(CLIPBOARD_DATA, SEL_CLIPBOARD, TYPE_UTF8,
+                            text.encode("utf-8"))
 
-            elif tipo == CLIPBOARD_DATA:
-                if a2 == TIPO_UTF8:
-                    texto = datos.decode("utf-8", "replace")
-                    escribir_portapapeles(texto)
-                    self.last_local = texto
-                    log("  received from the host:", len(texto), "bytes")
+            elif kind == CLIPBOARD_DATA:
+                if a2 == TYPE_UTF8:
+                    text = data.decode("utf-8", "replace")
+                    write_clipboard(text)
+                    self.last_local = text
+                    log("  received from the host:", len(text), "bytes")
 
-            elif tipo == VERSION:
-                log("  vdagentd version:", datos.decode("utf8", "replace").strip())
+            elif kind == VERSION:
+                log("  vdagentd version:", data.decode("utf8", "replace").strip())
 
 
-def leer_portapapeles():
+def read_clipboard():
     try:
         r = subprocess.run(["wl-paste", "--no-newline", "--type", "text/plain"],
                            capture_output=True, timeout=5)
@@ -3689,10 +3697,10 @@ def leer_portapapeles():
         return None
 
 
-def escribir_portapapeles(texto):
+def write_clipboard(text):
     try:
         subprocess.run(["wl-copy", "--type", "text/plain;charset=utf-8"],
-                       input=texto.encode("utf-8"), timeout=5)
+                       input=text.encode("utf-8"), timeout=5)
     except Exception as e:
         log("wl-copy failed:", e)
 
@@ -3713,12 +3721,12 @@ def resolution():
 def watch(ag):
     """If the user copies inside the VM, offer it to the host."""
     while True:
-        t = leer_portapapeles()
+        t = read_clipboard()
         if t is not None and t != ag.last_local:
             ag.last_local = t
             if t:
-                ag.enviar(CLIPBOARD_GRAB, SEL_CLIPBOARD, 0,
-                          struct.pack("<I", TIPO_UTF8))
+                ag.send(CLIPBOARD_GRAB, SEL_CLIPBOARD, 0,
+                          struct.pack("<I", TYPE_UTF8))
         time.sleep(1)
 
 
@@ -3728,14 +3736,14 @@ def main():
                           capture_output=True).returncode != 0:
             print(f"{c} is missing (wl-clipboard package)", file=sys.stderr); return 1
     if not os.path.exists(SOCK):
-        print(f"no existe {SOCK}.", file=sys.stderr)
-        print("Arranca el demonio:  sudo systemctl start spice-vdagentd",
+        print(f"{SOCK} does not exist.", file=sys.stderr)
+        print("Start the daemon:  sudo systemctl start spice-vdagentd",
               file=sys.stderr)
         return 1
 
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.connect(SOCK)
-    ag = Agente(s)
+    ag = Agent(s)
 
     # The stock agent announces its resolution as soon as it connects;
     # vdagentd uses that to know a live graphical session is behind it.
@@ -3743,13 +3751,13 @@ def main():
     # display_id (vdagentd-proto.h:51). If the size does not match exactly,
     # vdagentd drops the agent without a word (vdagentd.c:1088).
     width, height = resolution()
-    ag.enviar(GUEST_XORG_RESOLUTION, width, height,
+    ag.send(GUEST_XORG_RESOLUTION, width, height,
               struct.pack("<iiiii", width, height, 0, 0, 0))
 
-    ag.last_local = leer_portapapeles()
+    ag.last_local = read_clipboard()
     threading.Thread(target=watch, args=(ag,), daemon=True).start()
     try:
-        ag.bucle()
+        ag.loop()
     except KeyboardInterrupt:
         pass
     finally:
@@ -5266,7 +5274,7 @@ ph_package() {
   # Digits included: the name carries the version. Without them this very
   # filter rejected "Omarchy 4 ARM64", which is exactly the name we want.
   if [[ "$DNAME" != "$(printf '%s' "$DNAME" | tr -cd 'A-Za-z0-9 .-')" ]]; then
-    die "the distribution name '$DNAME' has odd characters; use letters, digits, espacio, punto o guion"
+    die "the distribution name '$DNAME' has odd characters; use letters, digits, space, dot or hyphen"
   fi
   write_readme "$W/dist/README.md"
 

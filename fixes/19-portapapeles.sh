@@ -34,7 +34,7 @@ for c in python3 wl-copy wl-paste; do
   command -v "$c" >/dev/null 2>&1 && echo "  ✓ $c" || { echo "  ✗ missing $c"; failed_pkg=1; }
 done
 if [ ! -e /dev/virtio-ports/com.redhat.spice.0 ]; then
-  echo "  ✗ no existe /dev/virtio-ports/com.redhat.spice.0"
+  echo "  ✗ /dev/virtio-ports/com.redhat.spice.0 does not exist"
   echo "    Enable 'Share clipboard' in UTM, then power the VM off and on."
   failed_pkg=1
 else

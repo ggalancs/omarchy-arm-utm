@@ -257,7 +257,31 @@ PLAIN_ES = {'libre', 'libres', 'fichero', 'ficheros', 'carpeta', 'carpetas',
             'huerfanos', 'huerfano', 'correcto', 'correcta', 'falta', 'faltan',
             'sobra', 'sobran', 'queda', 'quedan', 'tanda', 'linea', 'lineas',
             'comentario', 'castellano', 'espanol', 'tamano', 'vacio',
-            'veredicto', 'maquina', 'trabajo', 'nombre', 'consola', 'rama'}
+            'veredicto', 'maquina', 'trabajo', 'nombre', 'consola', 'rama',
+            # Added 2026-09-05. `die "... use letters, digits, espacio, punto o
+            # guion"` sat in build-omarchy-arm.sh reading zero on every run of
+            # this audit: none of the three is caught by the morphology rules,
+            # and two words are needed before the generic filter speaks. Common
+            # nouns that name punctuation and layout are exactly what a
+            # half-translated message keeps.
+            'espacio', 'espacios', 'punto', 'puntos', 'guion', 'guiones',
+            'coma', 'comas', 'letra', 'letras', 'palabra', 'palabras',
+            'mayuscula', 'minuscula', 'digito', 'digitos', 'caracter',
+            'caracteres', 'numero', 'numeros', 'texto', 'cadena', 'cadenas',
+            # A second batch, from the same 2026-09-05 sweep. The clipboard
+            # agent printed `no existe {SOCK}.` and `Arranca el demonio:` at
+            # the user, in Spanish, in every image the project has published,
+            # and both read as English here: 'existe' and 'demonio' are not
+            # caught by the morphology, and 'arranca' needed a second word on
+            # the same line before anything was said. Verbs in the third
+            # person and the imperative are what a half-translated message
+            # keeps longest, because they are the shortest words in it.
+            'existe', 'existen', 'demonio', 'demonios', 'arranca', 'arrancar',
+            'ejecuta', 'ejecutar', 'comprueba', 'comprobar', 'instala',
+            'instalar', 'escribe', 'escribir', 'lee', 'leer', 'borra',
+            'borrar', 'crea', 'crear', 'guarda', 'guardar', 'muestra',
+            'mostrar', 'espera', 'esperar', 'termina', 'terminar', 'cancela',
+            'cancelado', 'cancelada', 'pulsa', 'pulsar', 'elige', 'elegir'}
 # Technical English that a general wordlist tends not to carry, and that would
 # otherwise trip the morphology.
 # 'timezone' is the reason this list exists: it is not in the dictionary, and

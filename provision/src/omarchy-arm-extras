@@ -227,7 +227,7 @@ do_chrome() {
   info "The repositories' Chromium does NOT carry it, and chromium-widevine is x86_64 only."
   aur_build google-chrome || return 1
   ok "$(pacman -Q google-chrome)"
-  info "${c_dim}Comprueba el DRM en chrome://components → 'Widevine Content Decryption Module'${c_off}"
+  info "${c_dim}Check DRM at chrome://components → 'Widevine Content Decryption Module'${c_off}"
 }
 
 do_spotify_web() {

@@ -11,7 +11,7 @@ The gap is not cosmetic. As of 2026-09-05:
 
 | file | here | `provision/src/` |
 |---|---|---|
-| `sanitize.sh` | 260 lines | 748 lines |
+| `sanitize.sh` | 260 lines | 756 lines |
 | `repair.sh` | 76 lines | 78 lines |
 
 Those figures are checked, not remembered: `tests/test-repair-iso-note.sh`

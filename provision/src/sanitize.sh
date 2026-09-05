@@ -271,16 +271,13 @@ if [ -f "$HYPR_REC" ] && grep -qvE '^#|^[[:space:]]*$' "$HYPR_REC"; then
 
 MOTDEOF
   echo "  motd records the locally compiled packages"
-  # The motd has just told the user to run a command. stage2's failure path for
-  # that command is a bare `echo`, so the image can reach here having printed a
-  # warning nobody reads and shipped without it. A notice pointing at a missing
-  # binary is worse than no notice: it makes the image look broken at first
-  # login, exactly when it is trying to explain itself.
-  if [ -x /usr/local/bin/omarchy-arm-hypr-local ]; then
-    ok_ "the motd points at omarchy-arm-hypr-local, and it is installed"
-  else
-    bad "the motd tells the user to run omarchy-arm-hypr-local, which is not installed"
-  fi
+  # Only a warning here: ok_ and bad do not exist yet at this point in the file,
+  # and calling them would have printed "command not found" while leaving
+  # FAILURES untouched -- a check that cannot fail, which is the one thing this
+  # script is not allowed to contain. The invariant that can stop the image is
+  # in the block at the end, where those two are defined.
+  [ -x /usr/local/bin/omarchy-arm-hypr-local ] \
+    || warn "the motd points at omarchy-arm-hypr-local, which is not installed"
 fi
 cp /etc/motd "/home/$NEW/Desktop/README.txt"
 chown "$NEW:$NEW" "/home/$NEW/Desktop/README.txt"
@@ -546,6 +543,17 @@ fi
 [ "$(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l)" -eq 0 ] && ok_ "no ssh host keys" || bad "ssh host keys left behind"
 # The build's own resolvers must not travel. Every image so far shipped the two
 # public nameservers stage1 wrote for the chroot.
+# The motd tells the user to run omarchy-arm-hypr-local whenever anything was
+# compiled during the build. stage2's failure path for installing it is a bare
+# `echo`, so the image can reach here carrying a notice that points at a
+# command it does not have -- which makes it look broken at first login,
+# exactly when it is trying to explain itself.
+if grep -q 'omarchy-arm-hypr-local' /etc/motd 2>/dev/null; then
+  [ -x /usr/local/bin/omarchy-arm-hypr-local ] \
+    && ok_ "the motd points at omarchy-arm-hypr-local, and it is installed" \
+    || bad "the motd tells the user to run omarchy-arm-hypr-local, which is not installed"
+fi
+
 # The session the greeter will start must exist as a file. A greeter that
 # accepts the password and returns to itself is what issue #2 reported, and a
 # named-but-absent session produces exactly that.

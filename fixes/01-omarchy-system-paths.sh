@@ -11,7 +11,7 @@ USR=gabriel
 OM=/home/$USR/.local/share/omarchy
 log() { echo ""; echo "==> $*"; }
 
-[ -d "$OM" ] || { echo "!! no existe $OM"; exit 1; }
+[ -d "$OM" ] || { echo "!! $OM does not exist"; exit 1; }
 
 log "1/8 tree at /usr/share/omarchy"
 ln -sfn "$OM" /usr/share/omarchy
