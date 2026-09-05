@@ -378,6 +378,13 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
 # image for nothing. herdr now builds from omarchy-pkgs, which brings its own
 # Zig.
 
+# Declared HERE, above the branch, because the failure record below runs
+# outside it. `${#TOOLS_KO[@]:-0}` looks like a defaulting expansion and is not:
+# the `:-0` is inert inside `${#...}`, so with BUILD_TOOLS=no -- a real
+# questionnaire answer -- that line hit an unbound variable and printed an
+# error instead of the count.
+TOOLS_OK=(); TOOLS_KO=()
+
 if [ "${BUILD_TOOLS:-yes}" != "yes" ]; then
   warn "tool building disabled: ttfx, tensaku, omacalc,"
   warn "omacut, omawrite, aether, cliamp and omarchy-nvim (they can be added later"
@@ -429,7 +436,7 @@ fi
 sudo install -d -m755 /usr/local/share/omarchy-arm
 printf '%s\n' "${TOOLS_KO[@]:-}" | sed '/^$/d' \
   | sudo tee /usr/local/share/omarchy-arm/build-failures.txt >/dev/null
-echo "  failure record: /usr/local/share/omarchy-arm/build-failures.txt ($(( ${#TOOLS_KO[@]:-0} )) entries)"
+echo "  failure record: /usr/local/share/omarchy-arm/build-failures.txt (${#TOOLS_KO[@]} entries)"
 # Omarchy deliberately swaps two Yaru icons for the Adwaita ones; if Yaru has
 # just been installed, that has to be applied again.
 sudo bash "$OMARCHY_PATH/install/config/theme-system.sh" >/dev/null 2>&1 || true

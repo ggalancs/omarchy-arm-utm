@@ -48,6 +48,18 @@ usage() { awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit}' "$0"
 
 entries() { [ -f "$REC" ] && grep -vE '^#|^[[:space:]]*$' "$REC" || true; }
 
+# Options BEFORE the record guards. An image that compiled nothing -- which is
+# the healthy, normal case, and the one stage2 writes a header-only record for
+# on every build -- answered `--help` with "Nothing was compiled during this
+# build" and exit 0, and answered a typo the same way. Asking a command how to
+# use it, and being told when you have misspelled a flag, must not depend on
+# what the machine happens to contain. Same ordering as omarchy-arm-display.
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  ""|--replace|--recipe|--force) : ;;
+  *) echo "unknown option: $1" >&2; usage >&2; exit 1 ;;
+esac
+
 if [ ! -f "$REC" ]; then
   echo "  No record at $REC."
   echo "  This image does not carry one, so nothing here was compiled locally."

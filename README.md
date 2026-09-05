@@ -131,9 +131,12 @@ READMEs that ship inside the image — and writes them out at startup. The VM
 configuration is not on that list: it is generated from your answers rather
 than embedded. You can copy just that file to another Mac.
 
-Two things that file cannot carry with it, and that it will tell you about
+Three things that file cannot carry with it, and that it will tell you about
 rather than skip: `scripts/check-alarm-satisfiable.py`, the ten-second
-pre-flight, and the six documents that publish the image's sha256.
+pre-flight; `checksums/base-images.sha256`, the reviewed pins for the two base
+images; and the documents that publish the image's sha256 (four of the six
+quote it — `README.es.md` and `dist/README.md` link to the `.sha256` file
+instead, and are not compared against).
 
 ### How long
 

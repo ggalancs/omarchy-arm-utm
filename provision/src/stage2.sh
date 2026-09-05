@@ -395,7 +395,7 @@ else
       chown -R "$VM_USER:$VM_USER" "$dir"
 
       echo "  $pkg $newver: compiling (this is the slow part)"
-      su - "$VM_USER" -c "cd '$dir' && PATH='$HYPR_SHIM:\$PATH' PACKAGER='$HYPR_PACKAGER' PKGDEST='$HYPR_LOCALREPO' CMAKE_BUILD_PARALLEL_LEVEL=$HYPR_J MAKEFLAGS=-j$HYPR_J timeout 5400 makepkg -s --noconfirm --noprogressbar --nocheck $extra" >"$dir/build.log" 2>&1 &
+      su - "$VM_USER" -c "cd '$dir' && PATH=\"$HYPR_SHIM:\$PATH\" PACKAGER='$HYPR_PACKAGER' PKGDEST='$HYPR_LOCALREPO' CMAKE_BUILD_PARALLEL_LEVEL=$HYPR_J MAKEFLAGS=-j$HYPR_J timeout 5400 makepkg -s --noconfirm --noprogressbar --nocheck $extra" >"$dir/build.log" 2>&1 &
       bg=$!
       # A silent build and a stalled one look the same from outside, and
       # build.exp kills anything that says nothing for 5400 s. One line a
@@ -423,7 +423,7 @@ else
                # "THE BUILD STALLED" instead of the makepkg exit code that says
                # what actually happened. rc=6 is a mirror that will not serve
                # the sources; half an hour is already generous for that.
-               su - "$VM_USER" -c "cd '$dir' && PATH='$HYPR_SHIM:\$PATH' PACKAGER='$HYPR_PACKAGER' PKGDEST='$HYPR_LOCALREPO' CMAKE_BUILD_PARALLEL_LEVEL=$HYPR_J MAKEFLAGS=-j$HYPR_J timeout 1800 makepkg -s --noconfirm --noprogressbar --nocheck $extra" >>"$dir/build.log" 2>&1 &
+               su - "$VM_USER" -c "cd '$dir' && PATH=\"$HYPR_SHIM:\$PATH\" PACKAGER='$HYPR_PACKAGER' PKGDEST='$HYPR_LOCALREPO' CMAKE_BUILD_PARALLEL_LEVEL=$HYPR_J MAKEFLAGS=-j$HYPR_J timeout 1800 makepkg -s --noconfirm --noprogressbar --nocheck $extra" >>"$dir/build.log" 2>&1 &
                bg=$!; t=0
                while kill -0 "$bg" 2>/dev/null; do
                  sleep 60; t=$((t+60))

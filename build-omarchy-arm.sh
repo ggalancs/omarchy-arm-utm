@@ -240,9 +240,14 @@ ensure_dirs() { mkdir -p "$W"/{dl,vm,provision,scripts,logs,dist,shots}; }
 PINS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/checksums/base-images.sha256"
 check_pin() {
   local file="$1" name="$2" want got
-  [[ -r $PINS ]] || { warn "no $PINS: base images left unpinned"; return 0; }
+  # return 2 means "could not compare", which is NOT the same answer as
+  # "compared and matched". Both paths returned 0, and the caller then printed
+  # "checked against the local pin" over a check that had not run -- next to
+  # the warning saying so. The single-file mode README.md documents reaches
+  # here with no pins file at all.
+  [[ -r $PINS ]] || { warn "no $PINS: base images left unpinned"; return 2; }
   want=$(awk -v n="$name" '$2 == n {print $1}' "$PINS")
-  [[ -n $want ]] || { warn "$name is not pinned in checksums/base-images.sha256"; return 0; }
+  [[ -n $want ]] || { warn "$name is not pinned in checksums/base-images.sha256"; return 2; }
   got=$(shasum -a 256 "$file" | awk '{print $1}')
   if [[ $want != "$got" ]]; then
     warn "$name does not match its reviewed pin"
@@ -293,8 +298,11 @@ ph_fetch() {
   if [[ -z ${latest:-} && -r $PINS ]]; then
     latest=$(awk '$2 ~ /^alpine-virt-.*-aarch64\.iso$/ {print $2; exit}' "$PINS")
   fi
-  check_pin "$iso" "${latest:-$ALPINE_ISO}"
-  ok "Alpine $(du -h "$iso" | cut -f1)"
+  if check_pin "$iso" "${latest:-$ALPINE_ISO}"; then
+    ok "Alpine $(du -h "$iso" | cut -f1), checked against the local pin"
+  else
+    ok "Alpine $(du -h "$iso" | cut -f1), UNVERIFIED (see the warning above)"
+  fi
 
   if [[ ! -s $tgz ]]; then
     info "Arch Linux ARM rootfs (~800 MB)"
@@ -312,16 +320,22 @@ ph_fetch() {
     # that could still run was skipped because a different one had failed.
     # This is the same hole the Alpine branch above was fixed for.
     warn "could not read $ALARM_URL.md5; falling back to the reviewed local pin"
-    check_pin "$tgz" "ArchLinuxARM-aarch64-latest.tar.gz"
-    ok "rootfs ALARM $(du -h "$tgz" | cut -f1), checked against the local pin"
+    if check_pin "$tgz" "ArchLinuxARM-aarch64-latest.tar.gz"; then
+      ok "rootfs ALARM $(du -h "$tgz" | cut -f1), checked against the local pin"
+    else
+      ok "rootfs ALARM $(du -h "$tgz" | cut -f1), UNVERIFIED (see the warning above)"
+    fi
   elif [[ $want != "$got" ]]; then
     warn "MD5 mismatch (expected $want, got $got); downloading again"
     rm -f "$tgz"
     [[ ${FETCH_RETRY:-0} -ge 1 ]] && die "the ALARM rootfs still does not match after retrying"
     FETCH_RETRY=1 ph_fetch; return
   else
-    check_pin "$tgz" "ArchLinuxARM-aarch64-latest.tar.gz"
-    ok "rootfs ALARM $(du -h "$tgz" | cut -f1), MD5 verified"
+    if check_pin "$tgz" "ArchLinuxARM-aarch64-latest.tar.gz"; then
+      ok "rootfs ALARM $(du -h "$tgz" | cut -f1), MD5 verified and pinned"
+    else
+      ok "rootfs ALARM $(du -h "$tgz" | cut -f1), MD5 verified but NOT pinned (see above)"
+    fi
   fi
 }
 
@@ -1059,7 +1073,7 @@ else
       chown -R "$VM_USER:$VM_USER" "$dir"
 
       echo "  $pkg $newver: compiling (this is the slow part)"
-      su - "$VM_USER" -c "cd '$dir' && PATH='$HYPR_SHIM:\$PATH' PACKAGER='$HYPR_PACKAGER' PKGDEST='$HYPR_LOCALREPO' CMAKE_BUILD_PARALLEL_LEVEL=$HYPR_J MAKEFLAGS=-j$HYPR_J timeout 5400 makepkg -s --noconfirm --noprogressbar --nocheck $extra" >"$dir/build.log" 2>&1 &
+      su - "$VM_USER" -c "cd '$dir' && PATH=\"$HYPR_SHIM:\$PATH\" PACKAGER='$HYPR_PACKAGER' PKGDEST='$HYPR_LOCALREPO' CMAKE_BUILD_PARALLEL_LEVEL=$HYPR_J MAKEFLAGS=-j$HYPR_J timeout 5400 makepkg -s --noconfirm --noprogressbar --nocheck $extra" >"$dir/build.log" 2>&1 &
       bg=$!
       # A silent build and a stalled one look the same from outside, and
       # build.exp kills anything that says nothing for 5400 s. One line a
@@ -1087,7 +1101,7 @@ else
                # "THE BUILD STALLED" instead of the makepkg exit code that says
                # what actually happened. rc=6 is a mirror that will not serve
                # the sources; half an hour is already generous for that.
-               su - "$VM_USER" -c "cd '$dir' && PATH='$HYPR_SHIM:\$PATH' PACKAGER='$HYPR_PACKAGER' PKGDEST='$HYPR_LOCALREPO' CMAKE_BUILD_PARALLEL_LEVEL=$HYPR_J MAKEFLAGS=-j$HYPR_J timeout 1800 makepkg -s --noconfirm --noprogressbar --nocheck $extra" >>"$dir/build.log" 2>&1 &
+               su - "$VM_USER" -c "cd '$dir' && PATH=\"$HYPR_SHIM:\$PATH\" PACKAGER='$HYPR_PACKAGER' PKGDEST='$HYPR_LOCALREPO' CMAKE_BUILD_PARALLEL_LEVEL=$HYPR_J MAKEFLAGS=-j$HYPR_J timeout 1800 makepkg -s --noconfirm --noprogressbar --nocheck $extra" >>"$dir/build.log" 2>&1 &
                bg=$!; t=0
                while kill -0 "$bg" 2>/dev/null; do
                  sleep 60; t=$((t+60))
@@ -1901,6 +1915,13 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
 # image for nothing. herdr now builds from omarchy-pkgs, which brings its own
 # Zig.
 
+# Declared HERE, above the branch, because the failure record below runs
+# outside it. `${#TOOLS_KO[@]:-0}` looks like a defaulting expansion and is not:
+# the `:-0` is inert inside `${#...}`, so with BUILD_TOOLS=no -- a real
+# questionnaire answer -- that line hit an unbound variable and printed an
+# error instead of the count.
+TOOLS_OK=(); TOOLS_KO=()
+
 if [ "${BUILD_TOOLS:-yes}" != "yes" ]; then
   warn "tool building disabled: ttfx, tensaku, omacalc,"
   warn "omacut, omawrite, aether, cliamp and omarchy-nvim (they can be added later"
@@ -1952,7 +1973,7 @@ fi
 sudo install -d -m755 /usr/local/share/omarchy-arm
 printf '%s\n' "${TOOLS_KO[@]:-}" | sed '/^$/d' \
   | sudo tee /usr/local/share/omarchy-arm/build-failures.txt >/dev/null
-echo "  failure record: /usr/local/share/omarchy-arm/build-failures.txt ($(( ${#TOOLS_KO[@]:-0} )) entries)"
+echo "  failure record: /usr/local/share/omarchy-arm/build-failures.txt (${#TOOLS_KO[@]} entries)"
 # Omarchy deliberately swaps two Yaru icons for the Adwaita ones; if Yaru has
 # just been installed, that has to be applied again.
 sudo bash "$OMARCHY_PATH/install/config/theme-system.sh" >/dev/null 2>&1 || true
@@ -4596,6 +4617,18 @@ usage() { awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit}' "$0"
 
 entries() { [ -f "$REC" ] && grep -vE '^#|^[[:space:]]*$' "$REC" || true; }
 
+# Options BEFORE the record guards. An image that compiled nothing -- which is
+# the healthy, normal case, and the one stage2 writes a header-only record for
+# on every build -- answered `--help` with "Nothing was compiled during this
+# build" and exit 0, and answered a typo the same way. Asking a command how to
+# use it, and being told when you have misspelled a flag, must not depend on
+# what the machine happens to contain. Same ordering as omarchy-arm-display.
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  ""|--replace|--recipe|--force) : ;;
+  *) echo "unknown option: $1" >&2; usage >&2; exit 1 ;;
+esac
+
 if [ ! -f "$REC" ]; then
   echo "  No record at $REC."
   echo "  This image does not carry one, so nothing here was compiled locally."
@@ -5382,17 +5415,29 @@ ph_build() {
   # got 800 MB less back than they expected, in a build documented to need 40.
   # the rootfs travels inside the provisioning ISO
   local d; d=$(mktemp -d)
-  cp "$W/provision"/{stage1.sh,stage2.sh,stage3.sh,config.env,packages-core.txt,packages-extra.txt} "$d"/
+  cp "$W/provision"/{stage1.sh,stage2.sh,stage3.sh,config.env,packages-core.txt,packages-extra.txt} "$d"/ \
+    || { rm -rf "$d"; die "could not stage the core payloads for the provisioning ISO"; }
   # CAREFUL: this list is maintained BY HAND and forgives no omissions.
   # `user.sh` was left out when it was added: the payload was generated, stage1
   # ran `[ -f "$PROV/user.sh" ] && cp ...`, the file was not there, and the
   # guard swallowed it in silence. Eighty-two minutes of build to discover the
   # new command was not inside. If you add a payload, add it here.
-  cp "$W/provision"/{extras.sh,armsync.sh,clipbrd.sh,vdagent.py,share.sh,user.sh,gpu.sh,hyprcheck.sh,display.sh,hyprlocal.sh} "$d"/
-  ln "$W/dl/alarm-rootfs.tgz" "$d/alarm-rootfs.tgz" 2>/dev/null || cp "$W/dl/alarm-rootfs.tgz" "$d/"
+  cp "$W/provision"/{extras.sh,armsync.sh,clipbrd.sh,vdagent.py,share.sh,user.sh,gpu.sh,hyprcheck.sh,display.sh,hyprlocal.sh} "$d"/ \
+    || { rm -rf "$d"; die "could not stage the shipped commands for the provisioning ISO"; }
+  ln "$W/dl/alarm-rootfs.tgz" "$d/alarm-rootfs.tgz" 2>/dev/null || cp "$W/dl/alarm-rootfs.tgz" "$d/" \
+    || { rm -rf "$d"; die "could not put the ALARM rootfs on the provisioning ISO"; }
   rm -f "$W/provision/provision.iso"
-  hdiutil makehybrid -iso -joliet -default-volume-name PROVISION -o "$W/provision/provision.iso" "$d" >/dev/null
+  # This is the ISO the guest actually boots from, and it was the one written
+  # with no check at all. make_iso above was hardened and then its output
+  # deleted three lines later: the guards protected a file nothing reads. The
+  # two are not equivalent -- this one carries the 800 MB rootfs, so a volume
+  # that fills mid-build fails HERE, after make_iso has already succeeded --
+  # and the failure surfaced as QEMU exiting with build.exp reporting that
+  # Alpine never reached its login prompt.
+  hdiutil makehybrid -iso -joliet -default-volume-name PROVISION -o "$W/provision/provision.iso" "$d" >/dev/null \
+    || { rm -rf "$d"; die "hdiutil could not write the provisioning ISO (no space in $(dirname "$d")?)"; }
   rm -rf "$d"
+  [ -s "$W/provision/provision.iso" ] || die "the provisioning ISO came out empty"
   ok "provisioning ISO $(du -h "$W/provision/provision.iso" | cut -f1)"
 
   # Rebuilding discards the previous disk, which is ~40 min of work. If there
@@ -5440,13 +5485,22 @@ ph_utm() {
     else
       VM_NAME="$VM_NAME $(date +%H%M)"
       info "it will be registered as '$VM_NAME'"
-      # Written down, or it lives only in this process. save_answers is called
-      # from the questionnaire, which has already finished by the time we get
-      # here, so a later `--from sanitize` reloaded the OLD name from
-      # answers.env and looked for the bundle under it. VM_NAME is not in
-      # SET_BY_ENV either, so exporting it by hand did not help: load_answers
-      # overwrote that too. The rename has to survive the process that made it.
-      save_answers
+      # Written down, or it lives only in this process: a later `--from
+      # sanitize` reloads the OLD name from answers.env and looks for a bundle
+      # under it.
+      #
+      # ONLY the VM_NAME line, not the whole file. save_answers rewrites all
+      # eighteen answers from what is in memory, and by this point
+      # detect_from_host has already overwritten the timezone and the memory
+      # size with what it read off this Mac -- values load_answers had
+      # correctly restored from an earlier interactive run. Calling it here
+      # persisted that damage into answers.env for every run after.
+      if [ -f "$W/answers.env" ]; then
+        sed -i '' "/^VM_NAME=/d" "$W/answers.env" 2>/dev/null || true
+        printf "VM_NAME='%s'\n" "$(shq "$VM_NAME")" >> "$W/answers.env"
+      else
+        save_answers
+      fi
     fi
   fi
   local ulog="$W/logs/make-utm.log"
@@ -5748,24 +5802,39 @@ ph_package() {
   esac
   [ ${#NEWSUM} -eq 64 ] || die "the sha256 just computed is ${#NEWSUM} characters, not 64: '$NEWSUM'"
 
-  local DESYNC=0 SRC SEEN=0
+  # Only documents that STATE a hash are compared. Two of the six carry none at
+  # all -- README.es.md and dist/README.md link to the .sha256 file instead of
+  # quoting it -- and scoring "does not carry this image's sha256" against a
+  # document that quotes no sha256 at all made this gate permanently red: no
+  # build could reach the end of packaging, and the remedy in its own error
+  # message ("put it in the files above and package again") could not be
+  # carried out, because there is no line in those files to put it on.
+  #
+  # The die is right and stays. What was wrong was asking a question of files
+  # that do not answer it.
+  local DESYNC=0 SRC SEEN=0 QUIET=0
   for SRC in dist/omarchy-arm-utm-v2.zip.sha256 dist/VERSIONS.md \
              README.md README.es.md EMPEZAR.md dist/README.md; do
     [ -f "$REPO/$SRC" ] || continue
+    # A 16-run of lowercase hex is what "this document quotes a sha256" looks
+    # like, in full or abbreviated. Without one there is nothing to compare.
+    if ! grep -qE '[0-9a-f]{16}' "$REPO/$SRC"; then
+      QUIET=$((QUIET+1)); continue
+    fi
     SEEN=$((SEEN+1))
     grep -q "$NEWSUM" "$REPO/$SRC" || grep -q "${NEWSUM:0:16}" "$REPO/$SRC" || {
-      warn "$SRC does not carry this image's sha256"; DESYNC=1; }
+      warn "$SRC quotes a sha256, and it is not this image's"; DESYNC=1; }
   done
-  # The second way this gate passed without doing anything. README.md tells the
+  # The other way this gate passed without doing anything. README.md tells the
   # reader they can copy this one file to another Mac and run it there; in that
   # mode none of the six documents exists, every iteration hits the `continue`,
   # and the green line below described six comparisons that never happened.
   if [ "$SEEN" -eq 0 ]; then
-    warn "none of the six documents that publish the sha256 is next to this script;"
-    warn "nothing was compared. The image is at $W/dist/$DIST_ZIP with sha256:"
+    warn "no document next to this script quotes a sha256; nothing was compared."
+    warn "The image is at $W/dist/$DIST_ZIP with sha256:"
     warn "  $NEWSUM"
   elif [ "$DESYNC" = 0 ]; then
-    ok "the published sha256 agrees in the $SEEN document(s) that state it"
+    ok "the published sha256 agrees in the $SEEN document(s) that quote it ($QUIET quote none)"
   else
     die "the documentation names a different artifact than the one just built. Put $NEWSUM in the files above and package again."
   fi
