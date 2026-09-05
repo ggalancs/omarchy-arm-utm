@@ -117,15 +117,27 @@ sleep 1
 # they are not masked and that the socket is alive.
 sudo systemctl unmask spice-vdagentd.socket spice-vdagentd.service 2>/dev/null || true
 sudo systemctl start spice-vdagentd.socket 2>/dev/null || true
+# The moment the daemon was restarted, so the check below can look at THIS
+# invocation instead of the whole boot -- which necessarily contains the errors
+# this script has just repaired.
+RESTART_TS=$(date '+%Y-%m-%d %H:%M:%S')
 sudo systemctl restart spice-vdagentd
 sleep 3
 echo "  spice-vdagentd: $(systemctl is-active spice-vdagentd)"
 pgrep -af spice-vdagentd | grep -q -- ' -X' \
   && echo "  the daemon is running with -X" || echo "  x the daemon did not pick up -X"
 # The virtual absolute pointer: if this complains, the mouse is not captured.
-journalctl -u spice-vdagentd -b --no-pager 2>/dev/null | grep -q "uinput" \
-  && echo "  x uinput errors are still there (the mouse will not be captured)" \
-  || echo "  no uinput errors (the mouse is captured on its own)"
+# --since the restart, and with sudo. Reading the whole boot reported failure
+# on exactly the machines this script had just fixed, because the errors it
+# repairs were logged earlier in that same boot; and running journalctl
+# unprivileged on a machine where the user cannot read the system journal
+# matched nothing and printed the green line instead. It got it wrong in both
+# directions.
+if sudo journalctl -u spice-vdagentd --since "$RESTART_TS" --no-pager 2>/dev/null | grep -q "uinput"; then
+  echo "  x uinput errors since the restart (the mouse will not be captured)"
+else
+  echo "  no uinput errors since the restart (the mouse is captured on its own)"
+fi
 [ -S "$SOCK" ] && echo "  socket ready" || { echo "  x there is no socket at $SOCK"; exit 1; }
 case "$(systemctl is-enabled spice-vdagentd.socket 2>/dev/null)" in
   masked) echo "  x spice-vdagentd.socket is masked; the clipboard will not come back after a reboot:"

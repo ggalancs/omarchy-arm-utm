@@ -13,7 +13,7 @@ PKGS=(quickshell bluez-tools bluez-utils ddcutil dua-cli foot inotify-tools
       zbar cava)
 sudo pacman -S --noconfirm --needed "${PKGS[@]}" 2>&1 | tail -12 || {
   echo "!! batch failed, one at a time"
-  for p in "${PKGS[@]}"; do sudo pacman -S --noconfirm --needed "$p" >/dev/null 2>&1 || echo "   falla: $p"; done
+  for p in "${PKGS[@]}"; do sudo pacman -S --noconfirm --needed "$p" >/dev/null 2>&1 || echo "   failed: $p"; done
 }
 
 log "verification"

@@ -64,7 +64,12 @@ have() { command -v "$1" >/dev/null 2>&1; }
 # hour) to reinstall what is already there.
 is_installed() {
   case "$1" in
-    1password)     pacman -Q 1password        >/dev/null 2>&1 || [ -d /opt/1Password ] ;;
+    # NOT `[ -d /opt/1Password ]`: do_1password creates that directory before
+    # it copies anything, so a failed install left it behind and the tool then
+    # answered "already installed in this image" for ever -- contradicting the
+    # "failed: 1password" it had printed a minute earlier. The test here is the
+    # same one do_1password itself accepts as success.
+    1password)     pacman -Q 1password >/dev/null 2>&1 || have 1password ;;
     1password-cli) have op ;;
     # The BINARY, not the directory: an empty /opt/obsidian is what a failed
     # install used to leave behind, and it read as success.
@@ -95,7 +100,14 @@ aur_build() {
   # exist while $dir is built, and with set -u the script aborts.
   local pkg="$1" want="${2:-$1}"
   local dir="$WORK/$pkg" base
-  pacman -Q "$want" >/dev/null 2>&1 && { ok "$want already installed"; return 0; }
+  # FORCE has to reach here too, or `--force <aur item>` is a documented flag
+  # that silently does nothing: this short-circuit ran before any of the build.
+  # Written as a plain `if` rather than an && || chain, whose precedence is the
+  # kind of thing that reads correct and is not.
+  if [ "${FORCE:-0}" != 1 ] && pacman -Q "$want" >/dev/null 2>&1; then
+    ok "$want already installed"
+    return 0
+  fi
 
   base=$(curl -fsSL --max-time 20 "https://aur.archlinux.org/rpc/v5/info?arg[]=$pkg" \
          | sed -n 's/.*"PackageBase":"\([^"]*\)".*/\1/p' | head -1)
@@ -257,13 +269,22 @@ do_spotify_web() {
   if ! have google-chrome-stable; then
     warn "without Google Chrome the Spotify web app will not play: install 'chrome' first"
   fi
+  # The failure has to be reported AND returned. `&& ok` said nothing when the
+  # command failed, the function went on to return 0, and the run's summary
+  # listed Spotify as installed over a menu entry that was never created.
   if have omarchy-webapp-install; then
-    omarchy-webapp-install "Spotify" "https://open.spotify.com" \
-      "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/spotify.png" \
-      "$(have google-chrome-stable && echo 'google-chrome-stable --app=https://open.spotify.com')" \
-      >/dev/null 2>&1 && ok "launcher added to the application menu"
+    if omarchy-webapp-install "Spotify" "https://open.spotify.com" \
+         "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/spotify.png" \
+         "$(have google-chrome-stable && echo 'google-chrome-stable --app=https://open.spotify.com')" \
+         >/dev/null 2>&1; then
+      ok "launcher added to the application menu"
+    else
+      fail "omarchy-webapp-install could not create the launcher"
+      return 1
+    fi
   else
-    warn "omarchy-webapp-install is not available"
+    fail "omarchy-webapp-install is not available on this image"
+    return 1
   fi
   # Rebind SUPER+SHIFT+M, which in Omarchy points at the native binary
   local f="$HOME/.config/hypr/bindings.lua"

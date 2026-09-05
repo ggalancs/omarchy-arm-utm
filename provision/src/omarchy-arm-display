@@ -73,7 +73,6 @@ show() {
 
 apply() {
   local mode="$1" scale="$2" gdk="$3" tmp
-  cp -a "$MON" "$MON.bak.$(date +%s)"
   # A temporary file and mv rather than `sed -i`: in-place editing needs an
   # empty argument on BSD sed and no argument on GNU, so `sed -i` would only
   # run on one of them. This runs on the guest, but a script that cannot be
@@ -89,6 +88,19 @@ apply() {
   # fixes/03 writes it -- and against those none of the three expressions match.
   # The user was told the resolution had been applied and reloaded, and one line
   # later show() printed the old configuration back at them.
+  # Two different reasons for "the file did not change", and they need
+  # different answers: the sed matched nothing, or it matched and the value was
+  # already what was asked for. The guard added to catch the first one reported
+  # the second one as an unrecognisable file -- so `--default` on a stock image
+  # told the user to restore the stock file they already had, and exited 1.
+  if cmp -s "$MON" "$tmp" \
+     && grep -q "mode = \"$mode\"" "$MON" \
+     && grep -q "scale = $scale" "$MON"; then
+    rm -f "$tmp"
+    echo "  already set: $mode at scale $scale"
+    show
+    return 0
+  fi
   if cmp -s "$MON" "$tmp"; then
     rm -f "$tmp"
     echo "  !! nothing changed: $MON is not in the shape this tool edits."
@@ -97,6 +109,10 @@ apply() {
     show
     return 1
   fi
+  # The backup is taken HERE, once we know the file is about to change. Taken
+  # at the top of the function it accumulated one copy per invocation, including
+  # every run that changed nothing and returned 1.
+  cp -a "$MON" "$MON.bak.$(date +%s)"
   mv "$tmp" "$MON" || { rm -f "$tmp"; echo "  could not rewrite $MON" >&2; return 1; }
   if command -v hyprctl >/dev/null 2>&1 && hyprctl reload >/dev/null 2>&1; then
     echo "  applied and reloaded"

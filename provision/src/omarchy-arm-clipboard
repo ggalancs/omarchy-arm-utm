@@ -110,11 +110,17 @@ watch_folder() {
   fi
   touch "$FILE" 2>/dev/null || { echo "cannot write to $FILE" >&2; exit 1; }
   local last_local last_remote actual remote_sum
-  last_local="$(wl-paste --no-newline 2>/dev/null || true)"
+  # --type text, always. Without it wl-paste hands back whatever the source
+  # offers first, so an image selection came through as PNG bytes: command
+  # substitution strips the NULs, bash logs "ignored null byte in input" into
+  # the journal once a second for as long as that selection lives, and the
+  # mangled remains are pushed to the Mac's clipboard. The header of this file
+  # says "Text only"; the sibling agent already gets this right.
+  last_local="$(wl-paste --no-newline --type text 2>/dev/null || true)"
   last_remote="$(cat "$FILE" 2>/dev/null || true)"
   while :; do
     # guest -> file
-    actual="$(wl-paste --no-newline 2>/dev/null || true)"
+    actual="$(wl-paste --no-newline --type text 2>/dev/null || true)"
     if [ "$actual" != "$last_local" ] && [ -n "$actual" ]; then
       printf '%s' "$actual" > "$FILE"
       last_local="$actual"; last_remote="$actual"

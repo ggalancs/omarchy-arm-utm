@@ -69,6 +69,8 @@ unable
 unavailable
 unparseable
 unreachable
+unrecognisable
+unsatisfiable
 usable
 utilizable
 variable

@@ -518,3 +518,6 @@ validate_accounts
 ISO_CP
 STAGE1
 dst
+FILES
+RESTART_TS
+autologin_files

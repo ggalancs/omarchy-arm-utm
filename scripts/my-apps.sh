@@ -97,16 +97,32 @@ printf '  AUR           : %d\n' "${#FROM_AUR[@]}"
 printf '  no aarch64    : %d\n' "${#MISSING[@]}"
 echo "─────────────────────────────────────────────"
 
+# Two different answers, and they were being given as one. Without an AUR
+# helper nothing can be looked up in the AUR, so a name that is not in the
+# repositories is UNKNOWN, not absent: google-chrome, 1password-cli, typora and
+# localsend all have aarch64 AUR builds, and this told the user they are
+# "only published for x86_64". The warning that was meant to explain it could
+# not fire either -- FROM_AUR is only appended to inside the branch that
+# requires a helper, so `[ -z "$AUR" ] && [ ${#FROM_AUR[@]} -gt 0 ]` was
+# unsatisfiable by construction.
 if [ "${#MISSING[@]}" -gt 0 ]; then
   echo
-  amber "These have no aarch64 build and will not be installed:"
-  printf '    %s\n' "${MISSING[@]}"
-  echo
-  echo "  Not a fault in the image: that software is only published for x86_64."
-  echo "  Look for a native alternative, a web version, or an aarch64 Flatpak."
+  if [ -z "$AUR" ]; then
+    amber "These could not be checked: there is no AUR helper on this machine."
+    printf '    %s\n' "${MISSING[@]}"
+    echo
+    echo "  They may well have an aarch64 build in the AUR. Install a helper first:"
+    echo "    sudo pacman -S --needed base-devel git"
+    echo "    git clone https://aur.archlinux.org/yay-bin.git && cd yay-bin && makepkg -si"
+  else
+    amber "These have no aarch64 build and will not be installed:"
+    printf '    %s\n' "${MISSING[@]}"
+    echo
+    echo "  Not a fault in the image: $AUR was asked and neither the repositories"
+    echo "  nor the AUR publish them for aarch64."
+    echo "  Look for a native alternative, a web version, or an aarch64 Flatpak."
+  fi
 fi
-
-[ -z "$AUR" ] && [ "${#FROM_AUR[@]}" -gt 0 ] && amber "  (no yay or paru: AUR packages skipped)"
 
 if [ "$CHECK_ONLY" = 1 ]; then
   echo; echo "Check only. Drop --check to install."

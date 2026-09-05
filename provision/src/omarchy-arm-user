@@ -24,7 +24,14 @@ usage_header() { awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit
 CONF=/etc/sddm.conf.d/autologin.conf
 
 accounts() { awk -F: '$3>=1000 && $3<65000 {print $1}' /etc/passwd | sort; }
-current()  { [ -f "$CONF" ] && sed -n 's/^User=//p' "$CONF" | tail -1; }
+# Every file under /etc/sddm.conf.d that sets an autologin user, in the order
+# SDDM reads them, so the last one wins here as it does there. Reading only
+# $CONF was wrong in both directions: the shipped image carries TWO of them --
+# stage2 writes autologin.conf and sanitize writes 20-autologin.conf -- and
+# 'a' sorts after '2', so the file this tool knew about is the one that wins
+# while the other stays in force behind it.
+autologin_files() { grep -ls '^\[Autologin\]' /etc/sddm.conf.d/*.conf 2>/dev/null; }
+current()  { grep -h '^User=' /etc/sddm.conf.d/*.conf 2>/dev/null | tail -1 | cut -d= -f2; }
 
 case "${1:-}" in
   -h|--help) usage_header; exit 0 ;;
@@ -43,8 +50,17 @@ case "${1:-}" in
   # --preguntar was an undocumented Spanish alias; the documented spelling is
   # --ask, and it is the only one now.
   --ask)
-    [ -f "$CONF" ] || { echo "It was already asking for username and password."; exit 0; }
-    sudo rm -f "$CONF" || exit 1
+    # ALL of them. Removing one of two left the other's [Autologin] block in
+    # force: the machine went on logging in without a password while this
+    # command reported it had stopped, and `omarchy-arm-user` with no argument
+    # agreed with it, because both read the same single file.
+    FILES=$(autologin_files)
+    [ -n "$FILES" ] || { echo "It was already asking for username and password."; exit 0; }
+    for f in $FILES; do
+      sudo rm -f "$f" || exit 1
+      echo "  removed $f"
+    done
+    [ -z "$(current)" ] || { echo "!! something still sets an autologin user; not done." >&2; exit 1; }
     echo "Done: from the next boot SDDM will ask for username and password."
     echo
     echo "NOTE: the Omarchy SDDM theme shows the last user who logged in. If it"

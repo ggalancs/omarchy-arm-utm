@@ -3267,7 +3267,12 @@ have() { command -v "$1" >/dev/null 2>&1; }
 # hour) to reinstall what is already there.
 is_installed() {
   case "$1" in
-    1password)     pacman -Q 1password        >/dev/null 2>&1 || [ -d /opt/1Password ] ;;
+    # NOT `[ -d /opt/1Password ]`: do_1password creates that directory before
+    # it copies anything, so a failed install left it behind and the tool then
+    # answered "already installed in this image" for ever -- contradicting the
+    # "failed: 1password" it had printed a minute earlier. The test here is the
+    # same one do_1password itself accepts as success.
+    1password)     pacman -Q 1password >/dev/null 2>&1 || have 1password ;;
     1password-cli) have op ;;
     # The BINARY, not the directory: an empty /opt/obsidian is what a failed
     # install used to leave behind, and it read as success.
@@ -3298,7 +3303,14 @@ aur_build() {
   # exist while $dir is built, and with set -u the script aborts.
   local pkg="$1" want="${2:-$1}"
   local dir="$WORK/$pkg" base
-  pacman -Q "$want" >/dev/null 2>&1 && { ok "$want already installed"; return 0; }
+  # FORCE has to reach here too, or `--force <aur item>` is a documented flag
+  # that silently does nothing: this short-circuit ran before any of the build.
+  # Written as a plain `if` rather than an && || chain, whose precedence is the
+  # kind of thing that reads correct and is not.
+  if [ "${FORCE:-0}" != 1 ] && pacman -Q "$want" >/dev/null 2>&1; then
+    ok "$want already installed"
+    return 0
+  fi
 
   base=$(curl -fsSL --max-time 20 "https://aur.archlinux.org/rpc/v5/info?arg[]=$pkg" \
          | sed -n 's/.*"PackageBase":"\([^"]*\)".*/\1/p' | head -1)
@@ -3460,13 +3472,22 @@ do_spotify_web() {
   if ! have google-chrome-stable; then
     warn "without Google Chrome the Spotify web app will not play: install 'chrome' first"
   fi
+  # The failure has to be reported AND returned. `&& ok` said nothing when the
+  # command failed, the function went on to return 0, and the run's summary
+  # listed Spotify as installed over a menu entry that was never created.
   if have omarchy-webapp-install; then
-    omarchy-webapp-install "Spotify" "https://open.spotify.com" \
-      "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/spotify.png" \
-      "$(have google-chrome-stable && echo 'google-chrome-stable --app=https://open.spotify.com')" \
-      >/dev/null 2>&1 && ok "launcher added to the application menu"
+    if omarchy-webapp-install "Spotify" "https://open.spotify.com" \
+         "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/spotify.png" \
+         "$(have google-chrome-stable && echo 'google-chrome-stable --app=https://open.spotify.com')" \
+         >/dev/null 2>&1; then
+      ok "launcher added to the application menu"
+    else
+      fail "omarchy-webapp-install could not create the launcher"
+      return 1
+    fi
   else
-    warn "omarchy-webapp-install is not available"
+    fail "omarchy-webapp-install is not available on this image"
+    return 1
   fi
   # Rebind SUPER+SHIFT+M, which in Omarchy points at the native binary
   local f="$HOME/.config/hypr/bindings.lua"
@@ -3641,10 +3662,18 @@ cat > "$W/provision/armsync.sh" <<'__PAYLOAD_PROVISION_ARMSYNC_SH__'
 set -uo pipefail
 TREE=/usr/share/omarchy
 
-git -C "$TREE" rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
-
 # The tree may belong to the user (development VM) or to root (shipped image)
 if [ -w "$TREE/.git" ]; then GIT=(git -C "$TREE"); else GIT=(sudo git -C "$TREE"); fi
+
+# The gate runs through $GIT, and it has to. Run unprivileged against the
+# root-owned tree of a distributed image, git refuses with "detected dubious
+# ownership" and exits 128 -- so `|| exit 0` swallowed it and the hook silently
+# did nothing on exactly the images it was written for. The next line already
+# knew the tree might be root's; the check above it did not.
+if ! "${GIT[@]}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "  $TREE is not a git checkout, or git will not read it; the Omarchy tree is NOT being updated" >&2
+  exit 0
+fi
 
 echo -e "\e[32m\nUpdate the Omarchy tree (git checkout)\e[0m"
 before=$("${GIT[@]}" rev-parse --short HEAD 2>/dev/null)
@@ -3669,8 +3698,14 @@ for f in "$TREE"/bin/*; do
   sudo ln -sfn "/usr/share/omarchy/bin/$b" "$t" 2>/dev/null && n=$((n+1))
 done
 [ "$n" -gt 0 ] && echo "  $n new binaries linked into /usr/bin"
-# Links pointing at commands already removed from the tree
-sudo find /usr/bin -xtype l -delete 2>/dev/null || true
+# Links pointing at commands already removed from the tree -- OURS, and only
+# ours. This was `find /usr/bin -xtype l -delete` with no restriction, so it
+# deleted every broken symlink in /usr/bin as root, silently: one left by a
+# third-party installer, or a pacman-owned link whose target had gone, went
+# with them. This hook creates links into /usr/share/omarchy/bin and those are
+# the only ones it may remove.
+sudo find /usr/bin -maxdepth 1 -xtype l -lname '/usr/share/omarchy/*' -print -delete 2>/dev/null \
+  | sed 's|^|  removed stale link: |' || true
 exit 0
 __PAYLOAD_PROVISION_ARMSYNC_SH__
 chmod +x "$W/provision/armsync.sh"
@@ -3788,11 +3823,17 @@ watch_folder() {
   fi
   touch "$FILE" 2>/dev/null || { echo "cannot write to $FILE" >&2; exit 1; }
   local last_local last_remote actual remote_sum
-  last_local="$(wl-paste --no-newline 2>/dev/null || true)"
+  # --type text, always. Without it wl-paste hands back whatever the source
+  # offers first, so an image selection came through as PNG bytes: command
+  # substitution strips the NULs, bash logs "ignored null byte in input" into
+  # the journal once a second for as long as that selection lives, and the
+  # mangled remains are pushed to the Mac's clipboard. The header of this file
+  # says "Text only"; the sibling agent already gets this right.
+  last_local="$(wl-paste --no-newline --type text 2>/dev/null || true)"
   last_remote="$(cat "$FILE" 2>/dev/null || true)"
   while :; do
     # guest -> file
-    actual="$(wl-paste --no-newline 2>/dev/null || true)"
+    actual="$(wl-paste --no-newline --type text 2>/dev/null || true)"
     if [ "$actual" != "$last_local" ] && [ -n "$actual" ]; then
       printf '%s' "$actual" > "$FILE"
       last_local="$actual"; last_remote="$actual"
@@ -4158,7 +4199,14 @@ usage_header() { awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit
 CONF=/etc/sddm.conf.d/autologin.conf
 
 accounts() { awk -F: '$3>=1000 && $3<65000 {print $1}' /etc/passwd | sort; }
-current()  { [ -f "$CONF" ] && sed -n 's/^User=//p' "$CONF" | tail -1; }
+# Every file under /etc/sddm.conf.d that sets an autologin user, in the order
+# SDDM reads them, so the last one wins here as it does there. Reading only
+# $CONF was wrong in both directions: the shipped image carries TWO of them --
+# stage2 writes autologin.conf and sanitize writes 20-autologin.conf -- and
+# 'a' sorts after '2', so the file this tool knew about is the one that wins
+# while the other stays in force behind it.
+autologin_files() { grep -ls '^\[Autologin\]' /etc/sddm.conf.d/*.conf 2>/dev/null; }
+current()  { grep -h '^User=' /etc/sddm.conf.d/*.conf 2>/dev/null | tail -1 | cut -d= -f2; }
 
 case "${1:-}" in
   -h|--help) usage_header; exit 0 ;;
@@ -4177,8 +4225,17 @@ case "${1:-}" in
   # --preguntar was an undocumented Spanish alias; the documented spelling is
   # --ask, and it is the only one now.
   --ask)
-    [ -f "$CONF" ] || { echo "It was already asking for username and password."; exit 0; }
-    sudo rm -f "$CONF" || exit 1
+    # ALL of them. Removing one of two left the other's [Autologin] block in
+    # force: the machine went on logging in without a password while this
+    # command reported it had stopped, and `omarchy-arm-user` with no argument
+    # agreed with it, because both read the same single file.
+    FILES=$(autologin_files)
+    [ -n "$FILES" ] || { echo "It was already asking for username and password."; exit 0; }
+    for f in $FILES; do
+      sudo rm -f "$f" || exit 1
+      echo "  removed $f"
+    done
+    [ -z "$(current)" ] || { echo "!! something still sets an autologin user; not done." >&2; exit 1; }
     echo "Done: from the next boot SDDM will ask for username and password."
     echo
     echo "NOTE: the Omarchy SDDM theme shows the last user who logged in. If it"
@@ -4537,7 +4594,6 @@ show() {
 
 apply() {
   local mode="$1" scale="$2" gdk="$3" tmp
-  cp -a "$MON" "$MON.bak.$(date +%s)"
   # A temporary file and mv rather than `sed -i`: in-place editing needs an
   # empty argument on BSD sed and no argument on GNU, so `sed -i` would only
   # run on one of them. This runs on the guest, but a script that cannot be
@@ -4553,6 +4609,19 @@ apply() {
   # fixes/03 writes it -- and against those none of the three expressions match.
   # The user was told the resolution had been applied and reloaded, and one line
   # later show() printed the old configuration back at them.
+  # Two different reasons for "the file did not change", and they need
+  # different answers: the sed matched nothing, or it matched and the value was
+  # already what was asked for. The guard added to catch the first one reported
+  # the second one as an unrecognisable file -- so `--default` on a stock image
+  # told the user to restore the stock file they already had, and exited 1.
+  if cmp -s "$MON" "$tmp" \
+     && grep -q "mode = \"$mode\"" "$MON" \
+     && grep -q "scale = $scale" "$MON"; then
+    rm -f "$tmp"
+    echo "  already set: $mode at scale $scale"
+    show
+    return 0
+  fi
   if cmp -s "$MON" "$tmp"; then
     rm -f "$tmp"
     echo "  !! nothing changed: $MON is not in the shape this tool edits."
@@ -4561,6 +4630,10 @@ apply() {
     show
     return 1
   fi
+  # The backup is taken HERE, once we know the file is about to change. Taken
+  # at the top of the function it accumulated one copy per invocation, including
+  # every run that changed nothing and returned 1.
+  cp -a "$MON" "$MON.bak.$(date +%s)"
   mv "$tmp" "$MON" || { rm -f "$tmp"; echo "  could not rewrite $MON" >&2; return 1; }
   if command -v hyprctl >/dev/null 2>&1 && hyprctl reload >/dev/null 2>&1; then
     echo "  applied and reloaded"

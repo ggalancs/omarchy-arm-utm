@@ -352,7 +352,11 @@ PLAIN_ES = {'libre', 'libres', 'fichero', 'ficheros', 'carpeta', 'carpetas',
             'pantalla', 'pantallas', 'tema', 'temas', 'fondo', 'fondos',
             'sistema', 'sistemas', 'ajuste', 'ajustes', 'resumen', 'resumenes',
             'modulo', 'modulos', 'enlace', 'enlaces', 'vuelta', 'vueltas',
-            'binario', 'binarios', 'ruta', 'salida', 'entrada'}
+            'binario', 'binarios', 'ruta', 'salida', 'entrada',
+            # `falla` slipped past a list that held `fallo` and `fallara`: the
+            # third person singular of the present is the form a log label
+            # actually uses.
+            'falla', 'fallan', 'fallo', 'fallos', 'fallan'}
 # Technical English that a general wordlist tends not to carry, and that would
 # otherwise trip the morphology.
 # 'timezone' is the reason this list exists: it is not in the dictionary, and
