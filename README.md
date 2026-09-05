@@ -50,13 +50,29 @@ default branch **`quattro`** (4.x). They are different products:
 | Hyprland config | `.conf` | **Lua** (`hyprland.lua`, `bootstrap.lua`) |
 | Distribution | scripts in `~/.local/share` | **pacman package** in `/usr/share/omarchy` |
 
-The package itself is **`arch=('any')`** — pure scripts, Lua and QML. What is
-x86_64-only is the *repository* it is published in, so on ARM you cannot
-`pacman -S omarchy` and the files never land. Copy just the dotfiles and
-`OMARCHY_PATH` goes unset, `bashrc` errors out, Hyprland cannot find
+What is x86_64-only is the *repository* the package is published in, so on ARM
+you cannot `pacman -S omarchy` and the files never land. Copy just the dotfiles
+and `OMARCHY_PATH` goes unset, `bashrc` errors out, Hyprland cannot find
 `bootstrap.lua`, and you get a bare compositor instead of a desktop.
 `stage3.sh` reproduces by hand what that package would have installed, into
-`/usr/bin` — the same place upstream uses. An earlier version put them in
+`/usr/bin` — the same place upstream uses.
+
+> **Correction, 2026-09-04.** This section used to say the package is
+> **`arch=('any')`**. That was true when it was written and **it is not any
+> more**: on 2026-09-02, `omacom-io/omarchy-pkgs` commit `4ed5f14` changed
+> `omarchy` and `omarchy-settings` to `arch=('x86_64' 'aarch64')`, each with its
+> own `depends_<arch>` and a `package()` that drops the x86 boot and memory
+> stack on ARM. The *conclusion* is unchanged and re-verified the same day:
+> `pkgs.omarchy.org/stable/aarch64/omarchy.db` and
+> `stable-mirror.omarchy.org/core/os/aarch64/core.db` are both **404** while
+> their x86_64 counterparts are **200**. The recipe can be built for aarch64;
+> the repository still does not exist.
+>
+> That change is what makes a second builder possible, and the two now differ
+> exactly here: `build-omarchy-arm.sh` — the one this README describes, and the
+> one that produced the published image — **reproduces** the package by hand.
+> `build-omarchy-arm-pkg.sh` **builds and installs** it. See
+> [README-PKG.md](README-PKG.md). An earlier version put them in
 `/usr/local/bin`, which seemed tidier but broke things: the tree hardcodes
 `/usr/bin/omarchy-*` in thirteen places, five of them `.service` files.
 `/usr/local/bin` is still used, but only for the few ARM-specific wrappers that
@@ -192,6 +208,16 @@ the paths were.
 have, run [`fixes/18-avisos-que-no-se-apagan.sh`](fixes/18-avisos-que-no-se-apagan.sh)
 inside it — no need to re-download. For the clipboard, run
 [`fixes/19-portapapeles.sh`](fixes/19-portapapeles.sh) the same way.
+
+**And run [`fixes/20-seguridad-y-servicios.sh`](fixes/20-seguridad-y-servicios.sh)
+whichever image you have.** Auditing this build against Omarchy's own `install/`
+scripts on 2026-09-04 turned up five differences, two of them about security:
+the account was left in the `docker` group — which Omarchy refuses to grant,
+because it is equivalent to passwordless root — and no firewall was ever
+enabled, while the system this reproduces ships `ufw` turned on. It also
+enables `cups`, `avahi-daemon`, `power-profiles-daemon` and `systemd-resolved`,
+which upstream turns on and this build did not. Docker is not removed and
+`sudo docker` keeps working. The build script is fixed as well.
 
 ## What does not work
 

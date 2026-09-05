@@ -10,7 +10,7 @@
 #
 # It modifies nothing: -snapshot writes to a temporary overlay.
 set -uo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 
 BUNDLE="${1:-}"; OLD="${2:-builder}"
 [ -d "$BUNDLE" ] || { echo "usage: $0 <bundle.utm> [build-account]"; exit 2; }

@@ -16,7 +16,9 @@
 #  Anything that depends on the machine belongs in the repository, not in the
 #  environment.
 set -uo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+# || exit: a cd that fails would leave every check below running against
+# whatever directory the caller happened to be in, and reporting green for it.
+cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 
 pass=0; fail=0
 step() {
@@ -39,6 +41,31 @@ shellcheck_errors() {
   return $r
 }
 
+# The step above only ever looked at severity `error`, and a whole class of real
+# defect sat below that line unseen. On 2026-09-05 four scripts -- including
+# this one -- ran `cd "$(dirname ...)/.."` with no `|| exit`: a failed cd would
+# have left every check below it running against whatever directory the caller
+# happened to be in, and reporting green for it. shellcheck had been saying so,
+# as SC2164, since the day they were written.
+#
+# Scoped to the live sources. fixes/*.sh are one-shot repair scripts already
+# published, which people fetch by URL; their remaining warnings are cosmetic
+# and rewriting a shipped artifact for style is a bad trade.
+#
+# Three codes are excluded, each for a stated reason rather than to reach green:
+#   SC2046  the unquoted $(git ls-files) below splits into words on purpose
+#   SC2024  a redirect after sudo, into a file the invoking user already owns
+#   SC2034  an unused index in a `for i in $(seq ...)` retry loop
+shellcheck_warnings() {
+  command -v shellcheck >/dev/null 2>&1 || { echo "shellcheck not installed"; return 0; }
+  local f r=0
+  for f in build-omarchy-arm.sh provision/src/*.sh scripts/*.sh tests/*.sh; do
+    [ -f "$f" ] || continue
+    shellcheck -S warning -e SC1090,SC1091,SC2046,SC2024,SC2034 "$f" || r=1
+  done
+  return $r
+}
+
 echo "  running every step of .github/workflows/ci.yml"
 step "shell syntax"                shell_syntax
 step "python syntax"               python_syntax
@@ -53,6 +80,7 @@ step "unit tests"                        unit_tests
 step "published hash is coherent"        python3 scripts/check-published-hash.py
 step "documented flags exist"            python3 scripts/check-documented-flags.py
 step "shellcheck (errors only)"          shellcheck_errors
+step "shellcheck warnings (live src)"    shellcheck_warnings
 rm -f /tmp/ci-local.out
 echo
 if [ $fail -eq 0 ]; then

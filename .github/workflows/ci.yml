@@ -103,3 +103,17 @@ jobs:
             shellcheck -S error -e SC1090,SC1091 "$f" || fail=1
           done < <(git ls-files '*.sh')
           exit $fail
+
+      # Severity `error` alone missed SC2164 -- `cd` with no `|| exit` -- in
+      # four scripts, one of them the local CI runner itself, where it would
+      # have meant checking the wrong tree and calling it green. The excluded
+      # codes are listed with their reasons in scripts/ci-local.sh.
+      - name: ShellCheck warnings (live sources)
+        run: |
+          set -euo pipefail
+          fail=0
+          for f in build-omarchy-arm.sh provision/src/*.sh scripts/*.sh tests/*.sh; do
+            [ -f "$f" ] || continue
+            shellcheck -S warning -e SC1090,SC1091,SC2046,SC2024,SC2034 "$f" || fail=1
+          done
+          exit $fail

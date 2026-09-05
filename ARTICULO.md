@@ -69,6 +69,16 @@ instalar», que es un problema mucho más pequeño —lo cerraría publicar unos
 paquetes aarch64— y que además explica por qué varios proyectos de terceros han
 tenido que montarse su propio repositorio por separado.
 
+> **Nota del 2026-09-04.** Este artículo se escribió en agosto y aquel
+> `arch=('any')` ya no es cierto: el 2026-09-02, el commit `4ed5f14` de
+> `omacom-io/omarchy-pkgs` pasó `omarchy` y `omarchy-settings` a
+> `arch=('x86_64' 'aarch64')`. Lo demás sigue en pie, comprobado el mismo día:
+> `pkgs.omarchy.org/stable/aarch64/omarchy.db` sigue devolviendo **404** y el de
+> x86_64 **200**. Es decir: la receta ya se puede construir para aarch64, el
+> repositorio publicado sigue sin existir. La nota va aquí, fechada, en lugar de
+> reescribir el párrafo, por la misma razón que el propio artículo da dos
+> párrafos más abajo.
+
 Dejo el error a la vista en vez de reescribir la historia, porque es
 representativo: **verifiqué contra la rama equivocada**. `master` suena a rama
 principal; en este repositorio la de por defecto es `quattro`. La misma trampa
@@ -300,9 +310,11 @@ paquete coloca ficheros en rutas fijas del sistema:
 - `/usr/share/uwsm/env.d/10-omarchy` — el gancho para la sesión gráfica
 
 Aquí conviene precisar, porque yo mismo lo escribí mal al principio: **el
-paquete no es x86_64-only**. Su PKGBUILD declara `arch=('any')` —son scripts,
-Lua y QML— e instala los comandos en `/usr/bin`, con enlaces desde
+paquete no es x86_64-only**. Su PKGBUILD declaraba entonces `arch=('any')` —son
+scripts, Lua y QML— e instala los comandos en `/usr/bin`, con enlaces desde
 `/usr/share/omarchy/bin`. Lo x86_64-only es el **repositorio** donde se publica.
+(Desde el 2026-09-02 ese PKGBUILD declara `arch=('x86_64' 'aarch64')`; ver la
+nota del principio. El repositorio aarch64 sigue sin existir.)
 En ARM no hay de dónde instalarlo, y ahí empieza el problema: clonar el
 repositorio en el `$HOME` deja `OMARCHY_PATH` sin definir, el `.bashrc` da
 error, Hyprland no encuentra su `bootstrap.lua` y nada del autostart funciona.

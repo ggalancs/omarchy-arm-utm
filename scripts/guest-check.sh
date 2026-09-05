@@ -64,6 +64,31 @@ grep -vs -- '^[[:space:]]*--' /home/omarchy/.config/hypr/autostart.lua 2>/dev/nu
 
 echo "== hygiene =="
 [ "$(systemctl is-enabled sshd 2>&1)" = disabled ] && ok_ "sshd disabled" || bad "sshd: $(systemctl is-enabled sshd 2>&1)"
+
+# Added 2026-09-05, after finding all of this true of the image that was
+# actually published: the account was in the docker group -- which Omarchy
+# refuses to grant because it is equivalent to passwordless root -- and no
+# firewall was ever switched on. Checked here as well as in sanitize, because
+# this is the script that reads a FINISHED image rather than a chroot.
+if getent group docker >/dev/null 2>&1; then
+  getent group docker | cut -d: -f4 | tr "," "\n" | grep -qx omarchy \
+    && bad "omarchy is in the docker group: that is passwordless root" \
+    || ok_ "omarchy is not in the docker group"
+  [ "$(systemctl is-enabled docker.socket 2>&1)" = enabled ] \
+    && ok_ "docker on socket activation" \
+    || bad "docker.socket not enabled (upstream enables the socket, not the service)"
+fi
+[ "$(systemctl is-enabled ufw 2>&1)" = enabled ] && ok_ "ufw enabled" \
+                                                 || bad "ufw: $(systemctl is-enabled ufw 2>&1)"
+systemctl is-active --quiet ufw && ok_ "ufw active" || bad "ufw is enabled but not running"
+grep -qs "^ENABLED=yes" /etc/ufw/ufw.conf && ok_ "ufw.conf ENABLED=yes" \
+                                          || bad "ufw.conf does not say ENABLED=yes"
+grep -qs '^DEFAULT_INPUT_POLICY="DROP"' /etc/default/ufw && ok_ "ufw denies incoming" \
+                                          || bad "ufw does not deny incoming by default"
+for u in systemd-resolved cups avahi-daemon power-profiles-daemon; do
+  [ "$(systemctl is-enabled $u 2>&1)" = enabled ] && ok_ "$u enabled" \
+                                                  || bad "$u: $(systemctl is-enabled $u 2>&1)"
+done
 [ "$(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l)" -eq 0 ] && ok_ "no ssh host keys" || bad "ssh host keys left behind"
 [ -f /root/failed-packages.txt ] && bad "/root/failed-packages.txt left behind" || ok_ "no leftovers in /root"
 # One check for a whole class of failures. stage3 records which tools failed
@@ -102,11 +127,13 @@ F=$(systemctl --failed --no-legend | wc -l); U=$(systemctl --user --failed --no-
 [ "$F" -eq 0 ] && ok_ "no failed system units" || { bad "$F failed units"; systemctl --failed --no-legend | sed 's/^/         /'; }
 [ "$U" -eq 0 ] && ok_ "no failed user units" || { bad "$U failed user units"; systemctl --user --failed --no-legend | sed 's/^/         /'; }
 # A dangling link is acceptable only if a distribution package left it that way.
-for l in $(find /usr/bin /usr/local/bin -xtype l 2>/dev/null); do
+# read -r, not `for l in $(find ...)`: a path with a space became two tokens
+# and both were then reported as dangling links that do not exist.
+while IFS= read -r -d "" l; do
   owner=$(pacman -Qoq "$l" 2>/dev/null)
   [ -n "$owner" ] && ok_ "dangling link $l (packaged by $owner, not ours)" \
                    || bad "dangling link with no owner: $l"
-done
+done < <(find /usr/bin /usr/local/bin -xtype l -print0 2>/dev/null)
 # What the image ships as the machine's own settings. Both are the builder's
 # configuration baked into an image for strangers, and neither was checked here
 # before: the keyboard cost two users hours (#1, #2) and the timezone shipped as

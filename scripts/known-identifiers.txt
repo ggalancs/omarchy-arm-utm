@@ -335,3 +335,22 @@ write_payloads
 write_readme
 wsha
 xmlq
+
+# Added 2026-09-04 with the security fixes: the satisfiability
+# pre-check and the invariants that keep the docker group, the firewall
+# and systemd-resolved from regressing.
+DOCKER_CHANGED
+USER_NAME
+_svc
+dep
+link
+member
+path
+pkgs
+repo
+st3
+svc
+SUDO
+_waited
+unit_enabled
+shellcheck_warnings

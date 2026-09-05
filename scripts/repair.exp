@@ -28,11 +28,21 @@ wait_for "TOK_SH_0" 12 "prompt" 60
 send "mkdir -p /media/prov; for d in /dev/vd? /dev/sr?; do mount -t iso9660 -o ro \$d /media/prov 2>/dev/null && \[ -f /media/prov/repair.sh \] && break; umount /media/prov 2>/dev/null; done; ls /media/prov; echo TOK_PROV_\$?\r"
 wait_for "TOK_PROV_0" 13 "provisioning ISO" 120
 
-set timeout -1
+# NOT `set timeout -1`, and build.exp says why in its own words: it used to be
+# that, and a stalled mirror hung a build for twenty hours in "Retrieving
+# packages...". That lesson was applied there and never here, in the file that
+# runs sanitize -- which removes 469 MB of documentation, walks the whole
+# filesystem twice and runs fstrim. Any of those stalling used to mean waiting
+# for ever, with no output and no way to tell a slow run from a dead one.
+#
+# 3600 s is generous for a phase that takes about three minutes, and it is a
+# number. A run that reaches it has hung.
+set timeout 3600
 send "export FIXSCRIPT=$FIX; sh /media/prov/repair.sh 2>&1 | tee /tmp/repair.log\r"
 expect {
     -ex "TOK_REPAIR_0" { puts "\n\n===== REPAIR COMPLETED =====\n" }
     -re {TOK_REPAIR_[1-9][0-9]*} { puts "\n\n!!!!! THE REPAIR FAILED !!!!!\n"; exit 20 }
+    timeout { puts "\n!! the repair produced nothing for 3600 s: it has hung, not stalled"; exit 21 }
     eof { puts "\n!! EOF"; exit 16 }
 }
 set timeout 300

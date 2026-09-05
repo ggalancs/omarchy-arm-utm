@@ -324,6 +324,20 @@ curl -s .../omarchy-iso/main/plans/aarch64-support.md | head -20
         cerraría publicar unos 25 paquetes aarch64— y explica por qué varios proyectos de
         terceros han tenido que montarse su propio repositorio por separado.
       </p>
+      <blockquote>
+        <p>
+          <strong>Nota del 04-09-2026.</strong> Este artículo se escribió en agosto y aquel
+          <code>arch=('any')</code> ya no es cierto: el 02-09-2026, el commit
+          <code>4ed5f14</code> de <code>omacom-io/omarchy-pkgs</code> pasó
+          <code>omarchy</code> y <code>omarchy-settings</code> a
+          <code>arch=('x86_64' 'aarch64')</code>. Lo demás sigue en pie, comprobado el mismo
+          día: <code>pkgs.omarchy.org/stable/aarch64/omarchy.db</code> sigue devolviendo
+          <strong>404</strong> y el de x86_64 <strong>200</strong>. Es decir: la receta ya se
+          puede construir para aarch64, el repositorio publicado sigue sin existir. La nota va
+          aquí, fechada, en lugar de reescribir el párrafo, por la misma razón que el propio
+          artículo da dos párrafos más abajo.
+        </p>
+      </blockquote>
       <p class="note">
         Dejo el error a la vista en vez de reescribir la historia, porque es
         representativo: <strong>verifiqué contra la rama equivocada</strong>.
@@ -562,7 +576,8 @@ curl -s .../omarchy/quattro/version   <span class="o">→ 4.0.0.alpha</span></co
         </ul>
         <p>
           Aquí conviene precisar, porque yo mismo lo escribí mal al principio: <strong>el
-          paquete no es x86_64-only</strong>. Su PKGBUILD declara <code>arch=('any')</code>
+          paquete no es x86_64-only</strong>. Su PKGBUILD declaraba entonces
+          <code>arch=('any')</code>
           —son scripts, Lua y QML— e instala los comandos en <code>/usr/bin</code>, con
           enlaces desde <code>/usr/share/omarchy/bin</code>. Lo x86_64-only es el
           <strong>repositorio</strong> donde se publica. En ARM no hay de dónde instalarlo,

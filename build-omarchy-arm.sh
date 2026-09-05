@@ -283,6 +283,15 @@ ph_fetch() {
     mv "$W/dl/$(basename "$iso").parcial" "$iso"
     [[ -n $wsha ]] && info "sha256 verified" || warn "no published sha256: not verified"
   fi
+  # When the ISO was already on disk from an earlier run, $latest was never
+  # set, so this pinned against the hardcoded ALPINE_ISO name. If the cached
+  # file was a different point release, that name is not in the pins file,
+  # check_pin warned and RETURNED 0 -- a check that cannot fail, which is the
+  # one thing this project keeps promising not to ship. The reviewed name comes
+  # from the pins file itself.
+  if [[ -z ${latest:-} && -r $PINS ]]; then
+    latest=$(awk '$2 ~ /^alpine-virt-.*-aarch64\.iso$/ {print $2; exit}' "$PINS")
+  fi
   check_pin "$iso" "${latest:-$ALPINE_ISO}"
   ok "Alpine $(du -h "$iso" | cut -f1)"
 
@@ -356,8 +365,14 @@ networkmanager btrfs-progs efibootmgr spice-vdagent qemu-guest-agent""".split()
 heavy = set("""libreoffice-fresh kdenlive signal-desktop obs-studio moonlight-qt tesseract
 tesseract-data-eng gpu-screen-recorder xournalpp evince system-config-printer cups cups-browsed
 cups-filters cups-pdf docker docker-buildx docker-compose rust ruby clang llvm luarocks
-mariadb-libs postgresql-libs python-poetry-core tree-sitter-cli usage ufw fcitx5 fcitx5-gtk
+mariadb-libs postgresql-libs python-poetry-core tree-sitter-cli usage fcitx5 fcitx5-gtk
 fcitx5-qt bolt kernel-modules-hook ffmpegthumbnailer lazydocker firefox dotnet-runtime""".split())
+# ufw is deliberately absent from that list. It used to be, which made it
+# best-effort: if it failed to install nothing stopped, and the image shipped
+# with no firewall while claiming to reproduce a system that ships one on. It
+# is small, it is in Arch Linux ARM, and Omarchy lists it in
+# omarchy-base.packages -- so a build that cannot install it should stop at
+# minute ten rather than fail its own invariants at minute ninety.
 core, ext, miss = [], [], []
 for p in pkgs + infra:
     p = subs.get(p, p)
@@ -379,6 +394,22 @@ PYEOF
   # late, far from the cause.
   [ -s "$W/provision/packages-core.txt" ] || die "the package lists could not be written"
   ok "lists generated against branch '$OMARCHY_REF': $(grep -cvE '^#|^$' "$W/provision/packages-core.txt") in core, $(grep -cvE '^#|^$' "$W/provision/packages-extra.txt") extras"
+
+  # Ten seconds here against forty minutes there. On 2026-09-04 a build got as
+  # far as unpacking the rootfs, partitioning, installing a base system and
+  # running a full -Syu before pacman said hyprland could not be installed at
+  # all: Arch Linux ARM had aquamarine providing libaquamarine.so=14-64 while
+  # hyprland and hyprtoolkit, in the same repository, were still built against
+  # =13-64. Nothing this build does afterwards can work around that, so ask
+  # before spending the forty minutes.
+  local SATCHECK; SATCHECK="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scripts/check-alarm-satisfiable.py"
+  if [ "${ALARM_SKIP_SAT:-}" = 1 ]; then
+    warn "satisfiability pre-check skipped (ALARM_SKIP_SAT=1)"
+  elif [ -x "$SATCHECK" ]; then
+    info "checking Arch Linux ARM can actually satisfy the core list..."
+    python3 "$SATCHECK" "$W/provision/packages-core.txt" \
+      || die "Arch Linux ARM cannot satisfy the core package list right now (see above). This is upstream and transient; try again when the mirrors catch up."
+  fi
 }
 
 # ────────────────────────── payloads (written into $W) ─────────────────────
@@ -704,9 +735,20 @@ echo "  ESP:"; find /boot/EFI /boot/loader -maxdepth 3 | sort
 # ---------------------------------------------------------------- network
 log "network: NetworkManager (the tarball's systemd-networkd is disabled)"
 systemctl disable systemd-networkd.service systemd-networkd.socket 2>/dev/null || true
-systemctl disable systemd-resolved.service 2>/dev/null || true
 rm -f /etc/systemd/network/*.network 2>/dev/null || true
 systemctl enable NetworkManager.service
+# systemd-resolved is ENABLED, not disabled. It used to be disabled here,
+# alongside networkd, which reads as one decision but is two: Omarchy turns
+# resolved on (install/config/enable-services.sh) and ships drop-ins for it in
+# /etc/systemd/resolved.conf.d/, so with it off those files did nothing.
+# NetworkManager detects resolved and hands DNS to it; the stub file below is
+# the pairing Arch documents for that.
+systemctl enable systemd-resolved.service 2>/dev/null || true
+# The /etc/resolv.conf stub symlink resolved expects is NOT created here. It
+# points at /run/systemd/resolve/stub-resolv.conf, which does not exist inside
+# this chroot, and everything after this line -- around 1,500 packages and the
+# whole of stage3 -- still needs working DNS. It is created at the end of the
+# stage, once nothing else has to resolve a name.
 systemctl enable systemd-timesyncd.service 2>/dev/null || true
 
 # ---------------------------------------------------------------- desktop
@@ -846,8 +888,64 @@ FSTAB
 fi
 echo "  /mnt/share prepared (VirtFS through fstab, WebDAV with omarchy-arm-share)"
 systemctl enable bluetooth.service 2>/dev/null || true
-systemctl enable docker.service 2>/dev/null || true
-usermod -aG docker "$VM_USER" 2>/dev/null || true
+
+# ---------------------------------------------------------------- docker
+# The user is NOT added to the docker group, and that is the whole point of
+# this block. It used to be, and it was wrong: Omarchy 4 refuses to do it and
+# says why in install/config/docker.sh --
+#
+#   "The Docker daemon runs as root and its socket is root-owned, so membership
+#    in the docker group is equivalent to passwordless root: any process in it
+#    can `docker run -v /:/host` and rewrite the host as root. We therefore do
+#    NOT add the install user to the docker group by default."
+#
+# Every image published before 2026-09-04 shipped that membership, so the
+# account handed to strangers had root without a password. Removing it here
+# fixes future builds; fixes/20-seguridad-y-servicios.sh fixes the images that
+# are already out there.
+#
+# Anyone who wants the convenience back opts in, behind a warning, with
+# `omarchy-setup-security-sudoless-docker` (Setup > Security > Sudoless Docker).
+#
+# docker.socket, not docker.service: socket activation is what upstream enables
+# (install/config/enable-services.sh), and it does not hold up boot.
+systemctl disable docker.service 2>/dev/null || true
+systemctl enable docker.socket 2>/dev/null || true
+echo "  docker: socket activation, and the user is NOT in the docker group"
+
+# ------------------------------------------------- the rest of enable-services
+# install/config/enable-services.sh, minus what a VM cannot have. These were
+# simply missing: without power-profiles-daemon the Omarchy power menu has
+# nobody to talk to, and without cups/avahi there is no printing or discovery.
+# Each one is best-effort: a name that is not installed is a no-op, not a
+# failure.
+for _svc in cups.service avahi-daemon.service power-profiles-daemon.service \
+            linux-modules-cleanup.service; do
+  systemctl enable "$_svc" 2>/dev/null && echo "  enabled $_svc" || echo "  (absent) $_svc"
+done
+
+# ---------------------------------------------------------------- firewall
+# install/config/firewall.sh: allow nothing in, everything out, plus the two
+# LocalSend ports. The image used to ship with no firewall at all while the
+# distribution it reproduces ships one turned on. ufw allows loopback by
+# default, so the SPICE WebDAV share on localhost:9843 is unaffected.
+if command -v ufw >/dev/null 2>&1; then
+  # No --force here. It is documented for enable/reset/delete, not for
+  # `default`, and with `|| true` after it a rejected flag would leave the
+  # policy unset without a word. install/config/firewall.sh calls it plainly,
+  # so this does too. The policy is verified in sanitize rather than assumed.
+  ufw default deny incoming  >/dev/null 2>&1 || warn "could not set the incoming policy"
+  ufw default allow outgoing >/dev/null 2>&1 || warn "could not set the outgoing policy"
+  ufw allow 53317/udp >/dev/null 2>&1 || true
+  ufw allow 53317/tcp >/dev/null 2>&1 || true
+  # Configured to come up on the installed system rather than mutating the
+  # firewall of the environment this chroot is running in.
+  sed -i 's/^ENABLED=.*/ENABLED=yes/' /etc/ufw/ufw.conf 2>/dev/null || true
+  systemctl enable ufw 2>/dev/null || true
+  echo "  ufw: deny incoming, allow outgoing, LocalSend 53317, enabled at boot"
+else
+  warn "ufw is not installed: the image will ship without a firewall"
+fi
 
 # ---------------------------------------------------------------- dotfiles
 log "stage 3: Omarchy dotfiles as $VM_USER"
@@ -957,6 +1055,27 @@ LIBGL_ALWAYS_SOFTWARE=1
 EOF
 # serial console, handy for debugging from the host
 systemctl enable serial-getty@ttyAMA0.service 2>/dev/null || true
+
+log "DNS"
+# The stub symlink resolved documents is NOT created, and that is a decision
+# taken from evidence rather than from the manual.
+#
+# Measured on the published image after enabling systemd-resolved on it: the
+# service comes up, NetworkManager notices it, `resolvectl status` reports
+# "resolv.conf mode: foreign", and names resolve. NetworkManager keeps writing
+# /etc/resolv.conf itself and everything works.
+#
+# Pointing /etc/resolv.conf at /run/systemd/resolve/stub-resolv.conf would be
+# the tidier pairing, and it carries a failure mode this one does not: if
+# resolved ever fails to start, that symlink dangles and the shipped image has
+# no DNS at all, on a machine somebody else is holding. The tidier arrangement
+# is not worth that on an image that goes out to strangers, and no build has
+# been able to run since the change was written to prove otherwise.
+#
+# What matters for parity is that resolved is enabled -- Omarchy ships
+# drop-ins in /etc/systemd/resolved.conf.d/ that did nothing with it off --
+# and that is done in the network block above.
+echo "  systemd-resolved enabled; NetworkManager keeps managing /etc/resolv.conf"
 
 log "cleanup"
 rm -f /etc/sudoers.d/99-install
@@ -1753,6 +1872,14 @@ OLD="${DIST_OLD_USER:-${VM_USER:-}}"
 NEW="${DIST_NEW_USER:-omarchy}"
 [ -n "$OLD" ] || { echo "sanitize: no idea which user to start from" >&2; exit 1; }
 getent passwd "$OLD" >/dev/null || { echo "sanitize: user '$OLD' does not exist" >&2; exit 1; }
+# NEW is checked too, and not only for existence: it is pasted into about
+# fifteen paths below, several of them arguments to `rm -rf` running as root.
+# A value like '../../etc' would have walked straight out of /home. The caller
+# validates it as well; this is the copy that runs with the power to do damage.
+case "$NEW" in
+  *[!a-z0-9_-]*|"" ) echo "sanitize: '$NEW' is not a valid account name" >&2; exit 1 ;;
+  [!a-z_]* )         echo "sanitize: '$NEW' must start with a letter" >&2; exit 1 ;;
+esac
 log()  { echo ""; echo "==> $*"; }
 warn() { echo "!!  $*" >&2; }
 
@@ -1856,7 +1983,10 @@ done
 rm -f /usr/local/bin/obsidian /usr/local/share/applications/obsidian.desktop 2>/dev/null || true
 # Removing /opt/1Password leaves its /usr/bin links pointing at nothing. The
 # same oversight as always: a text sweep does not see where a link points.
-for l in $(find /usr/bin /usr/local/bin -maxdepth 1 -xtype l 2>/dev/null); do
+# read -r, not `for l in $(find ...)`: a name with a space became two tokens,
+# and this loop removes files as root.
+find /usr/bin /usr/local/bin -maxdepth 1 -xtype l -print0 2>/dev/null |
+while IFS= read -r -d "" l; do
   case "$(readlink "$l")" in
     /opt/1Password/*|/opt/obsidian/*|/opt/typora/*)
       rm -f "$l"; echo "  dangling link removed: $l" ;;
@@ -2223,6 +2353,51 @@ else
 fi
 
 [ "$(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l)" -eq 0 ] && ok_ "no ssh host keys" || bad "ssh host keys left behind"
+
+# The three decisions that separate this image from the one shipped before
+# 2026-09-04. Checked here, on the finished filesystem, and not only in the
+# source: a static test proves the build script says the right thing, and this
+# proves the image actually came out that way.
+#
+# systemctl is not usable in a chroot, so these read the enable symlinks
+# directly. A unit masked to /dev/null is a symlink too, and does not count.
+unit_enabled() {
+  local u rc=1
+  while IFS= read -r u; do
+    [ "$(readlink "$u")" = /dev/null ] && continue
+    rc=0
+  done < <(find /etc/systemd/system -name "$1" -type l 2>/dev/null)
+  return $rc
+}
+
+# The one that mattered most: membership of the docker group is equivalent to
+# passwordless root, and every image published before 2026-09-04 granted it.
+if getent group docker >/dev/null 2>&1; then
+  if getent group docker | cut -d: -f4 | tr "," "\n" | grep -qx "$NEW"; then
+    bad "$NEW is in the docker group: that is passwordless root, and upstream refuses it"
+  else
+    ok_ "$NEW is not in the docker group"
+  fi
+fi
+# Not guarded by "if ufw is installed". Guarding it that way is how a check
+# stops being able to fail: no ufw, no check, and the image goes out with no
+# firewall and a green report. Its absence is the defect.
+if [ -d /etc/ufw ]; then
+  unit_enabled ufw.service && ok_ "ufw will start at boot" \
+    || bad "ufw is not enabled: the image would ship with no firewall"
+  grep -qs "^ENABLED=yes" /etc/ufw/ufw.conf && ok_ "ufw.conf says ENABLED=yes" \
+    || bad "ufw.conf does not say ENABLED=yes: ufw would start and do nothing"
+  # The policy itself, not just that ufw runs. `ufw default ...` is called with
+  # its failure tolerated, so this is the line that decides whether the image
+  # actually denies anything.
+  grep -qs '^DEFAULT_INPUT_POLICY="DROP"' /etc/default/ufw \
+    && ok_ "ufw denies incoming by default" \
+    || bad "ufw does not deny incoming: the firewall would run and allow everything"
+else
+  bad "ufw is not installed: the image would ship with no firewall"
+fi
+unit_enabled systemd-resolved.service && ok_ "systemd-resolved enabled" \
+  || bad "systemd-resolved is not enabled, and Omarchy ships drop-ins that need it"
 # The layout that ships. Not a cosmetic detail: with the builder's layout, a
 # user could not type ':' in nvim to fix it, and another could not type his own
 # password. Both cost hours and both were silent.
@@ -3625,11 +3800,21 @@ wait_for "TOK_SH_0" 12 "prompt" 60
 send "mkdir -p /media/prov; for d in /dev/vd? /dev/sr?; do mount -t iso9660 -o ro \$d /media/prov 2>/dev/null && \[ -f /media/prov/repair.sh \] && break; umount /media/prov 2>/dev/null; done; ls /media/prov; echo TOK_PROV_\$?\r"
 wait_for "TOK_PROV_0" 13 "provisioning ISO" 120
 
-set timeout -1
+# NOT `set timeout -1`, and build.exp says why in its own words: it used to be
+# that, and a stalled mirror hung a build for twenty hours in "Retrieving
+# packages...". That lesson was applied there and never here, in the file that
+# runs sanitize -- which removes 469 MB of documentation, walks the whole
+# filesystem twice and runs fstrim. Any of those stalling used to mean waiting
+# for ever, with no output and no way to tell a slow run from a dead one.
+#
+# 3600 s is generous for a phase that takes about three minutes, and it is a
+# number. A run that reaches it has hung.
+set timeout 3600
 send "export FIXSCRIPT=$FIX; sh /media/prov/repair.sh 2>&1 | tee /tmp/repair.log\r"
 expect {
     -ex "TOK_REPAIR_0" { puts "\n\n===== REPAIR COMPLETED =====\n" }
     -re {TOK_REPAIR_[1-9][0-9]*} { puts "\n\n!!!!! THE REPAIR FAILED !!!!!\n"; exit 20 }
+    timeout { puts "\n!! the repair produced nothing for 3600 s: it has hung, not stalled"; exit 21 }
     eof { puts "\n!! EOF"; exit 16 }
 }
 set timeout 300
@@ -4095,7 +4280,14 @@ ph_verify() {
   #      package does not install on aarch64. That is an Arch Linux ARM
   #      packaging fault, not ours; confirmed with pacman -Qo.
   #   U  >=6 user units installed: without them first-run fails in a loop
-  #   V  the tree's version starts with 4
+#   V  the tree's version starts with 4
+#   G  the account is NOT in the docker group. Every image published
+#      before 2026-09-04 put it there, which upstream refuses to do
+#      because it is equivalent to passwordless root. Checked on the
+#      booted image, not only in the build script, so it cannot come
+#      back quietly.
+#   F  ufw is enabled. The same images shipped with no firewall while
+#      the system they reproduce ships one turned on.
   # The previous threshold looked at /usr/local/bin, where the commands no
   # longer go: a guaranteed false positive the moment they moved to /usr/bin.
   local vlog="$W/logs/verify.log"
@@ -4140,7 +4332,7 @@ expect {
 #
 # C counts the five known ways the clipboard can die. None of them
 # needs a connected SPICE client, so they can all be checked here.
-send "H=\$(pgrep -c Hyprland); Q=\$(pgrep -c quickshell); B=\$(find /usr/bin -maxdepth 1 -name 'omarchy-*' | wc -l); R=\$(find /usr/bin /usr/local/bin -xtype l | wc -l); U=\$(find /usr/lib/systemd/user -maxdepth 1 -name 'omarchy-*.service' | wc -l); V=\$(cat /usr/share/omarchy/version 2>/dev/null | cut -d. -f1); C=0; test -x /usr/local/bin/omarchy-arm-vdagent && C=\$((C+1)); pgrep -af spice-vdagentd | grep -q -- ' -X' && C=\$((C+1)); systemctl is-active --quiet spice-vdagentd && C=\$((C+1)); systemctl --user is-active --quiet omarchy-arm-vdagent.service && C=\$((C+1)); grep -vs -- '^\[\[:space:]]*--' ~/.config/hypr/autostart.lua | grep -qs spice-vdagent || C=\$((C+1)); echo \"### H=\$H Q=\$Q BINS=\$B ROTOS=\$R UNITS=\$U VER=\$V CLIP=\$C/5\"; if \[ \$H -ge 1 ] && \[ \$Q -ge 1 ] && \[ \$B -ge 400 ] && \[ \$R -le 5 ] && \[ \$U -ge 6 ] && \[ \"\$V\" = 4 ] && \[ \$C -eq 5 ]; then echo VERD\"ICT_OK\"; else echo VERD\"ICT_KO\"; fi\r"
+send "H=\$(pgrep -c Hyprland); Q=\$(pgrep -c quickshell); B=\$(find /usr/bin -maxdepth 1 -name 'omarchy-*' | wc -l); R=\$(find /usr/bin /usr/local/bin -xtype l | wc -l); U=\$(find /usr/lib/systemd/user -maxdepth 1 -name 'omarchy-*.service' | wc -l); V=\$(cat /usr/share/omarchy/version 2>/dev/null | cut -d. -f1); G=\$(id -nG | grep -qw docker && echo 1 || echo 0); F=\$(systemctl is-enabled ufw >/dev/null 2>&1 && echo 1 || echo 0); C=0; test -x /usr/local/bin/omarchy-arm-vdagent && C=\$((C+1)); pgrep -af spice-vdagentd | grep -q -- ' -X' && C=\$((C+1)); systemctl is-active --quiet spice-vdagentd && C=\$((C+1)); systemctl --user is-active --quiet omarchy-arm-vdagent.service && C=\$((C+1)); grep -vs -- '^\[\[:space:]]*--' ~/.config/hypr/autostart.lua | grep -qs spice-vdagent || C=\$((C+1)); echo \"### H=\$H Q=\$Q BINS=\$B BROKEN=\$R UNITS=\$U VER=\$V DOCKERGRP=\$G UFW=\$F CLIP=\$C/5\"; if \[ \$H -ge 1 ] && \[ \$Q -ge 1 ] && \[ \$B -ge 400 ] && \[ \$R -le 5 ] && \[ \$U -ge 6 ] && \[ \"\$V\" = 4 ] && \[ \$G -eq 0 ] && \[ \$F -eq 1 ] && \[ \$C -eq 5 ]; then echo VERD\"ICT_OK\"; else echo VERD\"ICT_KO\"; fi\r"
 expect { -re {VERDICT_(OK|KO)} {} timeout {} }
 EXPEOF
   sed 's/\x1b\[[0-9;?=]*[a-zA-Z]//g' "$vlog" | grep -aE "^###" | tail -1
@@ -4163,7 +4355,21 @@ ph_sanitize() {
   phase "sanitize - a clean copy for distribution"
   write_payloads
   "$UTMCTL" stop "$VM_NAME" >/dev/null 2>&1 || true
-  while [[ $("$UTMCTL" status "$VM_NAME" 2>/dev/null) == started ]]; do sleep 3; done
+  # Bounded. This used to be an unconditional loop: a guest that never finished
+  # shutting down left the build spinning silently for ever, with no output to
+  # tell it apart from a slow one.
+  local _waited=0
+  while [[ $("$UTMCTL" status "$VM_NAME" 2>/dev/null) == started ]]; do
+    sleep 3; _waited=$((_waited+3))
+    if (( _waited >= 180 )); then
+      warn "'$VM_NAME' has not stopped after 180 s; forcing it"
+      "$UTMCTL" stop "$VM_NAME" --force >/dev/null 2>&1 || true
+      sleep 10
+      break
+    fi
+  done
+  [[ $("$UTMCTL" status "$VM_NAME" 2>/dev/null) == started ]] \
+    && die "'$VM_NAME' will not stop; sanitising a running disk would copy an inconsistent filesystem"
 
   local src; src=$(find "$DOCS/$VM_NAME.utm/Data" -name '*.qcow2' | head -1)
   [[ -s $src ]] || src="$W/vm/omarchy-arm.qcow2"
@@ -4718,6 +4924,12 @@ done
 # the distributable image's account.
 [[ $VM_USER =~ ^[a-z_][a-z0-9_-]{2,31}$ ]] \
   || die "VM_USER='$VM_USER' is not valid: lowercase, digits, '-' and '_', starting with a letter, 3-32 characters"
+# The same shape is required of DIST_NEW_USER. It was not, and it is used
+# unquoted-in-effect by sanitize.sh to build about fifteen paths under
+# /home/<name>, several of them arguments to `rm -rf`, as root. A value like
+# '../../etc' would have walked straight out of /home.
+[[ $DIST_NEW_USER =~ ^[a-z_][a-z0-9_-]{2,31}$ ]] \
+  || die "DIST_NEW_USER='$DIST_NEW_USER' is not valid: lowercase, digits, '-' and '_', starting with a letter, 3-32 characters"
 [[ $DIST_NEW_USER == *"$VM_USER"* ]] \
   && die "VM_USER='$VM_USER' is a substring of DIST_NEW_USER='$DIST_NEW_USER'; pick another"
 

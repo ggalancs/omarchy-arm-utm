@@ -8,7 +8,7 @@
 # mistake that no syntax check, no linter and no reading of the diff would
 # have shown.
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 
 fail=0
 for f in provision/src/stage3.sh build-omarchy-arm.sh; do

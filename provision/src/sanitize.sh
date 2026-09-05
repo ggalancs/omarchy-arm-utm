@@ -10,6 +10,14 @@ OLD="${DIST_OLD_USER:-${VM_USER:-}}"
 NEW="${DIST_NEW_USER:-omarchy}"
 [ -n "$OLD" ] || { echo "sanitize: no idea which user to start from" >&2; exit 1; }
 getent passwd "$OLD" >/dev/null || { echo "sanitize: user '$OLD' does not exist" >&2; exit 1; }
+# NEW is checked too, and not only for existence: it is pasted into about
+# fifteen paths below, several of them arguments to `rm -rf` running as root.
+# A value like '../../etc' would have walked straight out of /home. The caller
+# validates it as well; this is the copy that runs with the power to do damage.
+case "$NEW" in
+  *[!a-z0-9_-]*|"" ) echo "sanitize: '$NEW' is not a valid account name" >&2; exit 1 ;;
+  [!a-z_]* )         echo "sanitize: '$NEW' must start with a letter" >&2; exit 1 ;;
+esac
 log()  { echo ""; echo "==> $*"; }
 warn() { echo "!!  $*" >&2; }
 
@@ -113,7 +121,10 @@ done
 rm -f /usr/local/bin/obsidian /usr/local/share/applications/obsidian.desktop 2>/dev/null || true
 # Removing /opt/1Password leaves its /usr/bin links pointing at nothing. The
 # same oversight as always: a text sweep does not see where a link points.
-for l in $(find /usr/bin /usr/local/bin -maxdepth 1 -xtype l 2>/dev/null); do
+# read -r, not `for l in $(find ...)`: a name with a space became two tokens,
+# and this loop removes files as root.
+find /usr/bin /usr/local/bin -maxdepth 1 -xtype l -print0 2>/dev/null |
+while IFS= read -r -d "" l; do
   case "$(readlink "$l")" in
     /opt/1Password/*|/opt/obsidian/*|/opt/typora/*)
       rm -f "$l"; echo "  dangling link removed: $l" ;;
@@ -480,6 +491,51 @@ else
 fi
 
 [ "$(ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l)" -eq 0 ] && ok_ "no ssh host keys" || bad "ssh host keys left behind"
+
+# The three decisions that separate this image from the one shipped before
+# 2026-09-04. Checked here, on the finished filesystem, and not only in the
+# source: a static test proves the build script says the right thing, and this
+# proves the image actually came out that way.
+#
+# systemctl is not usable in a chroot, so these read the enable symlinks
+# directly. A unit masked to /dev/null is a symlink too, and does not count.
+unit_enabled() {
+  local u rc=1
+  while IFS= read -r u; do
+    [ "$(readlink "$u")" = /dev/null ] && continue
+    rc=0
+  done < <(find /etc/systemd/system -name "$1" -type l 2>/dev/null)
+  return $rc
+}
+
+# The one that mattered most: membership of the docker group is equivalent to
+# passwordless root, and every image published before 2026-09-04 granted it.
+if getent group docker >/dev/null 2>&1; then
+  if getent group docker | cut -d: -f4 | tr "," "\n" | grep -qx "$NEW"; then
+    bad "$NEW is in the docker group: that is passwordless root, and upstream refuses it"
+  else
+    ok_ "$NEW is not in the docker group"
+  fi
+fi
+# Not guarded by "if ufw is installed". Guarding it that way is how a check
+# stops being able to fail: no ufw, no check, and the image goes out with no
+# firewall and a green report. Its absence is the defect.
+if [ -d /etc/ufw ]; then
+  unit_enabled ufw.service && ok_ "ufw will start at boot" \
+    || bad "ufw is not enabled: the image would ship with no firewall"
+  grep -qs "^ENABLED=yes" /etc/ufw/ufw.conf && ok_ "ufw.conf says ENABLED=yes" \
+    || bad "ufw.conf does not say ENABLED=yes: ufw would start and do nothing"
+  # The policy itself, not just that ufw runs. `ufw default ...` is called with
+  # its failure tolerated, so this is the line that decides whether the image
+  # actually denies anything.
+  grep -qs '^DEFAULT_INPUT_POLICY="DROP"' /etc/default/ufw \
+    && ok_ "ufw denies incoming by default" \
+    || bad "ufw does not deny incoming: the firewall would run and allow everything"
+else
+  bad "ufw is not installed: the image would ship with no firewall"
+fi
+unit_enabled systemd-resolved.service && ok_ "systemd-resolved enabled" \
+  || bad "systemd-resolved is not enabled, and Omarchy ships drop-ins that need it"
 # The layout that ships. Not a cosmetic detail: with the builder's layout, a
 # user could not type ':' in nvim to fix it, and another could not type his own
 # password. Both cost hours and both were silent.

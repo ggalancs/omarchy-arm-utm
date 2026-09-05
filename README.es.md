@@ -20,8 +20,8 @@ totalmente automatizada desde macOS: ni un clic en la interfaz de UTM.
 
 ## Por qué no se instala Omarchy tal cual
 
-Omarchy 4 no se puede instalar en ARM64. Verificado contra las fuentes
-primarias:
+Omarchy 4 no se puede instalar en ARM64 *tal cual*. Verificado contra las
+fuentes primarias:
 
 | Comprobación (23-08-2026) | Resultado |
 |---|---|
@@ -55,13 +55,30 @@ defecto **`quattro`** (4.0.0.alpha). Son dos productos distintos:
 | Config de Hyprland | `.conf` | **Lua** (`hyprland.lua`, `bootstrap.lua`) |
 | Distribución | scripts en `~/.local/share` | **paquete pacman** en `/usr/share/omarchy` |
 
-El paquete en sí es **`arch=('any')`** —scripts, Lua y QML—. Lo que es
-x86_64-only es el *repositorio* donde se publica, así que en ARM no puedes
-`pacman -S omarchy` y los ficheros nunca llegan. Copiando solo los dotfiles,
-`OMARCHY_PATH` queda sin definir, el `bashrc` da error, Hyprland no encuentra
-`bootstrap.lua` y te quedas con un compositor pelado en vez de un escritorio.
-`stage3.sh` replica a mano lo que habría instalado ese paquete, en `/usr/bin`
-—el mismo sitio que usa upstream—. Una versión anterior los ponía en
+Lo que es x86_64-only es el *repositorio* donde se publica el paquete, así que
+en ARM no puedes `pacman -S omarchy` y los ficheros nunca llegan. Copiando solo
+los dotfiles, `OMARCHY_PATH` queda sin definir, el `bashrc` da error, Hyprland
+no encuentra `bootstrap.lua` y te quedas con un compositor pelado en vez de un
+escritorio. `stage3.sh` replica a mano lo que habría instalado ese paquete, en
+`/usr/bin` —el mismo sitio que usa upstream—.
+
+> **Corrección del 04-09-2026.** Aquí se decía que el paquete es
+> **`arch=('any')`**. Era cierto cuando se escribió y **ya no lo es**: el
+> 02-09-2026, el commit `4ed5f14` de `omacom-io/omarchy-pkgs` pasó `omarchy` y
+> `omarchy-settings` a `arch=('x86_64' 'aarch64')`, cada uno con su
+> `depends_<arch>` y un `package()` que retira el stack de arranque x86 en ARM.
+> La *conclusión* no cambia, y se ha vuelto a comprobar el mismo día:
+> `pkgs.omarchy.org/stable/aarch64/omarchy.db` y
+> `stable-mirror.omarchy.org/core/os/aarch64/core.db` siguen devolviendo **404**
+> mientras los de x86_64 devuelven **200**. La receta ya se puede construir para
+> aarch64; el repositorio publicado sigue sin existir.
+>
+> Eso hace que la frase de arriba —«no se puede instalar en ARM64»— sea cierta
+> para este builder y **ya no lo sea para el otro**. Ahí es exactamente donde se
+> separan los dos: `build-omarchy-arm.sh` —el que describe este documento y el
+> que produjo la imagen publicada— **replica** el paquete a mano.
+> `build-omarchy-arm-pkg.sh` lo **construye e instala**. Ver
+> [README-PKG.md](README-PKG.md). Una versión anterior los ponía en
 `/usr/local/bin`, que parecía más limpio pero rompía cosas: el árbol lleva trece
 rutas `/usr/bin/omarchy-*` cableadas, cinco en ficheros `.service`.
 `/usr/local/bin` se sigue usando, pero sólo para los pocos envoltorios propios
@@ -126,6 +143,17 @@ muchas rutas que se arreglaran.
 que la primera). Para arreglar una VM que ya tengas, sin volver a descargar,
 ejecuta dentro [`fixes/18-avisos-que-no-se-apagan.sh`](fixes/18-avisos-que-no-se-apagan.sh),
 y para el portapapeles [`fixes/19-portapapeles.sh`](fixes/19-portapapeles.sh).
+
+**Y ejecuta [`fixes/20-seguridad-y-servicios.sh`](fixes/20-seguridad-y-servicios.sh)
+tengas la imagen que tengas.** Auditar esta construcción contra los propios
+scripts `install/` de Omarchy el 04-09-2026 sacó cinco diferencias, dos de ellas
+de seguridad: la cuenta quedaba en el grupo `docker` —que Omarchy se niega a
+conceder, porque equivale a root sin contraseña— y nunca se activaba el
+cortafuegos, mientras que el sistema que esto reproduce trae `ufw` encendido.
+También habilita `cups`, `avahi-daemon`, `power-profiles-daemon` y
+`systemd-resolved`, que upstream enciende y esta construcción no. No desinstala
+Docker: `sudo docker` sigue funcionando. El script de construcción también está
+corregido.
 
 ## Uso
 

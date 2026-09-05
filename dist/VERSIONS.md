@@ -165,6 +165,35 @@ image no longer carries and what was proven about it:
   documentation, and the .NET SDK only needed to *build* Pinta and OBS. The Rust
   and Go toolchains stay, so `yay` still works.
 
+## Every image so far: run this one
+
+**2026-09-04.** Both files above ship five differences from Omarchy 4, and two
+of them are about security. Auditing the build against Omarchy's own
+`install/` scripts turned them up:
+
+- **The account is in the `docker` group.** Omarchy 4 refuses to grant it and
+  says why in `install/config/docker.sh`: *"membership in the docker group is
+  equivalent to passwordless root: any process in it can `docker run -v /:/host`
+  and rewrite the host as root"*. The build granted it and the sanitising step
+  never took it away.
+- **No firewall.** `install/config/firewall.sh` turns `ufw` on with "deny
+  incoming, allow outgoing" plus the LocalSend ports. The build never enabled
+  it, so the image shipped with the firewall off.
+- `cups`, `avahi-daemon`, `power-profiles-daemon` and `linux-modules-cleanup`
+  were never enabled — without the third, Omarchy's power menu has nobody to
+  talk to.
+- `systemd-resolved` was disabled, while Omarchy enables it and ships drop-ins
+  for it that therefore did nothing.
+
+Run this inside the VM. It does not remove Docker and `sudo docker` keeps
+working:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ggalancs/omarchy-arm-utm/main/fixes/20-seguridad-y-servicios.sh | bash
+```
+
+The build script is fixed too, so images built from now on are born correct.
+
 ## Already downloaded the first one?
 
 You do not need to fetch 3.6 GB. Run these inside the VM:

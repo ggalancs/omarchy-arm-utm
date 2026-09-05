@@ -166,9 +166,20 @@ echo "  ESP:"; find /boot/EFI /boot/loader -maxdepth 3 | sort
 # ---------------------------------------------------------------- network
 log "network: NetworkManager (the tarball's systemd-networkd is disabled)"
 systemctl disable systemd-networkd.service systemd-networkd.socket 2>/dev/null || true
-systemctl disable systemd-resolved.service 2>/dev/null || true
 rm -f /etc/systemd/network/*.network 2>/dev/null || true
 systemctl enable NetworkManager.service
+# systemd-resolved is ENABLED, not disabled. It used to be disabled here,
+# alongside networkd, which reads as one decision but is two: Omarchy turns
+# resolved on (install/config/enable-services.sh) and ships drop-ins for it in
+# /etc/systemd/resolved.conf.d/, so with it off those files did nothing.
+# NetworkManager detects resolved and hands DNS to it; the stub file below is
+# the pairing Arch documents for that.
+systemctl enable systemd-resolved.service 2>/dev/null || true
+# The /etc/resolv.conf stub symlink resolved expects is NOT created here. It
+# points at /run/systemd/resolve/stub-resolv.conf, which does not exist inside
+# this chroot, and everything after this line -- around 1,500 packages and the
+# whole of stage3 -- still needs working DNS. It is created at the end of the
+# stage, once nothing else has to resolve a name.
 systemctl enable systemd-timesyncd.service 2>/dev/null || true
 
 # ---------------------------------------------------------------- desktop
@@ -308,8 +319,64 @@ FSTAB
 fi
 echo "  /mnt/share prepared (VirtFS through fstab, WebDAV with omarchy-arm-share)"
 systemctl enable bluetooth.service 2>/dev/null || true
-systemctl enable docker.service 2>/dev/null || true
-usermod -aG docker "$VM_USER" 2>/dev/null || true
+
+# ---------------------------------------------------------------- docker
+# The user is NOT added to the docker group, and that is the whole point of
+# this block. It used to be, and it was wrong: Omarchy 4 refuses to do it and
+# says why in install/config/docker.sh --
+#
+#   "The Docker daemon runs as root and its socket is root-owned, so membership
+#    in the docker group is equivalent to passwordless root: any process in it
+#    can `docker run -v /:/host` and rewrite the host as root. We therefore do
+#    NOT add the install user to the docker group by default."
+#
+# Every image published before 2026-09-04 shipped that membership, so the
+# account handed to strangers had root without a password. Removing it here
+# fixes future builds; fixes/20-seguridad-y-servicios.sh fixes the images that
+# are already out there.
+#
+# Anyone who wants the convenience back opts in, behind a warning, with
+# `omarchy-setup-security-sudoless-docker` (Setup > Security > Sudoless Docker).
+#
+# docker.socket, not docker.service: socket activation is what upstream enables
+# (install/config/enable-services.sh), and it does not hold up boot.
+systemctl disable docker.service 2>/dev/null || true
+systemctl enable docker.socket 2>/dev/null || true
+echo "  docker: socket activation, and the user is NOT in the docker group"
+
+# ------------------------------------------------- the rest of enable-services
+# install/config/enable-services.sh, minus what a VM cannot have. These were
+# simply missing: without power-profiles-daemon the Omarchy power menu has
+# nobody to talk to, and without cups/avahi there is no printing or discovery.
+# Each one is best-effort: a name that is not installed is a no-op, not a
+# failure.
+for _svc in cups.service avahi-daemon.service power-profiles-daemon.service \
+            linux-modules-cleanup.service; do
+  systemctl enable "$_svc" 2>/dev/null && echo "  enabled $_svc" || echo "  (absent) $_svc"
+done
+
+# ---------------------------------------------------------------- firewall
+# install/config/firewall.sh: allow nothing in, everything out, plus the two
+# LocalSend ports. The image used to ship with no firewall at all while the
+# distribution it reproduces ships one turned on. ufw allows loopback by
+# default, so the SPICE WebDAV share on localhost:9843 is unaffected.
+if command -v ufw >/dev/null 2>&1; then
+  # No --force here. It is documented for enable/reset/delete, not for
+  # `default`, and with `|| true` after it a rejected flag would leave the
+  # policy unset without a word. install/config/firewall.sh calls it plainly,
+  # so this does too. The policy is verified in sanitize rather than assumed.
+  ufw default deny incoming  >/dev/null 2>&1 || warn "could not set the incoming policy"
+  ufw default allow outgoing >/dev/null 2>&1 || warn "could not set the outgoing policy"
+  ufw allow 53317/udp >/dev/null 2>&1 || true
+  ufw allow 53317/tcp >/dev/null 2>&1 || true
+  # Configured to come up on the installed system rather than mutating the
+  # firewall of the environment this chroot is running in.
+  sed -i 's/^ENABLED=.*/ENABLED=yes/' /etc/ufw/ufw.conf 2>/dev/null || true
+  systemctl enable ufw 2>/dev/null || true
+  echo "  ufw: deny incoming, allow outgoing, LocalSend 53317, enabled at boot"
+else
+  warn "ufw is not installed: the image will ship without a firewall"
+fi
 
 # ---------------------------------------------------------------- dotfiles
 log "stage 3: Omarchy dotfiles as $VM_USER"
@@ -419,6 +486,27 @@ LIBGL_ALWAYS_SOFTWARE=1
 EOF
 # serial console, handy for debugging from the host
 systemctl enable serial-getty@ttyAMA0.service 2>/dev/null || true
+
+log "DNS"
+# The stub symlink resolved documents is NOT created, and that is a decision
+# taken from evidence rather than from the manual.
+#
+# Measured on the published image after enabling systemd-resolved on it: the
+# service comes up, NetworkManager notices it, `resolvectl status` reports
+# "resolv.conf mode: foreign", and names resolve. NetworkManager keeps writing
+# /etc/resolv.conf itself and everything works.
+#
+# Pointing /etc/resolv.conf at /run/systemd/resolve/stub-resolv.conf would be
+# the tidier pairing, and it carries a failure mode this one does not: if
+# resolved ever fails to start, that symlink dangles and the shipped image has
+# no DNS at all, on a machine somebody else is holding. The tidier arrangement
+# is not worth that on an image that goes out to strangers, and no build has
+# been able to run since the change was written to prove otherwise.
+#
+# What matters for parity is that resolved is enabled -- Omarchy ships
+# drop-ins in /etc/systemd/resolved.conf.d/ that did nothing with it off --
+# and that is done in the network block above.
+echo "  systemd-resolved enabled; NetworkManager keeps managing /etc/resolv.conf"
 
 log "cleanup"
 rm -f /etc/sudoers.d/99-install
