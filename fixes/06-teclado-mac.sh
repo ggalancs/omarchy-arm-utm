@@ -13,7 +13,7 @@ export WAYLAND_DISPLAY=$(ls /run/user/1000 2>/dev/null | grep -m1 '^wayland-[0-9
 export OMARCHY_PATH=/usr/share/omarchy
 export PATH=/usr/local/bin:$PATH
 
-log "XKBLAYOUT en /etc/vconsole.conf"
+log "XKBLAYOUT in /etc/vconsole.conf"
 sudo tee /etc/vconsole.conf >/dev/null <<'EOF'
 KEYMAP=es
 XKBLAYOUT=es
@@ -24,15 +24,15 @@ log "input.lua: chosen layout + Option as SUPER"
 cat > ~/.config/hypr/input.lua <<'LUA'
 -- Keyboard settings for this VM on macOS.
 --
--- altwin:swap_lalt_lwin intercambia Alt y Super. Motivo: macOS intercepta la
--- Cmd key before UTM sees it (Cmd+Space opens Spotlight), so Omarchy's
--- Omarchy's SUPER shortcuts would be unreachable. With the swap:
+-- altwin:swap_lalt_lwin swaps Alt and Super. The reason: macOS intercepts the
+-- Cmd key before UTM ever sees it (Cmd+Space opens Spotlight), so Omarchy's
+-- SUPER shortcuts would be unreachable. With the swap:
 --
 --     Mac Option (⌥)  ->  SUPER in the VM   (Option+Space = Omarchy menu)
 --     Mac Cmd (⌘)     ->  ALT in the VM
 --
--- If you prefer the original behaviour, delete "altwin:swap_lalt_lwin" and su
--- instead turns on UTM's input capture (it needs Accessibility permission
+-- If you prefer the original behaviour, delete "altwin:swap_lalt_lwin" and
+-- instead turn on UTM's input capture (it needs Accessibility permission
 -- and Input Monitoring for UTM in System Settings > Privacy).
 hl.config({
   input = {

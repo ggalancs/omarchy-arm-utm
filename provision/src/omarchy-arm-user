@@ -14,13 +14,20 @@
 #                                     username and password
 #  ────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
+
+# The help text is the file's own header, and its END is where the comments
+# stop -- not a line number counted by hand. Every one of these ranges either
+# overshot and printed a shell directive as the last line of the help, or
+# undershot and cut a sentence in half. Computed, so it cannot drift again.
+usage_header() { awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit}' "$0"; }
+
 CONF=/etc/sddm.conf.d/autologin.conf
 
 accounts() { awk -F: '$3>=1000 && $3<65000 {print $1}' /etc/passwd | sort; }
 current()  { [ -f "$CONF" ] && sed -n 's/^User=//p' "$CONF" | tail -1; }
 
 case "${1:-}" in
-  -h|--help) sed -n '3,16p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 0 ;;
+  -h|--help) usage_header; exit 0 ;;
 
   "")
     A=$(current)
@@ -33,7 +40,9 @@ case "${1:-}" in
     echo "Change it:  omarchy-arm-user <account>   |   omarchy-arm-user --ask"
     ;;
 
-  --ask|--preguntar)
+  # --preguntar was an undocumented Spanish alias; the documented spelling is
+  # --ask, and it is the only one now.
+  --ask)
     [ -f "$CONF" ] || { echo "It was already asking for username and password."; exit 0; }
     sudo rm -f "$CONF" || exit 1
     echo "Done: from the next boot SDDM will ask for username and password."

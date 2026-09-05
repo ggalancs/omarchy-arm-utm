@@ -28,18 +28,32 @@
 #  desktop is inert.
 set -u
 
+# The help text is the file's own header, and its END is where the comments
+# stop -- not a line number counted by hand. Every one of these ranges either
+# overshot and printed a shell directive as the last line of the help, or
+# undershot and cut a sentence in half. Computed, so it cannot drift again.
+usage_header() { awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit}' "$0"; }
+
+
 CONF="${HYPRLAND_LUA:-$HOME/.config/hypr/hyprland.lua}"
 LINE='dofile((os.getenv("OMARCHY_PATH") or "/usr/share/omarchy") .. "/default/hypr/bootstrap.lua")'
 
 case "${1:-}" in
-  -h|--help) sed -n '3,26p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 0 ;;
+  -h|--help) usage_header; exit 0 ;;
 esac
 
 [ -f "$CONF" ] || exit 0          # not an Omarchy session; say nothing
 
 # Only the bootstrap call matters, not the exact spelling: a user may have
 # written their own OMARCHY_PATH or split it over lines.
-if grep -q 'bootstrap\.lua' "$CONF"; then
+#
+# But it has to be a CALL, not a mention. A bare match accepted a Lua-commented
+# `-- dofile(... bootstrap.lua)`, and `--fix` -- run from the inert desktop this
+# tool exists for -- answered "already loads bootstrap.lua; nothing to do" about
+# a file that loads nothing at all. The pattern below still tolerates the split
+# form: a continuation line starts with `..`, whose first character is not a
+# space and not the `-` of a Lua comment.
+if grep -qE '^[[:space:]]*[^-[:space:]].*bootstrap\.lua' "$CONF"; then
   [ "${1:-}" = "--fix" ] && echo "  $CONF already loads bootstrap.lua; nothing to do"
   exit 0
 fi

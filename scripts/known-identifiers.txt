@@ -490,3 +490,9 @@ skip
 skipped
 tag
 tk_code
+ConditionPathIsDirectory
+LEFT
+STRAY
+TGT_GID
+TGT_UID
+usage_header

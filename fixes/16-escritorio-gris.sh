@@ -39,5 +39,9 @@ O=$(pacman -Qtdq 2>/dev/null | tr '\n' ' '); [ -n "${O// /}" ] && pacman -Rns --
 
 echo "==> verification"
 echo "  broken links: $(find /home/$NEW /usr/local/bin -xdev -type l ! -exec test -e {} \; -print 2>/dev/null | wc -l)"
-echo "  retired ones present: $(for p in mako swayosd walker elephant; do pacman -Q $p >/dev/null 2>&1 && echo -n "$p "; done; echo -n none)"
+# `echo -n none` sat after `done`, outside the loop, so the output for a
+# surviving package read "retired ones present: mako none" -- the reassuring
+# word printed unconditionally next to the evidence contradicting it.
+LEFT=$(for p in mako swayosd walker elephant; do pacman -Q "$p" >/dev/null 2>&1 && printf '%s ' "$p"; done)
+echo "  retired ones present: ${LEFT:-none}"
 sync

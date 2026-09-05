@@ -19,6 +19,13 @@
 #
 set -uo pipefail
 
+# The help text is the file's own header, and its END is where the comments
+# stop -- not a line number counted by hand. Every one of these ranges either
+# overshot and printed a shell directive as the last line of the help, or
+# undershot and cut a sentence in half. Computed, so it cannot drift again.
+usage_header() { awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit}' "$0"; }
+
+
 c_ok=$'\033[32m'; c_warn=$'\033[33m'; c_err=$'\033[31m'; c_hi=$'\033[1;36m'; c_dim=$'\033[2m'; c_off=$'\033[0m'
 title() { echo; echo "${c_hi}━━━ $* ━━━${c_off}"; }
 info()  { echo "  $*"; }
@@ -36,11 +43,11 @@ OK_LIST=(); KO_LIST=()
 CATALOG=(
   "1password|1Password|Password manager. Official arm64 tarball from AgileBits"
   "1password-cli|1Password CLI|The op command. Official static arm64 binary"
-  "obsidian|Obsidian|Notas en markdown. AppImage arm64 oficial"
+  "obsidian|Obsidian|Markdown notes. Official arm64 build"
   "typora|Typora|WYSIWYG markdown editor. Official arm64 package via AUR"
   "localsend|LocalSend|Send files between devices. Official arm64 build"
   "chrome|Google Chrome|Brings Widevine for arm64: enables Spotify and Netflix on the web"
-  "spotify-web|Spotify (webapp)|Lanzador de open.spotify.com + reasigna SUPER+SHIFT+M"
+  "spotify-web|Spotify (webapp)|Launcher for open.spotify.com + rebinds SUPER+SHIFT+M"
   "pinta|Pinta|Image editor. Built with Microsoft's arm64 .NET"
   "obs|OBS Studio|Capture and streaming. Built without the browser plugin"
 )
@@ -59,7 +66,9 @@ is_installed() {
   case "$1" in
     1password)     pacman -Q 1password        >/dev/null 2>&1 || [ -d /opt/1Password ] ;;
     1password-cli) have op ;;
-    obsidian)      [ -d /opt/obsidian ] ;;
+    # The BINARY, not the directory: an empty /opt/obsidian is what a failed
+    # install used to leave behind, and it read as success.
+    obsidian)      [ -x /opt/obsidian/obsidian ] ;;
     typora)        pacman -Q typora           >/dev/null 2>&1 ;;
     localsend)     pacman -Q localsend-bin    >/dev/null 2>&1 ;;
     chrome)        pacman -Q google-chrome    >/dev/null 2>&1 || have google-chrome-stable ;;
@@ -196,8 +205,18 @@ do_obsidian() {
   info "$(basename "$url")"
   unverified_gate obsidian || return 1
   mkdir -p "$WORK"; curl -fL --progress-bar "$url" -o "$WORK/obsidian.tar.gz" || { fail "download failed"; return 1; }
-  sudo rm -rf /opt/obsidian; sudo mkdir -p /opt/obsidian
-  sudo tar -xzf "$WORK/obsidian.tar.gz" -C /opt/obsidian --strip-components=1 || { fail "could not extract"; return 1; }
+  # Extract FIRST, swap after. This used to `rm -rf /opt/obsidian` and then
+  # extract into it: a truncated download or a bad tarball left an empty
+  # directory where a working install had been -- and is_installed() tests for
+  # the directory, so the wreckage then read as "already installed" to the
+  # menu, to --all and to the summary.
+  rm -rf "$WORK/obsidian.new"; mkdir -p "$WORK/obsidian.new"
+  tar -xzf "$WORK/obsidian.tar.gz" -C "$WORK/obsidian.new" --strip-components=1 \
+    || { fail "could not extract"; rm -rf "$WORK/obsidian.new"; return 1; }
+  [ -x "$WORK/obsidian.new/obsidian" ] \
+    || { fail "the tarball carries no obsidian binary"; rm -rf "$WORK/obsidian.new"; return 1; }
+  sudo rm -rf /opt/obsidian
+  sudo mv "$WORK/obsidian.new" /opt/obsidian || { fail "could not install into /opt/obsidian"; return 1; }
   sudo ln -sfn /opt/obsidian/obsidian /usr/local/bin/obsidian
   sudo install -Dm644 /dev/stdin /usr/local/share/applications/obsidian.desktop <<'DESK'
 [Desktop Entry]
@@ -335,7 +354,7 @@ run_item() {
     spotify-web)   do_spotify_web ;;
     pinta)         do_pinta ;;
     obs)           do_obs ;;
-    *) fail "no conozco '$k'"; return 1 ;;
+    *) fail "unknown item '$k'"; return 1 ;;
   esac
 }
 
@@ -366,7 +385,7 @@ if [ "${1:-}" = "--force" ] || [ "${1:-}" = "-f" ]; then FORCE=1; shift; fi
 case "${1:-}" in
   --list|-l) show_list; exit 0 ;;
   --all|-a)  mapfile -t SELECTED < <(catalog_keys) ;;
-  -h|--help) sed -n '3,20p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 0 ;;
+  -h|--help) usage_header; exit 0 ;;
   "")
     if have gum; then
       show_list

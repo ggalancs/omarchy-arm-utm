@@ -12,8 +12,8 @@
 #
 #  It is not the default, for one reason the reports do not mention: the image
 #  renders in software (LIBGL_ALWAYS_SOFTWARE=1, because GPU clients come up
-#  black under UTM 4.7). 3840x2160 is 8,294,400 pixels against 2,304,000 --
-#  3.6 times as many, through llvmpipe, for every user who has not turned the
+#  black under UTM 4.7). 3840x2400 is 9,216,000 pixels against 2,304,000 --
+#  four times as many, through llvmpipe, for every user who has not turned the
 #  GPU on. Crisp text is worth that on a machine that can afford it and is not
 #  worth it on one that cannot, and only the person at the keyboard knows
 #  which they have.
@@ -29,6 +29,19 @@
 #  Pairs with `omarchy-arm-gpu --on` where the host supports it: that is what
 #  makes the extra pixels cheap.
 set -u
+
+# The help text is the header, and the range has to stop at the last line of
+# it. Written as a literal `3,31p` it ran one line past and printed `set -u` as
+# the last line of --help. Six shipped commands did the same thing; the range
+# is computed here instead of counted by hand.
+usage() {
+  awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit}' "$0"
+}
+
+# --help before the session check. Asking a command how to use it must work
+# from anywhere, and this exited 1 with "is this an Omarchy session?" for
+# anyone reading the help over ssh or from a TTY.
+case "${1:-}" in -h|--help) usage; exit 0 ;; esac
 
 MON="$HOME/.config/hypr/monitors.lua"
 [ -f "$MON" ] || { echo "  $MON not found: is this an Omarchy session?" >&2; exit 1; }
@@ -69,7 +82,22 @@ apply() {
   sed -e "s/mode = \"[0-9]*x[0-9]*@[0-9]*\"/mode = \"$mode\"/" \
       -e "s/\(position = \"0x0\", scale = \)[0-9]*/\1$scale/" \
       -e "s/hl.env(\"GDK_SCALE\", \"[0-9]*\")/hl.env(\"GDK_SCALE\", \"$gdk\")/" \
-      "$MON" > "$tmp" && mv "$tmp" "$MON" || { rm -f "$tmp"; echo "  could not rewrite $MON" >&2; return 1; }
+      "$MON" > "$tmp" || { rm -f "$tmp"; echo "  could not rewrite $MON" >&2; return 1; }
+  # sed exits 0 when it matches NOTHING, so this reported success over a file
+  # it had not touched. monitors.lua legitimately comes in other shapes -- the
+  # `mode = "preferred"` form is documented inside the very file this edits, and
+  # fixes/03 writes it -- and against those none of the three expressions match.
+  # The user was told the resolution had been applied and reloaded, and one line
+  # later show() printed the old configuration back at them.
+  if cmp -s "$MON" "$tmp"; then
+    rm -f "$tmp"
+    echo "  !! nothing changed: $MON is not in the shape this tool edits."
+    echo "     It looks for mode, position and scale written as the shipped"
+    echo "     file writes them. Edit it by hand, or restore the stock file."
+    show
+    return 1
+  fi
+  mv "$tmp" "$MON" || { rm -f "$tmp"; echo "  could not rewrite $MON" >&2; return 1; }
   if command -v hyprctl >/dev/null 2>&1 && hyprctl reload >/dev/null 2>&1; then
     echo "  applied and reloaded"
   else
@@ -91,11 +119,12 @@ case "${1:-}" in
     #
     # GDK_SCALE stays 1: Hyprland's scale already handles GTK apps, and setting
     # both doubles twice, which is how you get comically large windows.
-    apply 3840x2400@60 2 1
+    # The advice only makes sense if the mode was actually applied.
+    apply 3840x2400@60 2 1 || exit 1
     echo "  enable Retina Mode in UTM's Display settings if you have not"
     ;;
-  --default)  apply 1920x1200@60 1 1 ;;
+  --default)  apply 1920x1200@60 1 1 || exit 1 ;;
   --status)   show ;;
-  -h|--help)  sed -n '3,31p' "$0" | sed 's/^#\{0,2\} \{0,1\}//' ;;
-  *)          sed -n '3,31p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 1 ;;
+  -h|--help)  usage ;;
+  *)          usage; exit 1 ;;
 esac

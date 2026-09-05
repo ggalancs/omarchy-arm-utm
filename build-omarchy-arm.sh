@@ -2689,7 +2689,16 @@ echo "  /etc/localtime -> $(readlink /etc/localtime)"
 log "9/10 checking nothing is still tied to $OLD"
 echo "  references in /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null | head -5 || echo "    none"
 echo "  home:"; ls -ld "/home/$NEW"; ls /home/
-echo "  owner of stray files:"; find /home/$NEW -maxdepth 2 ! -user "$NEW" 2>/dev/null | head -3 || echo "    all correct"
+# `find | head || echo` is dead: find returns 0 when it matches nothing and so
+# does head, so the reassuring branch could only be reached by find ITSELF
+# erroring -- it printed "all correct" exactly when the check had not run. The
+# line above it works only because grep, unlike find, exits 1 on no match.
+STRAY=$(find /home/$NEW -maxdepth 2 ! -user "$NEW" 2>/dev/null | head -3)
+if [ -n "$STRAY" ]; then
+  echo "  owner of stray files:"; printf '%s\n' "$STRAY" | sed 's/^/    /'
+else
+  echo "  owner of stray files:    none"
+fi
 
 log "orphan packages"
 # Build dependencies left behind by makepkg -s, and firmware for hardware a VM
@@ -3172,6 +3181,13 @@ cat > "$W/provision/extras.sh" <<'__PAYLOAD_PROVISION_EXTRAS_SH__'
 #
 set -uo pipefail
 
+# The help text is the file's own header, and its END is where the comments
+# stop -- not a line number counted by hand. Every one of these ranges either
+# overshot and printed a shell directive as the last line of the help, or
+# undershot and cut a sentence in half. Computed, so it cannot drift again.
+usage_header() { awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit}' "$0"; }
+
+
 c_ok=$'\033[32m'; c_warn=$'\033[33m'; c_err=$'\033[31m'; c_hi=$'\033[1;36m'; c_dim=$'\033[2m'; c_off=$'\033[0m'
 title() { echo; echo "${c_hi}━━━ $* ━━━${c_off}"; }
 info()  { echo "  $*"; }
@@ -3189,11 +3205,11 @@ OK_LIST=(); KO_LIST=()
 CATALOG=(
   "1password|1Password|Password manager. Official arm64 tarball from AgileBits"
   "1password-cli|1Password CLI|The op command. Official static arm64 binary"
-  "obsidian|Obsidian|Notas en markdown. AppImage arm64 oficial"
+  "obsidian|Obsidian|Markdown notes. Official arm64 build"
   "typora|Typora|WYSIWYG markdown editor. Official arm64 package via AUR"
   "localsend|LocalSend|Send files between devices. Official arm64 build"
   "chrome|Google Chrome|Brings Widevine for arm64: enables Spotify and Netflix on the web"
-  "spotify-web|Spotify (webapp)|Lanzador de open.spotify.com + reasigna SUPER+SHIFT+M"
+  "spotify-web|Spotify (webapp)|Launcher for open.spotify.com + rebinds SUPER+SHIFT+M"
   "pinta|Pinta|Image editor. Built with Microsoft's arm64 .NET"
   "obs|OBS Studio|Capture and streaming. Built without the browser plugin"
 )
@@ -3212,7 +3228,9 @@ is_installed() {
   case "$1" in
     1password)     pacman -Q 1password        >/dev/null 2>&1 || [ -d /opt/1Password ] ;;
     1password-cli) have op ;;
-    obsidian)      [ -d /opt/obsidian ] ;;
+    # The BINARY, not the directory: an empty /opt/obsidian is what a failed
+    # install used to leave behind, and it read as success.
+    obsidian)      [ -x /opt/obsidian/obsidian ] ;;
     typora)        pacman -Q typora           >/dev/null 2>&1 ;;
     localsend)     pacman -Q localsend-bin    >/dev/null 2>&1 ;;
     chrome)        pacman -Q google-chrome    >/dev/null 2>&1 || have google-chrome-stable ;;
@@ -3349,8 +3367,18 @@ do_obsidian() {
   info "$(basename "$url")"
   unverified_gate obsidian || return 1
   mkdir -p "$WORK"; curl -fL --progress-bar "$url" -o "$WORK/obsidian.tar.gz" || { fail "download failed"; return 1; }
-  sudo rm -rf /opt/obsidian; sudo mkdir -p /opt/obsidian
-  sudo tar -xzf "$WORK/obsidian.tar.gz" -C /opt/obsidian --strip-components=1 || { fail "could not extract"; return 1; }
+  # Extract FIRST, swap after. This used to `rm -rf /opt/obsidian` and then
+  # extract into it: a truncated download or a bad tarball left an empty
+  # directory where a working install had been -- and is_installed() tests for
+  # the directory, so the wreckage then read as "already installed" to the
+  # menu, to --all and to the summary.
+  rm -rf "$WORK/obsidian.new"; mkdir -p "$WORK/obsidian.new"
+  tar -xzf "$WORK/obsidian.tar.gz" -C "$WORK/obsidian.new" --strip-components=1 \
+    || { fail "could not extract"; rm -rf "$WORK/obsidian.new"; return 1; }
+  [ -x "$WORK/obsidian.new/obsidian" ] \
+    || { fail "the tarball carries no obsidian binary"; rm -rf "$WORK/obsidian.new"; return 1; }
+  sudo rm -rf /opt/obsidian
+  sudo mv "$WORK/obsidian.new" /opt/obsidian || { fail "could not install into /opt/obsidian"; return 1; }
   sudo ln -sfn /opt/obsidian/obsidian /usr/local/bin/obsidian
   sudo install -Dm644 /dev/stdin /usr/local/share/applications/obsidian.desktop <<'DESK'
 [Desktop Entry]
@@ -3488,7 +3516,7 @@ run_item() {
     spotify-web)   do_spotify_web ;;
     pinta)         do_pinta ;;
     obs)           do_obs ;;
-    *) fail "no conozco '$k'"; return 1 ;;
+    *) fail "unknown item '$k'"; return 1 ;;
   esac
 }
 
@@ -3519,7 +3547,7 @@ if [ "${1:-}" = "--force" ] || [ "${1:-}" = "-f" ]; then FORCE=1; shift; fi
 case "${1:-}" in
   --list|-l) show_list; exit 0 ;;
   --all|-a)  mapfile -t SELECTED < <(catalog_keys) ;;
-  -h|--help) sed -n '3,20p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 0 ;;
+  -h|--help) usage_header; exit 0 ;;
   "")
     if have gum; then
       show_list
@@ -3625,7 +3653,7 @@ cat > "$W/provision/clipbrd.sh" <<'__PAYLOAD_PROVISION_CLIPBRD_SH__'
 #  it to the file. On the Mac an equivalent script does the same with
 #  pbcopy/pbpaste. Text only.
 #
-#  USO
+#  Usage
 #    omarchy-arm-clipboard             watch (started by the user service)
 #    omarchy-arm-clipboard --install   install the service and start it
 #    omarchy-arm-clipboard --host      print the script for the Mac
@@ -3636,7 +3664,11 @@ SHARE="${OMARCHY_CLIPBOARD_DIR:-/mnt/share}"
 FILE="$SHARE/.clipboard"
 INTERVAL="${OMARCHY_CLIPBOARD_INTERVAL:-1}"
 
-usage() { sed -n '3,26p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; }
+# The help text is the file's own header, and its END is where the comments
+# stop -- not a line number counted by hand. Every one of these ranges either
+# overshot and printed a shell directive as the last line of the help, or
+# undershot and cut a sentence in half. Computed, so it cannot drift again.
+usage() { awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit}' "$0"; }
 
 do_install() {
   mkdir -p ~/.config/systemd/user
@@ -3646,11 +3678,18 @@ Description=Shared clipboard with the host (via UTM shared folder)
 After=graphical-session.target
 PartOf=graphical-session.target
 ConditionEnvironment=WAYLAND_DISPLAY
-# With no SPICE channel from the host (UTM with clipboard sharing off, or a
-# different hypervisor) the agent has nobody to talk to. Skipping cleanly
-# beats failing and being restarted every few seconds for the whole session.
-# Reported by mphaxise in #13.
-ConditionPathExists=/dev/virtio-ports/com.redhat.spice.0
+# The condition must name what THIS unit needs, and this one never opens a
+# SPICE channel: it watches a directory in the shared folder. It was carrying a
+# verbatim copy of the vdagent unit's condition -- the SPICE virtio port --
+# which is the very thing whose absence is the reason this fallback exists. So
+# on the machines it was written for it started, found its condition unmet,
+# skipped, and `systemctl --user enable --now` returned 0 while the line below
+# announced the service was active.
+#
+# A condition there must be: watch_folder exits 1 when the share is missing and
+# the unit restarts on failure every five seconds, which is the loop the
+# original comment was written to avoid. Reported by mphaxise in #13.
+ConditionPathIsDirectory=/mnt/share
 
 [Service]
 Type=simple
@@ -3662,7 +3701,15 @@ RestartSec=5
 WantedBy=graphical-session.target
 UNIT
   systemctl --user daemon-reload
-  systemctl --user enable --now omarchy-arm-clipboard.service && echo "servicio activo"
+  # Reported, not asserted: enable --now returns 0 for a unit that skipped on
+  # an unmet condition, so "active" was a claim that could not be wrong.
+  systemctl --user enable --now omarchy-arm-clipboard.service || true
+  if systemctl --user is-active --quiet omarchy-arm-clipboard.service; then
+    echo "  service active"
+  else
+    echo "  !! the service is not running. Its condition is a shared folder at"
+    echo "     /mnt/share; if there is none, mount it first (omarchy-arm-share)."
+  fi
   systemctl --user --no-pager status omarchy-arm-clipboard.service | head -5
 }
 
@@ -3930,6 +3977,13 @@ cat > "$W/provision/share.sh" <<'__PAYLOAD_PROVISION_SHARE_SH__'
 #  arguments it mounts; --umount unmounts; --status reports what it sees.
 #
 set -uo pipefail
+
+# The help text is the file's own header, and its END is where the comments
+# stop -- not a line number counted by hand. Every one of these ranges either
+# overshot and printed a shell directive as the last line of the help, or
+# undershot and cut a sentence in half. Computed, so it cannot drift again.
+usage_header() { awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit}' "$0"; }
+
 MOUNT_POINT="${OMARCHY_SHARE_MNT:-/mnt/share}"
 TAG=share
 WEBDAV_PORT=/dev/virtio-ports/org.spice-space.webdav.0
@@ -3959,6 +4013,13 @@ show_state() {
   is_mounted && { echo "  contents:"; ls -la "$MOUNT_POINT" 2>/dev/null | head -6 | sed 's/^/    /'; }
 }
 
+# The account the mount is FOR. Under `sudo omarchy-arm-share` every `id -u`
+# in this file answers 0, so the davfs mount below was handed uid=0,gid=0 and
+# the desktop account was locked out of its own share with nothing saying so.
+# SUDO_UID/SUDO_GID are what sudo leaves behind for exactly this question.
+TGT_UID=${SUDO_UID:-$(id -u)}
+TGT_GID=${SUDO_GID:-$(id -g)}
+
 do_mount() {
   is_mounted && { echo "already mounted on $MOUNT_POINT"; return 0; }
   sudo mkdir -p "$MOUNT_POINT"
@@ -3974,9 +4035,14 @@ do_mount() {
     # so it is a one-time fix that survives reboots rather than a per-boot
     # hack. Reported and verified end-to-end by RBeach (@BeachFrontMT) in
     # omacom/omarchy discussion #7956.
-    if ! [ -r "$MOUNT_POINT" ] || ! [ -w "$MOUNT_POINT" ]; then
+    # An OWNERSHIP comparison, not an access test. root's access() grants
+    # R_OK and W_OK whatever the mode says, so under sudo both tests were
+    # unconditionally true, this whole block was skipped, and the next line
+    # announced the mount was ready while the desktop account still could not
+    # read it.
+    if [ "$(stat -c %u "$MOUNT_POINT" 2>/dev/null)" != "$TGT_UID" ]; then
       echo "  host ownership does not match this account; claiming the mount"
-      sudo chown "$(id -u):$(id -g)" "$MOUNT_POINT" 2>/dev/null \
+      sudo chown "$TGT_UID:$TGT_GID" "$MOUNT_POINT" 2>/dev/null \
         && echo "  chown applied (stored as xattrs on the host: it persists)" \
         || echo "  ! chown failed; the share may be read-only for you"
     fi
@@ -4001,7 +4067,7 @@ do_mount() {
       return 1
     fi
     # davfs2 asks for a username and password: neither is needed here
-    if printf '\n\n' | sudo mount -t davfs -o rw,uid=$(id -u),gid=$(id -g) "$URL" "$MOUNT_POINT" 2>/dev/null; then
+    if printf '\n\n' | sudo mount -t davfs -o rw,uid="$TGT_UID",gid="$TGT_GID" "$URL" "$MOUNT_POINT" 2>/dev/null; then
       echo "mounted over SPICE WebDAV on $MOUNT_POINT"; return 0
     fi
     echo "davfs2 could not mount $URL" >&2
@@ -4017,7 +4083,7 @@ do_mount() {
 case "${1:-}" in
   --umount|-u) sudo umount "$MOUNT_POINT" && echo "unmounted" ;;
   --status|-s) show_state ;;
-  -h|--help)   sed -n '3,14p' "$0" | sed 's/^#\{0,2\} \{0,1\}//' ;;
+  -h|--help)   usage_header ;;
   "")          do_mount ;;
   *)           echo "unknown option: $1" >&2; exit 1 ;;
 esac
@@ -4041,13 +4107,20 @@ cat > "$W/provision/user.sh" <<'__PAYLOAD_PROVISION_USER_SH__'
 #                                     username and password
 #  ────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
+
+# The help text is the file's own header, and its END is where the comments
+# stop -- not a line number counted by hand. Every one of these ranges either
+# overshot and printed a shell directive as the last line of the help, or
+# undershot and cut a sentence in half. Computed, so it cannot drift again.
+usage_header() { awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit}' "$0"; }
+
 CONF=/etc/sddm.conf.d/autologin.conf
 
 accounts() { awk -F: '$3>=1000 && $3<65000 {print $1}' /etc/passwd | sort; }
 current()  { [ -f "$CONF" ] && sed -n 's/^User=//p' "$CONF" | tail -1; }
 
 case "${1:-}" in
-  -h|--help) sed -n '3,16p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 0 ;;
+  -h|--help) usage_header; exit 0 ;;
 
   "")
     A=$(current)
@@ -4060,7 +4133,9 @@ case "${1:-}" in
     echo "Change it:  omarchy-arm-user <account>   |   omarchy-arm-user --ask"
     ;;
 
-  --ask|--preguntar)
+  # --preguntar was an undocumented Spanish alias; the documented spelling is
+  # --ask, and it is the only one now.
+  --ask)
     [ -f "$CONF" ] || { echo "It was already asking for username and password."; exit 0; }
     sudo rm -f "$CONF" || exit 1
     echo "Done: from the next boot SDDM will ask for username and password."
@@ -4112,6 +4187,13 @@ cat > "$W/provision/gpu.sh" <<'__PAYLOAD_PROVISION_GPU_SH__'
 #    omarchy-arm-gpu --off     back to software rendering (safe everywhere)
 #  ────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
+
+# The help text is the file's own header, and its END is where the comments
+# stop -- not a line number counted by hand. Every one of these ranges either
+# overshot and printed a shell directive as the last line of the help, or
+# undershot and cut a sentence in half. Computed, so it cannot drift again.
+usage_header() { awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit}' "$0"; }
+
 CONF=/etc/environment.d/90-vm-graphics.conf
 
 # systemd's environment.d is NOT one file. Every *.conf across four directories
@@ -4180,7 +4262,7 @@ warn_override() {
 }
 
 case "${1:-}" in
-  -h|--help) sed -n '3,23p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 0 ;;
+  -h|--help) usage_header; exit 0 ;;
 
   "")
     echo "Rendering: $(state)"
@@ -4199,7 +4281,20 @@ case "${1:-}" in
   --on)
     # Commented rather than deleted: --off has to be able to put it back
     # without knowing what the line said.
-    sudo sed -i 's/^LIBGL_ALWAYS_SOFTWARE=1/#LIBGL_ALWAYS_SOFTWARE=1/' "$CONF" || exit 1
+    #
+    # The pattern mirrors exactly what state() accepts -- leading blanks, an
+    # optional quote, and 1/true/yes -- because it was anchored on the literal
+    # `^LIBGL_ALWAYS_SOFTWARE=1` while state() has always read the wider set.
+    # Against `LIBGL_ALWAYS_SOFTWARE="1"`, which this project's own test asserts
+    # must count as software rendering, the sed matched nothing, exited 0, and
+    # the line below announced hardware GL was enabled.
+    sudo sed -i -E 's/^([[:space:]]*)(LIBGL_ALWAYS_SOFTWARE[[:space:]]*=[[:space:]]*"?(1|true|yes)"?)/\1#\2/' "$CONF" || exit 1
+    # Checked, not assumed, the same way --off is.
+    if [ "$(state)" = software ]; then
+      echo "!! nothing changed: $CONF still selects software rendering." >&2
+      warn_override
+      exit 1
+    fi
     echo "Hardware GL enabled. Log out and back in for it to apply."
     echo
     echo "How to tell whether it worked, once you are back:"
@@ -4259,18 +4354,32 @@ cat > "$W/provision/hyprcheck.sh" <<'__PAYLOAD_PROVISION_HYPRCHECK_SH__'
 #  desktop is inert.
 set -u
 
+# The help text is the file's own header, and its END is where the comments
+# stop -- not a line number counted by hand. Every one of these ranges either
+# overshot and printed a shell directive as the last line of the help, or
+# undershot and cut a sentence in half. Computed, so it cannot drift again.
+usage_header() { awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit}' "$0"; }
+
+
 CONF="${HYPRLAND_LUA:-$HOME/.config/hypr/hyprland.lua}"
 LINE='dofile((os.getenv("OMARCHY_PATH") or "/usr/share/omarchy") .. "/default/hypr/bootstrap.lua")'
 
 case "${1:-}" in
-  -h|--help) sed -n '3,26p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 0 ;;
+  -h|--help) usage_header; exit 0 ;;
 esac
 
 [ -f "$CONF" ] || exit 0          # not an Omarchy session; say nothing
 
 # Only the bootstrap call matters, not the exact spelling: a user may have
 # written their own OMARCHY_PATH or split it over lines.
-if grep -q 'bootstrap\.lua' "$CONF"; then
+#
+# But it has to be a CALL, not a mention. A bare match accepted a Lua-commented
+# `-- dofile(... bootstrap.lua)`, and `--fix` -- run from the inert desktop this
+# tool exists for -- answered "already loads bootstrap.lua; nothing to do" about
+# a file that loads nothing at all. The pattern below still tolerates the split
+# form: a continuation line starts with `..`, whose first character is not a
+# space and not the `-` of a Lua comment.
+if grep -qE '^[[:space:]]*[^-[:space:]].*bootstrap\.lua' "$CONF"; then
   [ "${1:-}" = "--fix" ] && echo "  $CONF already loads bootstrap.lua; nothing to do"
   exit 0
 fi
@@ -4317,8 +4426,8 @@ cat > "$W/provision/display.sh" <<'__PAYLOAD_PROVISION_DISPLAY_SH__'
 #
 #  It is not the default, for one reason the reports do not mention: the image
 #  renders in software (LIBGL_ALWAYS_SOFTWARE=1, because GPU clients come up
-#  black under UTM 4.7). 3840x2160 is 8,294,400 pixels against 2,304,000 --
-#  3.6 times as many, through llvmpipe, for every user who has not turned the
+#  black under UTM 4.7). 3840x2400 is 9,216,000 pixels against 2,304,000 --
+#  four times as many, through llvmpipe, for every user who has not turned the
 #  GPU on. Crisp text is worth that on a machine that can afford it and is not
 #  worth it on one that cannot, and only the person at the keyboard knows
 #  which they have.
@@ -4334,6 +4443,19 @@ cat > "$W/provision/display.sh" <<'__PAYLOAD_PROVISION_DISPLAY_SH__'
 #  Pairs with `omarchy-arm-gpu --on` where the host supports it: that is what
 #  makes the extra pixels cheap.
 set -u
+
+# The help text is the header, and the range has to stop at the last line of
+# it. Written as a literal `3,31p` it ran one line past and printed `set -u` as
+# the last line of --help. Six shipped commands did the same thing; the range
+# is computed here instead of counted by hand.
+usage() {
+  awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit}' "$0"
+}
+
+# --help before the session check. Asking a command how to use it must work
+# from anywhere, and this exited 1 with "is this an Omarchy session?" for
+# anyone reading the help over ssh or from a TTY.
+case "${1:-}" in -h|--help) usage; exit 0 ;; esac
 
 MON="$HOME/.config/hypr/monitors.lua"
 [ -f "$MON" ] || { echo "  $MON not found: is this an Omarchy session?" >&2; exit 1; }
@@ -4374,7 +4496,22 @@ apply() {
   sed -e "s/mode = \"[0-9]*x[0-9]*@[0-9]*\"/mode = \"$mode\"/" \
       -e "s/\(position = \"0x0\", scale = \)[0-9]*/\1$scale/" \
       -e "s/hl.env(\"GDK_SCALE\", \"[0-9]*\")/hl.env(\"GDK_SCALE\", \"$gdk\")/" \
-      "$MON" > "$tmp" && mv "$tmp" "$MON" || { rm -f "$tmp"; echo "  could not rewrite $MON" >&2; return 1; }
+      "$MON" > "$tmp" || { rm -f "$tmp"; echo "  could not rewrite $MON" >&2; return 1; }
+  # sed exits 0 when it matches NOTHING, so this reported success over a file
+  # it had not touched. monitors.lua legitimately comes in other shapes -- the
+  # `mode = "preferred"` form is documented inside the very file this edits, and
+  # fixes/03 writes it -- and against those none of the three expressions match.
+  # The user was told the resolution had been applied and reloaded, and one line
+  # later show() printed the old configuration back at them.
+  if cmp -s "$MON" "$tmp"; then
+    rm -f "$tmp"
+    echo "  !! nothing changed: $MON is not in the shape this tool edits."
+    echo "     It looks for mode, position and scale written as the shipped"
+    echo "     file writes them. Edit it by hand, or restore the stock file."
+    show
+    return 1
+  fi
+  mv "$tmp" "$MON" || { rm -f "$tmp"; echo "  could not rewrite $MON" >&2; return 1; }
   if command -v hyprctl >/dev/null 2>&1 && hyprctl reload >/dev/null 2>&1; then
     echo "  applied and reloaded"
   else
@@ -4396,13 +4533,14 @@ case "${1:-}" in
     #
     # GDK_SCALE stays 1: Hyprland's scale already handles GTK apps, and setting
     # both doubles twice, which is how you get comically large windows.
-    apply 3840x2400@60 2 1
+    # The advice only makes sense if the mode was actually applied.
+    apply 3840x2400@60 2 1 || exit 1
     echo "  enable Retina Mode in UTM's Display settings if you have not"
     ;;
-  --default)  apply 1920x1200@60 1 1 ;;
+  --default)  apply 1920x1200@60 1 1 || exit 1 ;;
   --status)   show ;;
-  -h|--help)  sed -n '3,31p' "$0" | sed 's/^#\{0,2\} \{0,1\}//' ;;
-  *)          sed -n '3,31p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 1 ;;
+  -h|--help)  usage ;;
+  *)          usage; exit 1 ;;
 esac
 __PAYLOAD_PROVISION_DISPLAY_SH__
 chmod +x "$W/provision/display.sh"
@@ -4450,7 +4588,11 @@ set -uo pipefail
 REC=/usr/local/share/omarchy-arm/built-from-source.txt
 c_ok=$'\033[32m'; c_warn=$'\033[33m'; c_hi=$'\033[1;36m'; c_off=$'\033[0m'
 
-usage() { sed -n '3,36p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; }
+# The help text is the file's own header, and its END is where the comments
+# stop -- not a line number counted by hand. Every one of these ranges either
+# overshot and printed a shell directive as the last line of the help, or
+# undershot and cut a sentence in half. Computed, so it cannot drift again.
+usage() { awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit}' "$0"; }
 
 entries() { [ -f "$REC" ] && grep -vE '^#|^[[:space:]]*$' "$REC" || true; }
 

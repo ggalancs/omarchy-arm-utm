@@ -16,7 +16,7 @@
 #  it to the file. On the Mac an equivalent script does the same with
 #  pbcopy/pbpaste. Text only.
 #
-#  USO
+#  Usage
 #    omarchy-arm-clipboard             watch (started by the user service)
 #    omarchy-arm-clipboard --install   install the service and start it
 #    omarchy-arm-clipboard --host      print the script for the Mac
@@ -27,7 +27,11 @@ SHARE="${OMARCHY_CLIPBOARD_DIR:-/mnt/share}"
 FILE="$SHARE/.clipboard"
 INTERVAL="${OMARCHY_CLIPBOARD_INTERVAL:-1}"
 
-usage() { sed -n '3,26p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; }
+# The help text is the file's own header, and its END is where the comments
+# stop -- not a line number counted by hand. Every one of these ranges either
+# overshot and printed a shell directive as the last line of the help, or
+# undershot and cut a sentence in half. Computed, so it cannot drift again.
+usage() { awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit}' "$0"; }
 
 do_install() {
   mkdir -p ~/.config/systemd/user
@@ -37,11 +41,18 @@ Description=Shared clipboard with the host (via UTM shared folder)
 After=graphical-session.target
 PartOf=graphical-session.target
 ConditionEnvironment=WAYLAND_DISPLAY
-# With no SPICE channel from the host (UTM with clipboard sharing off, or a
-# different hypervisor) the agent has nobody to talk to. Skipping cleanly
-# beats failing and being restarted every few seconds for the whole session.
-# Reported by mphaxise in #13.
-ConditionPathExists=/dev/virtio-ports/com.redhat.spice.0
+# The condition must name what THIS unit needs, and this one never opens a
+# SPICE channel: it watches a directory in the shared folder. It was carrying a
+# verbatim copy of the vdagent unit's condition -- the SPICE virtio port --
+# which is the very thing whose absence is the reason this fallback exists. So
+# on the machines it was written for it started, found its condition unmet,
+# skipped, and `systemctl --user enable --now` returned 0 while the line below
+# announced the service was active.
+#
+# A condition there must be: watch_folder exits 1 when the share is missing and
+# the unit restarts on failure every five seconds, which is the loop the
+# original comment was written to avoid. Reported by mphaxise in #13.
+ConditionPathIsDirectory=/mnt/share
 
 [Service]
 Type=simple
@@ -53,7 +64,15 @@ RestartSec=5
 WantedBy=graphical-session.target
 UNIT
   systemctl --user daemon-reload
-  systemctl --user enable --now omarchy-arm-clipboard.service && echo "servicio activo"
+  # Reported, not asserted: enable --now returns 0 for a unit that skipped on
+  # an unmet condition, so "active" was a claim that could not be wrong.
+  systemctl --user enable --now omarchy-arm-clipboard.service || true
+  if systemctl --user is-active --quiet omarchy-arm-clipboard.service; then
+    echo "  service active"
+  else
+    echo "  !! the service is not running. Its condition is a shared folder at"
+    echo "     /mnt/share; if there is none, mount it first (omarchy-arm-share)."
+  fi
   systemctl --user --no-pager status omarchy-arm-clipboard.service | head -5
 }
 

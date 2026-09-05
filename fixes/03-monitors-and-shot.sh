@@ -31,7 +31,7 @@ echo "  configerrors: [$(hyprctl configerrors 2>&1 | head -3)]"
 
 log "desktop state"
 hyprctl monitors 2>&1 | head -6
-echo "--- procesos ---"
+echo "--- processes ---"
 for p in Hyprland quickshell mako elephant udiskie swaybg; do printf "  %-12s %s\n" "$p" "$(pgrep -a $p | head -1 || echo '-')"; done
 
 log "screenshot from inside"

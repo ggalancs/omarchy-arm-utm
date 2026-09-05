@@ -89,7 +89,7 @@ cat > /etc/motd <<'EOF'
   >> CHANGE THE PASSWORD NOW:  passwd
 
   Keys: the Mac's Option key acts as SUPER.
-          ⌥+Space  menu de Omarchy      ⌥+Return  terminal
+          ⌥+Space  Omarchy menu        ⌥+Return  terminal
 
 EOF
 install -d -o "$NEW" -g "$NEW" "/home/$NEW/Desktop"
@@ -97,7 +97,7 @@ cp /etc/motd "/home/$NEW/Desktop/README.txt"
 chown "$NEW:$NEW" "/home/$NEW/Desktop/README.txt"
 
 log "9/10 checking nothing is still tied to $OLD"
-echo "  referencias en /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null | head -5 || echo "    none"
+echo "  references in /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null | head -5 || echo "    none"
 echo "  home:"; ls -ld "/home/$NEW"; ls /home/
 echo "  owner of stray files:"; find /home/$NEW -maxdepth 2 ! -user "$NEW" 2>/dev/null | head -3 || echo "    all correct"
 

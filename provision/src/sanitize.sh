@@ -365,7 +365,16 @@ echo "  /etc/localtime -> $(readlink /etc/localtime)"
 log "9/10 checking nothing is still tied to $OLD"
 echo "  references in /etc:"; grep -rl "\b$OLD\b" /etc 2>/dev/null | head -5 || echo "    none"
 echo "  home:"; ls -ld "/home/$NEW"; ls /home/
-echo "  owner of stray files:"; find /home/$NEW -maxdepth 2 ! -user "$NEW" 2>/dev/null | head -3 || echo "    all correct"
+# `find | head || echo` is dead: find returns 0 when it matches nothing and so
+# does head, so the reassuring branch could only be reached by find ITSELF
+# erroring -- it printed "all correct" exactly when the check had not run. The
+# line above it works only because grep, unlike find, exits 1 on no match.
+STRAY=$(find /home/$NEW -maxdepth 2 ! -user "$NEW" 2>/dev/null | head -3)
+if [ -n "$STRAY" ]; then
+  echo "  owner of stray files:"; printf '%s\n' "$STRAY" | sed 's/^/    /'
+else
+  echo "  owner of stray files:    none"
+fi
 
 log "orphan packages"
 # Build dependencies left behind by makepkg -s, and firmware for hardware a VM

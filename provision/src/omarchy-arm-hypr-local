@@ -40,7 +40,11 @@ set -uo pipefail
 REC=/usr/local/share/omarchy-arm/built-from-source.txt
 c_ok=$'\033[32m'; c_warn=$'\033[33m'; c_hi=$'\033[1;36m'; c_off=$'\033[0m'
 
-usage() { sed -n '3,36p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; }
+# The help text is the file's own header, and its END is where the comments
+# stop -- not a line number counted by hand. Every one of these ranges either
+# overshot and printed a shell directive as the last line of the help, or
+# undershot and cut a sentence in half. Computed, so it cannot drift again.
+usage() { awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit}' "$0"; }
 
 entries() { [ -f "$REC" ] && grep -vE '^#|^[[:space:]]*$' "$REC" || true; }
 

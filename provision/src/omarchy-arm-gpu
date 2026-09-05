@@ -21,6 +21,13 @@
 #    omarchy-arm-gpu --off     back to software rendering (safe everywhere)
 #  ────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
+
+# The help text is the file's own header, and its END is where the comments
+# stop -- not a line number counted by hand. Every one of these ranges either
+# overshot and printed a shell directive as the last line of the help, or
+# undershot and cut a sentence in half. Computed, so it cannot drift again.
+usage_header() { awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit}' "$0"; }
+
 CONF=/etc/environment.d/90-vm-graphics.conf
 
 # systemd's environment.d is NOT one file. Every *.conf across four directories
@@ -89,7 +96,7 @@ warn_override() {
 }
 
 case "${1:-}" in
-  -h|--help) sed -n '3,23p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 0 ;;
+  -h|--help) usage_header; exit 0 ;;
 
   "")
     echo "Rendering: $(state)"
@@ -108,7 +115,20 @@ case "${1:-}" in
   --on)
     # Commented rather than deleted: --off has to be able to put it back
     # without knowing what the line said.
-    sudo sed -i 's/^LIBGL_ALWAYS_SOFTWARE=1/#LIBGL_ALWAYS_SOFTWARE=1/' "$CONF" || exit 1
+    #
+    # The pattern mirrors exactly what state() accepts -- leading blanks, an
+    # optional quote, and 1/true/yes -- because it was anchored on the literal
+    # `^LIBGL_ALWAYS_SOFTWARE=1` while state() has always read the wider set.
+    # Against `LIBGL_ALWAYS_SOFTWARE="1"`, which this project's own test asserts
+    # must count as software rendering, the sed matched nothing, exited 0, and
+    # the line below announced hardware GL was enabled.
+    sudo sed -i -E 's/^([[:space:]]*)(LIBGL_ALWAYS_SOFTWARE[[:space:]]*=[[:space:]]*"?(1|true|yes)"?)/\1#\2/' "$CONF" || exit 1
+    # Checked, not assumed, the same way --off is.
+    if [ "$(state)" = software ]; then
+      echo "!! nothing changed: $CONF still selects software rendering." >&2
+      warn_override
+      exit 1
+    fi
     echo "Hardware GL enabled. Log out and back in for it to apply."
     echo
     echo "How to tell whether it worked, once you are back:"

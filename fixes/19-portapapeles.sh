@@ -28,7 +28,7 @@ set -uo pipefail
 RAW=https://raw.githubusercontent.com/ggalancs/omarchy-arm-utm/main/provision/src/omarchy-arm-vdagent
 SOCK=/run/spice-vdagentd/spice-vdagent-sock
 
-echo "==> requisitos"
+echo "==> requirements"
 failed_pkg=0
 for c in python3 wl-copy wl-paste; do
   command -v "$c" >/dev/null 2>&1 && echo "  ✓ $c" || { echo "  ✗ missing $c"; failed_pkg=1; }
@@ -38,19 +38,19 @@ if [ ! -e /dev/virtio-ports/com.redhat.spice.0 ]; then
   echo "    Enable 'Share clipboard' in UTM, then power the VM off and on."
   failed_pkg=1
 else
-  echo "  ✓ canal SPICE presente"
+  echo "  ✓ the SPICE channel is present"
 fi
 pacman -Q spice-vdagent >/dev/null 2>&1 && echo "  ✓ spice-vdagent installed" \
   || { echo "  x spice-vdagent missing: sudo pacman -S spice-vdagent"; failed_pkg=1; }
 [ "$failed_pkg" -ne 0 ] && { echo; echo "Fix the above and try again."; exit 1; }
 
 echo
-echo "==> agente"
+echo "==> agent"
 if [ -f /usr/share/omarchy-arm-vdagent ]; then
   sudo install -Dm755 /usr/share/omarchy-arm-vdagent /usr/local/bin/omarchy-arm-vdagent
 else
   tmp=$(mktemp)
-  curl -fsSL "$RAW" -o "$tmp" || { echo "  ✗ no pude descargarlo"; rm -f "$tmp"; exit 1; }
+  curl -fsSL "$RAW" -o "$tmp" || { echo "  ✗ could not download it"; rm -f "$tmp"; exit 1; }
   python3 -c "import ast,sys;ast.parse(open(sys.argv[1]).read())" "$tmp" \
     || { echo "  x what was downloaded is not valid Python"; rm -f "$tmp"; exit 1; }
   sudo install -Dm755 "$tmp" /usr/local/bin/omarchy-arm-vdagent; rm -f "$tmp"

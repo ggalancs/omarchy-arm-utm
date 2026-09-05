@@ -43,7 +43,7 @@ echo "  WAYLAND_DISPLAY=$WAYLAND_DISPLAY  HIS=${HYPRLAND_INSTANCE_SIGNATURE:0:20
 hyprctl reload 2>&1 | head -3
 setsid omarchy-launch-shell >/tmp/shell.log 2>&1 &
 sleep 8
-echo "  procesos:"; pgrep -a quickshell | head -3; pgrep -a elephant | head -2
+echo "  processes:"; pgrep -a quickshell | head -3; pgrep -a elephant | head -2
 echo "  shell log:"; tail -15 /tmp/shell.log 2>/dev/null
 
 log "final state"

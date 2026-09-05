@@ -17,7 +17,7 @@ for f in "$MIGR"/*.sh; do
   b=$(basename "$f")
   [ -e "$STATE/$b" ] || { : > "$STATE/$b"; n=$((n+1)); }
 done
-echo "  sealed $n new; total $(ls -1 "$STATE" | wc -l) de $(ls -1 "$MIGR"/*.sh | wc -l)"
+echo "  sealed $n new; total $(ls -1 "$STATE" | wc -l) of $(ls -1 "$MIGR"/*.sh | wc -l)"
 echo "  pending now: $(omarchy-migrate --pending 2>/dev/null | wc -l)"
 
 log "2/5 recovering dust (the failed migration removed it)"
@@ -77,12 +77,12 @@ log "4/5 cleaning orphans left by the AUR builds"
 orph=$(pacman -Qdtq 2>/dev/null)
 [ -n "$orph" ] && sudo pacman -Rns --noconfirm $orph 2>&1 | tail -3 || echo "  (none)"
 
-log "5/5 re-ejecutando omarchy-update"
+log "5/5 running omarchy-update again"
 OMARCHY_UPDATE_NONINTERACTIVE=1 omarchy-update 2>&1 | tail -25
 echo "  exit code: $?"
 
 log "state"
-echo "  pendientes: $(omarchy-migrate --pending 2>/dev/null | wc -l)"
+echo "  pending: $(omarchy-migrate --pending 2>/dev/null | wc -l)"
 echo "  dust:       $(pacman -Q dust 2>/dev/null || echo NO)"
 echo ""
 echo "==> FIX9_OK"

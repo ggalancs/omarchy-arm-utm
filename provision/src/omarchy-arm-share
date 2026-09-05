@@ -12,6 +12,13 @@
 #  arguments it mounts; --umount unmounts; --status reports what it sees.
 #
 set -uo pipefail
+
+# The help text is the file's own header, and its END is where the comments
+# stop -- not a line number counted by hand. Every one of these ranges either
+# overshot and printed a shell directive as the last line of the help, or
+# undershot and cut a sentence in half. Computed, so it cannot drift again.
+usage_header() { awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit}' "$0"; }
+
 MOUNT_POINT="${OMARCHY_SHARE_MNT:-/mnt/share}"
 TAG=share
 WEBDAV_PORT=/dev/virtio-ports/org.spice-space.webdav.0
@@ -41,6 +48,13 @@ show_state() {
   is_mounted && { echo "  contents:"; ls -la "$MOUNT_POINT" 2>/dev/null | head -6 | sed 's/^/    /'; }
 }
 
+# The account the mount is FOR. Under `sudo omarchy-arm-share` every `id -u`
+# in this file answers 0, so the davfs mount below was handed uid=0,gid=0 and
+# the desktop account was locked out of its own share with nothing saying so.
+# SUDO_UID/SUDO_GID are what sudo leaves behind for exactly this question.
+TGT_UID=${SUDO_UID:-$(id -u)}
+TGT_GID=${SUDO_GID:-$(id -g)}
+
 do_mount() {
   is_mounted && { echo "already mounted on $MOUNT_POINT"; return 0; }
   sudo mkdir -p "$MOUNT_POINT"
@@ -56,9 +70,14 @@ do_mount() {
     # so it is a one-time fix that survives reboots rather than a per-boot
     # hack. Reported and verified end-to-end by RBeach (@BeachFrontMT) in
     # omacom/omarchy discussion #7956.
-    if ! [ -r "$MOUNT_POINT" ] || ! [ -w "$MOUNT_POINT" ]; then
+    # An OWNERSHIP comparison, not an access test. root's access() grants
+    # R_OK and W_OK whatever the mode says, so under sudo both tests were
+    # unconditionally true, this whole block was skipped, and the next line
+    # announced the mount was ready while the desktop account still could not
+    # read it.
+    if [ "$(stat -c %u "$MOUNT_POINT" 2>/dev/null)" != "$TGT_UID" ]; then
       echo "  host ownership does not match this account; claiming the mount"
-      sudo chown "$(id -u):$(id -g)" "$MOUNT_POINT" 2>/dev/null \
+      sudo chown "$TGT_UID:$TGT_GID" "$MOUNT_POINT" 2>/dev/null \
         && echo "  chown applied (stored as xattrs on the host: it persists)" \
         || echo "  ! chown failed; the share may be read-only for you"
     fi
@@ -83,7 +102,7 @@ do_mount() {
       return 1
     fi
     # davfs2 asks for a username and password: neither is needed here
-    if printf '\n\n' | sudo mount -t davfs -o rw,uid=$(id -u),gid=$(id -g) "$URL" "$MOUNT_POINT" 2>/dev/null; then
+    if printf '\n\n' | sudo mount -t davfs -o rw,uid="$TGT_UID",gid="$TGT_GID" "$URL" "$MOUNT_POINT" 2>/dev/null; then
       echo "mounted over SPICE WebDAV on $MOUNT_POINT"; return 0
     fi
     echo "davfs2 could not mount $URL" >&2
@@ -99,7 +118,7 @@ do_mount() {
 case "${1:-}" in
   --umount|-u) sudo umount "$MOUNT_POINT" && echo "unmounted" ;;
   --status|-s) show_state ;;
-  -h|--help)   sed -n '3,14p' "$0" | sed 's/^#\{0,2\} \{0,1\}//' ;;
+  -h|--help)   usage_header ;;
   "")          do_mount ;;
   *)           echo "unknown option: $1" >&2; exit 1 ;;
 esac

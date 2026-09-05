@@ -28,6 +28,13 @@
 #  ────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 
+# The help text is the file's own header, and its END is where the comments
+# stop -- not a line number counted by hand. Every one of these ranges either
+# overshot and printed a shell directive as the last line of the help, or
+# undershot and cut a sentence in half. Computed, so it cannot drift again.
+usage_header() { awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit}' "$0"; }
+
+
 red()  { printf '\033[31m%s\033[0m\n' "$*"; }
 green() { printf '\033[32m%s\033[0m\n' "$*"; }
 amber() { printf '\033[33m%s\033[0m\n' "$*"; }
@@ -47,7 +54,7 @@ LIST
 
 case "${1:-}" in
   --example|-e) example_list; exit 0 ;;
-  -h|--help)    sed -n '3,26p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 0 ;;
+  -h|--help)    usage_header; exit 0 ;;
 esac
 
 CHECK_ONLY=0
