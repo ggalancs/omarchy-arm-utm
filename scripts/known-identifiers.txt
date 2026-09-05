@@ -528,3 +528,5 @@ CLASSIFY
 classify
 SESSDIR
 REAL
+HYPR_UNDECLARED
+firstbuild

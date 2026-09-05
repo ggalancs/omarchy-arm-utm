@@ -464,6 +464,28 @@ else
       echo "  $pkg: built"
     }
 
+    # ---- what Arch's recipe does not declare, and this chroot therefore does
+    # ---- not have.
+    #
+    # hyprtoolkit's PKGBUILD at tag 0.5.4-5 carries `makedepends=(cmake)` and
+    # nothing else, while its CMakeLists.txt line 23 is
+    # `find_package(hyprwayland-scanner 0.4.0 REQUIRED)`. makepkg -s installs
+    # only what the recipe declares, so in a clean chroot cmake failed at
+    # configure time -- sixty seconds in, rc=4, with a message about an SDK.
+    # On Arch's own builders the tool is present for other reasons; here it is
+    # not. Arch Linux ARM publishes 0.4.6-1, which satisfies the constraint.
+    #
+    # hyprland's recipe DOES declare it, in depends, so this is only about
+    # hyprtoolkit. Installed --asdeps so the orphan sweep can take it back.
+    HYPR_UNDECLARED=(hyprwayland-scanner)
+    pacman -S --needed --noconfirm --asdeps "${HYPR_UNDECLARED[@]}" >/dev/null 2>&1 \
+      || { warn "could not install what Arch's recipe leaves undeclared: ${HYPR_UNDECLARED[*]}"; exit 1; }
+    for _t in "${HYPR_UNDECLARED[@]}"; do
+      pacman -Q "$_t" >/dev/null 2>&1 \
+        || { warn "$_t is still not installed after pacman reported success"; exit 1; }
+    done
+    echo "  installed what the recipe omits: ${HYPR_UNDECLARED[*]} ($(pacman -Q hyprwayland-scanner | awk '{print $2}'))"
+
     # THE ORDER. hyprtoolkit first and published immediately, because makepkg
     # resolves hyprland's `depends` (which include hyprland-guiutils, which needs
     # hyprtoolkit) before it ever looks at makedepends.

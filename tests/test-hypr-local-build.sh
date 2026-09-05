@@ -123,7 +123,28 @@ grep -q "grep -qa 'package(s) compiled during the build'" "$BLD" \
   && ok "the README section is appended only when something was compiled" \
   || bad "$BLD: the README section is not conditional on the sanitize log"
 
-# 8. THE CLASSIFIER, DRIVEN OVER THE PAIRS A REAL BUILD PRODUCED.
+# 8. THE BUILD TOOLS ARCH'S RECIPE DOES NOT DECLARE. hyprtoolkit's PKGBUILD
+#    says makedepends=(cmake) while its CMakeLists requires hyprwayland-scanner
+#    0.4.0, and makepkg -s installs only what is declared -- so the first real
+#    run died at cmake configure, sixty seconds in. Installing it has to happen
+#    BEFORE the first hypr_build, and it has to be verified: pacman reporting
+#    success is not the same as the package being there.
+inst=$(grep -vE '^[[:space:]]*#' "$S2" | grep -n 'HYPR_UNDECLARED' | head -1 | cut -d: -f1)
+firstbuild=$(grep -vE '^[[:space:]]*#' "$S2" | grep -n 'hypr_build hyprtoolkit' | head -1 | cut -d: -f1)
+if [ -n "$inst" ] && [ -n "$firstbuild" ] && [ "$inst" -lt "$firstbuild" ]; then
+  ok "the undeclared build tools are installed (line $inst) before the first compile ($firstbuild)"
+else
+  bad "$S2: nothing installs hyprwayland-scanner before hyprtoolkit is built"
+fi
+codegrep() { grep -qE "$2" < <(grep -vE '^[[:space:]]*#' "$1"); }
+codegrep "$S2" 'hyprwayland-scanner' \
+  && ok "hyprwayland-scanner is named in code, not only in a comment" \
+  || bad "$S2: hyprwayland-scanner appears only in prose"
+codegrep "$S2" 'pacman -Q "\$_t"' \
+  && ok "and the install is verified rather than assumed" \
+  || bad "$S2: the undeclared tools are installed without checking they arrived"
+
+# 9. THE CLASSIFIER, DRIVEN OVER THE PAIRS A REAL BUILD PRODUCED.
 #    pacman prints the whole transitive closure of an unsatisfiable list, not
 #    the root cause -- and the first version of this gate accepted only the two
 #    direct pairs, so a real run on 2026-09-05 aborted with "a shape this build
