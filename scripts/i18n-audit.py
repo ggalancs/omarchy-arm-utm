@@ -120,9 +120,14 @@ def is_code(line):
 # the vocabulary files, and counting them makes a total nobody can drive to
 # zero. They were passing only because the detector was weaker; widening it is
 # what made the exemption necessary to state out loud.
+#
+# tests/test-audit-surfaces.sh is the same case as the vocabulary files: it
+# holds Spanish FIXTURES, because the only way to prove this tool can see a
+# surface is to put Spanish on that surface and check it is reported. Auditing
+# it would report the evidence as the defect.
 EXEMPT_NAMES = ('i18n-audit.py', 'english-exceptions.txt', 'known-identifiers.txt',
                 'ARTICULO.md', 'articulo.html', 'README.es.md', 'EMPEZAR.md',
-                'guia.html')
+                'guia.html', 'test-audit-surfaces.sh')
 EXEMPT_DIRS = ('provision/repair-iso',)
 
 def is_exempt(path):
