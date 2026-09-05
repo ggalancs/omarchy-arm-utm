@@ -20,11 +20,22 @@ set -uo pipefail
 # whatever directory the caller happened to be in, and reporting green for it.
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 
-pass=0; fail=0
+pass=0; fail=0; skipped=0
+# Exit 77 means SKIPPED: the check could not run at all. It is neither a pass
+# nor a failure, and it must not be either. Returning 0 for it printed "ok" for
+# a check that never happened and then certified the tree; returning 1 would
+# make a machine without the tool permanently red, which teaches the reader to
+# ignore the summary. The third state is counted, printed unconditionally, and
+# it withholds the certification at the end.
 step() {
   local name="$1"; shift
-  if "$@" >/tmp/ci-local.out 2>&1; then
+  local rc=0
+  "$@" >/tmp/ci-local.out 2>&1 || rc=$?
+  if [ "$rc" -eq 0 ]; then
     printf '  ok    %s\n' "$name"; pass=$((pass+1))
+  elif [ "$rc" -eq 77 ]; then
+    printf '  SKIP  %s\n' "$name"; skipped=$((skipped+1))
+    sed 's/^/          /' /tmp/ci-local.out | head -5
   else
     printf '  FAIL  %s\n' "$name"; fail=$((fail+1))
     sed 's/^/          /' /tmp/ci-local.out | head -15
@@ -46,7 +57,7 @@ shellcheck_errors() {
   # first word is that name is parsed as a directive, and shellcheck itself
   # then fails with SC1072.)
   command -v shellcheck >/dev/null 2>&1 \
-    || { echo "shellcheck is not installed: this tree cannot be certified locally (brew install shellcheck)"; return 1; }
+    || { echo "not installed: brew install shellcheck"; return 77; }
   local f r=0
   while IFS= read -r f; do shellcheck -S error -e SC1090,SC1091 "$f" || r=1; done < <(git ls-files '*.sh')
   return $r
@@ -69,7 +80,7 @@ shellcheck_errors() {
 #   SC2034  an unused index in a `for i in $(seq ...)` retry loop
 shellcheck_warnings() {
   command -v shellcheck >/dev/null 2>&1 \
-    || { echo "shellcheck is not installed: this tree cannot be certified locally (brew install shellcheck)"; return 1; }
+    || { echo "not installed: brew install shellcheck"; return 77; }
   local f r=0
   for f in build-omarchy-arm.sh provision/src/*.sh scripts/*.sh tests/*.sh; do
     [ -f "$f" ] || continue
@@ -95,9 +106,17 @@ step "shellcheck (errors only)"          shellcheck_errors
 step "shellcheck warnings (live src)"    shellcheck_warnings
 rm -f /tmp/ci-local.out
 echo
-if [ $fail -eq 0 ]; then
+if [ $fail -eq 0 ] && [ $skipped -eq 0 ]; then
   echo "  $pass green, 0 red. Safe to ASK about a remote run -- not to start one."
   exit 0
 fi
-echo "  $pass green, $fail RED. Do not push anything near CI until these pass."
+if [ $fail -eq 0 ]; then
+  # Green is not the same as complete. The runner installs everything and runs
+  # every step, so a tree certified here against fewer checks than it will face
+  # there is exactly the local/runner gap this file exists to close.
+  echo "  $pass green, 0 red, $skipped SKIPPED. Not certified: install what is"
+  echo "  missing above and run this again before asking about a remote run."
+  exit 1
+fi
+echo "  $pass green, $fail RED, $skipped skipped. Do not push anything near CI until these pass."
 exit 1

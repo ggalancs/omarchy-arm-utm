@@ -54,7 +54,12 @@ for f in provision/src/stage2.sh build-omarchy-arm.sh; do
   codegrep "$f" 53317 \
     && ok "$f opens the LocalSend ports, so the ufw step really runs" \
     || bad "$f never opens 53317: the ufw configuration step is not there"
-  if grep -q 'ENABLED=yes' "$f"; then
+  # codegrep, and the WRITE rather than the bare string. `grep -q ENABLED=yes`
+  # over build-omarchy-arm.sh was satisfied by an unrelated guest-check
+  # assertion 1600 lines away, so deleting the sed that actually writes it kept
+  # this green. The file's own header says a comment is not a guard; neither is
+  # a mention.
+  if codegrep "$f" "sed -i .s/\^ENABLED=[^/]*/ENABLED=yes/"; then
     ok "$f writes ENABLED=yes into ufw.conf"
   else
     bad "$f does not set ENABLED=yes in ufw.conf"
@@ -66,7 +71,7 @@ for f in provision/src/stage2.sh build-omarchy-arm.sh; do
   else
     ok "$f does not disable systemd-resolved"
   fi
-  if grep -q 'systemctl enable systemd-resolved' "$f"; then
+  if codegrep "$f" 'systemctl enable systemd-resolved'; then
     ok "$f enables systemd-resolved"
   else
     bad "$f does not enable systemd-resolved"

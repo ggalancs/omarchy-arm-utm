@@ -39,9 +39,14 @@ fi
 
 # 2. THE VERSION GATES RUN BEFORE THE COMPILE. A stale pin must cost ten
 #    seconds, not forty-five minutes and a message naming the wrong cause.
-gate=$(line "$S2" 'sorts above extra')
-if [ -n "$gate" ] && [ -n "$tk" ] && [ "$gate" -lt "$tk" ]; then
-  ok "the version gates (line $gate) run before any compilation ($tk)"
+# The EXECUTABLE gate, not the comment that explains it. `sorts above extra`
+# first occurs at the head of the comment block above the loop, so deleting the
+# loop and leaving its explanation kept this green -- the exact shape sections
+# 3 and 4 of this same file were written to avoid.
+gate=$(grep -vE '^[[:space:]]*#' "$S2" | grep -n 'vercmp "\$_v" "\$_e"' | head -1 | cut -d: -f1)
+tk_code=$(grep -vE '^[[:space:]]*#' "$S2" | grep -n 'hypr_build hyprtoolkit' | head -1 | cut -d: -f1)
+if [ -n "$gate" ] && [ -n "$tk_code" ] && [ "$gate" -lt "$tk_code" ]; then
+  ok "the version gates (code line $gate) run before any compilation ($tk_code)"
 else
   bad "$S2: the version assertions must run before the build"
 fi
@@ -72,7 +77,16 @@ for f in "$S2" "$SAN" "$CMD"; do
     ok "$f: no bare grep -qv '^#' in code"
   fi
 done
-grep -q "grep -qvE '\^#|\^\[\[:space:\]\]\*\$'" "$SAN" \
+# Code again. sanitize.sh carries this exact pattern inside the comment that
+# explains why the weaker one is wrong, so the assertion was satisfied by the
+# explanation: replacing the guard with a bare `[ -f ]` left this green while
+# every image would claim a local compilation it never did.
+# Process substitution, NOT a pipe: `grep -q` exits on its first match, the
+# upstream grep takes SIGPIPE and returns 141, and the `set -o pipefail` above
+# reports the whole pipeline as failed. Written as a pipe, this check went red
+# over a file that was doing exactly the right thing -- which is how the same
+# mistake was found in tests/test-security-invariants.sh.
+grep -q "grep -qvE '\^#|\^\[\[:space:\]\]\*\$'" < <(grep -vE '^[[:space:]]*#' "$SAN") \
   && ok "sanitize guards the motd with the pattern that cannot false-positive" \
   || bad "$SAN: the motd guard is not the -E pattern"
 

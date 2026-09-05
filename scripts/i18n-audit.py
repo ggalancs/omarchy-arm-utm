@@ -115,7 +115,14 @@ def is_code(line):
 # duplicates is provision/src/, which IS audited. That directory is also
 # guarded by tests/test-repair-iso-note.sh, which fails the moment anything
 # outside it starts depending on it, so the exemption cannot quietly widen.
-EXEMPT_NAMES = ('i18n-audit.py', 'english-exceptions.txt', 'known-identifiers.txt')
+# ARTICULO.md and articulo.html are the Spanish write-up, and README.es.md and
+# EMPEZAR.md are the Spanish documentation. They are Spanish on purpose, like
+# the vocabulary files, and counting them makes a total nobody can drive to
+# zero. They were passing only because the detector was weaker; widening it is
+# what made the exemption necessary to state out loud.
+EXEMPT_NAMES = ('i18n-audit.py', 'english-exceptions.txt', 'known-identifiers.txt',
+                'ARTICULO.md', 'articulo.html', 'README.es.md', 'EMPEZAR.md',
+                'guia.html')
 EXEMPT_DIRS = ('provision/repair-iso',)
 
 def is_exempt(path):
@@ -214,7 +221,26 @@ OUTPUT_LINE = re.compile(r'\b(echo|log|warn|die|fail|failed|info|printf|print|'
                          r'note|ok|ok_|okk|bad|title|phase|step|hdr|say|'
                          r'puts|send_user|send_error|send_log)\b')
 QUOTED = re.compile(r'"([^"\\]*(?:\\.[^"\\]*)*)"')
+# Single-quoted literals too. Without this the whole `strings` mode was blind
+# to `echo 'no se pudo montar...'` -- and structurally blind to two entire
+# files: check-published-hash.py and check-documented-flags.py print through
+# single quotes exclusively, so that CI step could never go red on either of
+# them whatever they printed.
+#
+# Scanned only on lines that already print something, and only for literals
+# with a space in them: `sed -i 's/x/y/'` and `grep -q '^#'` are code, not
+# prose, and counting them would drown the real hits in false positives.
+SQUOTED = re.compile(r"'([^']{4,})'")
 SUBST = re.compile(r'\$\([^)]*\)|\$\{[^}]*\}|\$\w+|-\w+')
+# Things that live inside a quoted literal and are not prose in any language.
+# A mirror URL contains `de.mirror.archlinuxarm.org` and `de` is a Spanish
+# preposition; an awk program contains `/^MemAvailable/{print $2}`; and the
+# English pluralisation idiom `hash(es)` ends in the two letters that made
+# `corrupted hash(es).` read as Spanish. All three were reported against lines
+# that are correct.
+NOT_PROSE = re.compile(r'https?://\S+|[a-z0-9.-]+\.(?:org|com|net|io|dev)\b'
+                       r"|/\^?[^/]*/\{[^}]*\}"        # an awk program
+                       r'|\((?:e?s)\)')                # plural(s) / hash(es)
 
 # The comment detector deliberately leaves out 'el', 'de', 'no' and friends,
 # because in a long paragraph of English prose they produce false positives.
@@ -385,7 +411,11 @@ def spanish_words(text):
 # has to judge a piece of text asks this now, so a gap closed here closes
 # everywhere.
 def looks_spanish(text):
-    body = SUBST.sub(' ', text)
+    # NOT_PROSE first: a URL, an awk program and the `(es)` of an English
+    # plural are not text in any language, and each of them was reported
+    # against a line that was correct. It belongs HERE and not in one caller,
+    # because this is the single decision function the comment above promises.
+    body = SUBST.sub(' ', NOT_PROSE.sub(' ', text))
     if ES_CHARS.search(body) or ES_SURE.search(body):
         return True
     if spanish_words(body):
@@ -400,8 +430,14 @@ def spanish_strings(path):
     for n, line in enumerate(open(path, errors='replace'), 1):
         if not OUTPUT_LINE.search(line):
             continue
-        for lit in QUOTED.findall(line):
-            body = SUBST.sub(' ', lit)
+        # Single-quoted literals are considered only when they read like
+        # prose: at least two words. A shell one-liner is full of quoted
+        # fragments that are code (`'^#'`, `'s/a/b/'`, `'%s\n'`), and treating
+        # those as printed text produced more noise than findings.
+        lits = QUOTED.findall(line)
+        lits += [q for q in SQUOTED.findall(line) if len(q.split()) >= 2]
+        for lit in lits:
+            # (looks_spanish does the stripping; nothing else needs body.)
             # Two matches is the right bar for a sentence and the wrong one
             # for a label. `log "orphan packages"` has exactly one word on
             # the list and sailed through a run that reported zero, and so did
@@ -444,10 +480,26 @@ def spanish_config(path):
 # ever looked at them, so `cargar_respuestas`, `cuestionario`, `montar`,
 # `vigilar`, `PUNTO`, `RAIZ` and fifteen more survived every pass that reported
 # zero. An identifier is code in the most literal sense, and the rule covers it.
-DEF_FUNC = re.compile(r'^\s*(?:function\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(\)\s*\{')
-DEF_VAR  = re.compile(r'^\s*(?:local\s+|export\s+|declare\s+-\w+\s+)?'
+# `function f {` with no parentheses is valid bash and this missed it.
+DEF_FUNC = re.compile(r'^\s*(?:function\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:\(\))?\s*\{'
+                      r'|([A-Za-z_][A-Za-z0-9_]*)\s*\(\)\s*\{)')
+# NOT anchored at ^ any more, and readonly/typeset included. The idiom this
+# codebase uses constantly -- `local SATCHECK; SATCHECK="..."` -- put the
+# assignment after a semicolon, where a ^-anchored pattern could not see it.
+# SATCHECK sat in build-omarchy-arm.sh undeclared while `identifiers` reported
+# TOTAL 0 for that file: the ledger was certifying as reviewed a name it had
+# never read.
+DEF_VAR  = re.compile(r'(?:^|;)\s*(?:local\s+|export\s+|readonly\s+|typeset\s+|'
+                      r'declare\s+-\w+\s+)?'
                       r'([A-Za-z_][A-Za-z0-9_]{2,})=')
 DEF_FOR  = re.compile(r'\bfor\s+([A-Za-z_][A-Za-z0-9_]{2,})\s+in\b')
+# `local src="$1" pkg="$2"` declares TWO names, separated by a space, and this
+# codebase writes that constantly. A space is not a safe general boundary for
+# an assignment -- `echo X=1` would match -- so the multiple form is recognised
+# only after an actual declarator, where every `name=` on the segment is a
+# declaration by definition.
+DEF_DECL = re.compile(r'(?:^|;)\s*(?:local|export|readonly|typeset|declare(?:\s+-\w+)?)\s+([^;#]*)')
+DECL_NAME = re.compile(r'([A-Za-z_][A-Za-z0-9_]{2,})=')
 
 LEDGER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                            'known-identifiers.txt')
@@ -476,11 +528,20 @@ def spanish_identifiers(path):
     except OSError:
         return hits
     for n, l in enumerate(lines, 1):
+        # finditer, not search: one line can declare more than one name --
+        # `local src="$1" pkg="$2"` is the idiom this codebase uses everywhere,
+        # and taking only the first match reviewed `src` and never `pkg`.
+        # DEF_FUNC has two alternatives (`function f {` and `f() {`), so the
+        # name is whichever group matched.
+        names = []
         for rx in (DEF_FUNC, DEF_VAR, DEF_FOR):
-            m = rx.search(l)
-            if not m:
-                continue
-            name = m.group(1)
+            for m in rx.finditer(l):
+                g = next((g for g in m.groups() if g), None)
+                if g:
+                    names.append(g)
+        for m in DEF_DECL.finditer(l):
+            names += DECL_NAME.findall(m.group(1))
+        for name in names:
             if name in ledger or name in seen:
                 continue
             seen.add(name)
@@ -641,8 +702,11 @@ def selftest():
 
 if __name__ == "__main__":
     if len(sys.argv) < 2: sys.exit(__doc__)
-    if sys.argv[1] == "lint-cont":
-        sys.exit(1 if lint_continuations(sys.argv[2:]) else 0)
+    # lint-cont USED to be dispatched here, above the "no such path" guard
+    # below, so `lint-cont nope.sh` printed "no comments inside continued
+    # commands" and exited 0 -- a clean answer about a file that does not
+    # exist, which the comment on that guard calls the one wrong answer this
+    # tool must never give. It is dispatched after the guard now.
     if sys.argv[1] == "identifiers":
         MODE_IDENTIFIERS = True
     if sys.argv[1] == "guard":
@@ -661,6 +725,8 @@ if __name__ == "__main__":
         p = pathlib.Path(a)
         ps += [p] if p.is_file() else [q for q in p.rglob("*")
                if q.suffix in (".sh", ".py", ".exp", ".lua") or q.parent.name == "src"]
+    if sys.argv[1] == "lint-cont":
+        sys.exit(1 if lint_continuations(args) else 0)
     if sys.argv[1] == "selftest":
         sys.exit(selftest())
     # Every scanning mode runs the self-test first: a damaged vocabulary must

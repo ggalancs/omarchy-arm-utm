@@ -31,9 +31,17 @@ PAYLOAD_MAP={
 p=os.path.join(REPO_ROOT,"build-omarchy-arm.sh")
 file_lines=open(p).read().split("\n")
 changes=0
+# Missing markers are counted, not merely mentioned. `--check` used to print
+# "!! no opening marker" and then, because only `changes` fed the exit status,
+# announce "everything was already in sync" and exit 0 -- so a payload that had
+# quietly stopped being re-embedded kept the CI step green while the source it
+# was supposed to mirror drifted away from it.
+errors=0
 for token,rel in PAYLOAD_MAP.items():
     start_idx=next((i for i,l in enumerate(file_lines) if l.rstrip().endswith("<<'%s'"%token)), None)
-    if start_idx is None: print(f"  !! no opening marker: {token}"); continue
+    if start_idx is None:
+        print(f"  !! no opening marker: {token}  (declared source: {rel})")
+        errors+=1; continue
     end_idx=next(j for j in range(start_idx+1,len(file_lines)) if file_lines[j]==token)
     new_body=open(os.path.join(REPO_ROOT,rel)).read().rstrip("\n").split("\n")
     if file_lines[start_idx+1:end_idx]==new_body: continue
@@ -44,9 +52,19 @@ for token,rel in PAYLOAD_MAP.items():
 # CI needs. Without it a pipeline that ran the sync would "pass" by silently
 # fixing the tree it was meant to be judging.
 CHECK = "--check" in sys.argv
-if not CHECK:
+if not CHECK and not errors:
     open(p,"w").write("\n".join(file_lines))
-print(f"  {changes} payload(s) updated" if changes else "  everything was already in sync")
+elif errors:
+    # Not written. Half a sync is worse than none: the markers that WERE found
+    # would be updated and the run would still be broken, so the next reader
+    # sees a partially fresh file and a stale one indistinguishable from it.
+    print("  !! nothing was written: fix the missing marker(s) first")
+if errors:
+    print(f"  {errors} payload(s) have no marker in build-omarchy-arm.sh")
+else:
+    print(f"  {changes} payload(s) updated" if changes else "  everything was already in sync")
+if errors:
+    sys.exit(2)
 if CHECK and changes:
     print(f"  !! {changes} payload(s) differ from their source; run scripts/sync-payloads.py")
     sys.exit(1)

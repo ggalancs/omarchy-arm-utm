@@ -60,7 +60,20 @@ def main():
                 print('          expected %s' % want)
                 bad += 1
             else:
-                print('  other   %s: %s (a different release?)' % (doc, h))
+                # This used to print "other ... (a different release?)" and let
+                # the run exit 0. Only the shared-prefix shape was fatal, i.e.
+                # only the exact historical corruption -- so flipping the FIRST
+                # character of the published hash in VERSIONS.md produced a
+                # cheerful informational line and a green run, while the file
+                # documented an artifact that does not exist.
+                #
+                # A hash that belongs to a known release is legitimately
+                # "other"; known_other is built from dist/*.zip.sha256 above.
+                # Anything outside that set belongs to nothing, and a checker
+                # whose whole job is the published checksum cannot shrug at it.
+                print('  UNKNOWN %s: %s belongs to no release this repository'
+                      ' publishes' % (doc, h))
+                bad += 1
         # The TRUNCATED form is what the prose uses on purpose -- README.md and
         # EMPEZAR.md quote `00c592c9099f4ea0…` because a 64-character run does
         # not read well in a sentence. So the rule is not "must carry the full
@@ -95,7 +108,7 @@ def main():
     if bad:
         print('\n%d corrupted hash(es).' % bad)
         return 1
-    print('  ok  every full hash in the docs is the published one, or another release')
+    print('  ok  every hash in the docs is this release or another one it publishes')
     return 0
 
 if __name__ == '__main__':
