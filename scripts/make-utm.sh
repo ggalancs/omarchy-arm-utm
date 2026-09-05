@@ -4,7 +4,7 @@
 # UTM 4.7 only scans ~/Library/Containers/com.utmapp.UTM/Data/Documents/ once,
 # when the app starts (listRefresh() is called from ContentView.onAppear), so
 # UTM has to be quit, the bundle written, and the app opened again.
-# config.plist requires all TEN top-level keys: they are decoded with decode(),
+# config.plist requires all TWELVE top-level keys: they are decoded with decode(),
 # not decodeIfPresent(), and omitting any one makes UTM reject it.
 set -euo pipefail
 

@@ -1,7 +1,10 @@
 # Historical snapshot — NOT the source of truth
 
-Nothing in the repository reads this directory. `grep -rn repair-iso` finds one
-line, in `.gitignore`, and it is about log files.
+Nothing in the repository reads this directory. What mentions it, and why:
+`.gitignore` (log files), this page, and `tests/test-repair-iso-note.sh`, which
+exists to fail the moment anything else starts depending on it. Naming a path
+in order to refuse to read it is not a dependency; that test draws the line and
+enforces it.
 
 These are frozen copies of payloads that have since moved on. The live ones are
 in **`provision/src/`**, and `scripts/sync-payloads.py` embeds those into

@@ -496,3 +496,12 @@ STRAY
 TGT_GID
 TGT_UID
 usage_header
+ANSW
+N_COND
+N_FIX
+N_KEY
+N_PAY
+N_TOOL
+claim
+es_word
+word

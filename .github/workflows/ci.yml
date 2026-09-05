@@ -6,9 +6,13 @@ name: CI
 
 # MANUAL ONLY. Never push/pull_request/schedule/tag.
 #
-# This workflow was added with automatic triggers and ran three times on
-# GitHub without the owner asking for it, two of those failing in public. The
-# rule already existed, written down in six other projects of his: CI on
+# This workflow was added with `on: push` and ran twelve times on GitHub
+# without the owner asking for it, four of them red in public. (This file used
+# to say three runs and two failures; `gh run list` shows twelve push runs on
+# 2026-09-03, four failed. scripts/ci-local.sh had the right numbers and this
+# one did not, in the two files whose job is to justify the manual trigger from
+# that history.) The rule already existed, written down in six other projects
+# of his: CI on
 # GitHub does not run without his explicit confirmation, every job is
 # reproduced locally first, and only then is it triggered by hand.
 #

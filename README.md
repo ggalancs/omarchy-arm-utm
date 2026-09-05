@@ -68,11 +68,9 @@ and `OMARCHY_PATH` goes unset, `bashrc` errors out, Hyprland cannot find
 > their x86_64 counterparts are **200**. The recipe can be built for aarch64;
 > the repository still does not exist.
 >
-> That change is what makes a second builder possible, and the two now differ
-> exactly here: `build-omarchy-arm.sh` — the one this README describes, and the
-> one that produced the published image — **reproduces** the package by hand.
-> `build-omarchy-arm-pkg.sh` **builds and installs** it. See
-> [README-PKG.md](README-PKG.md). An earlier version put them in
+> `build-omarchy-arm.sh` — the one this README describes, and the one that
+> produced the published image — **reproduces** that package by hand. An
+> earlier version put them in
 `/usr/local/bin`, which seemed tidier but broke things: the tree hardcodes
 `/usr/bin/omarchy-*` in thirteen places, five of them `.service` files.
 `/usr/local/bin` is still used, but only for the few ARM-specific wrappers that
@@ -123,13 +121,19 @@ so Enter accepts them, then three decisions (compile the tools? include OBS and
 Pinta? prepare the image for distribution?) and a couple of follow-ups depending
 on the last one. Add `--yes` to skip all of it; with no tty it never asks.
 
-**The script is a single self-contained file.** It embeds the fifteen files it
-needs — three install stages, the sanitiser, the repair harness, the optional-app
-installer, the post-update hook, the clipboard agent, the shared-folder mounter,
-the VM config, two `expect` harnesses, the QEMU launcher, the `.utm` bundle
-writer and the README that ships inside the image — and writes them out at
-startup. You can
-copy just that file to another Mac.
+**The script is a single self-contained file.** It embeds the nineteen files
+it needs — three install stages, the sanitiser, the repair harness, the
+optional-app installer, the post-update hook, the clipboard agent, the SPICE
+clipboard agent, the shared-folder mounter, the account tool, the GPU switch,
+the Hyprland bootstrap check, the display switch, the local-build reporter, two
+`expect` harnesses, the QEMU launcher, the `.utm` bundle writer and the two
+READMEs that ship inside the image — and writes them out at startup. The VM
+configuration is not on that list: it is generated from your answers rather
+than embedded. You can copy just that file to another Mac.
+
+Two things that file cannot carry with it, and that it will tell you about
+rather than skip: `scripts/check-alarm-satisfiable.py`, the ten-second
+pre-flight, and the six documents that publish the image's sha256.
 
 ### How long
 
@@ -314,12 +318,15 @@ restores the shipped setting.
 If you rename the account or add another one, point autologin at it:
 
 ```bash
-omarchy-arm-user --ask       # pick from the accounts on the machine
-omarchy-arm-user someuser    # set it directly
+omarchy-arm-user             # list the accounts on the machine
+omarchy-arm-user someuser    # set autologin to that account
+omarchy-arm-user --ask       # turn autologin OFF: SDDM will ask on every boot
 ```
 
-It edits `[Autologin] User=` in `/etc/sddm.conf.d/autologin.conf` and leaves
-`Session=` alone.
+With an account name it edits `[Autologin] User=` in
+`/etc/sddm.conf.d/autologin.conf` and leaves `Session=` alone. `--ask` does not
+pick an account — it removes that file, so the greeter asks for a username and
+a password from the next boot. To go back, run it again with an account name.
 
 The image ships **UTC**. Set yours with `sudo timedatectl set-timezone <zone>` (`timedatectl list-timezones` lists them). Earlier images carried the builder's own timezone, which is why the clock was wrong out of the box.
 
@@ -428,7 +435,7 @@ EMPEZAR.md             how to run it (ES) — requirements, timings, troubleshoo
 ARTICULO.md            how it was figured out (ES)
 provision/src/         stage1..3.sh, repair.sh, sanitize.sh, omarchy-arm-extras, hooks/
 scripts/               qemu, expect harnesses, .utm bundle writer
-fixes/                 the 19 corrections found along the way, as a record
+fixes/                 the 20 corrections found along the way, as a record
 dist/README.md         the README that ships inside the image
 ```
 
@@ -443,6 +450,11 @@ The guest-side verdict, read back over the serial console:
 ### H=1 Q=1 BINS=445 ROTOS=1 UNITS=7 VER=4 CLIP=5/5
 VEREDICTO_OK
 ```
+
+That is the output of the builder **as it stood on 2026-08-25**, kept as the
+record of that run. Today's verdict line carries thirteen fields and the tokens
+are in English: `### H= Q= BINS= BROKEN= UNITS= VER= DOCKERGRP= UFW= LDD=
+HYPRDEPS= REC= PACDB= CLIP=` followed by `VERDICT_OK`.
 
 **All 18 packages build**, `herdr` included: it comes from Omarchy's own PKGBUILD,
 which declares `aarch64` and fetches the official Zig 0.15.2 from ziglang.org

@@ -38,22 +38,34 @@ dependencias de Homebrew se instalan con tu usuario.
 ## 2 · Qué contexto necesita el script
 
 **Ninguno: es un solo fichero.** `build-omarchy-arm.sh` lleva embebidos los
-quince ficheros que necesita —las tres etapas de instalación, el sanitizador, el
-reparador, el instalador de apps opcionales, el hook de actualización, el agente
-del portapapeles y su puente, el montador de la carpeta compartida, la
-configuración de la VM, los dos arneses de `expect`, el lanzador de QEMU, el
-generador del bundle `.utm` y el README que viaja dentro del zip—, y los escribe
-en disco al arrancar. Puedes copiarlo solo a él a otro Mac y funcionará
-igual.
+diecinueve ficheros que necesita —las tres etapas de instalación, el
+sanitizador, el reparador, el instalador de apps opcionales, el hook de
+actualización, el agente del portapapeles y su puente, el montador de la
+carpeta compartida, la herramienta de cuentas, el conmutador de GPU, la
+comprobación del arranque de Hyprland, el conmutador de resolución, el informe
+de lo compilado en local, los dos arneses de `expect`, el lanzador de QEMU, el
+generador del bundle `.utm` y los dos README que viajan dentro del zip—, y los
+escribe en disco al arrancar. La configuración de la VM no está en esa lista:
+se genera con tus respuestas, no viaja embebida. Puedes copiarlo solo a él a
+otro Mac y funcionará igual.
 
 Lo único que sí puedes darle de antemano, para ahorrar ~900 MB de descarga, son
-las imágenes base:
+las imágenes base —pero **tienen que ser exactamente las ancladas**, no
+cualquiera:
 
 ```bash
 mkdir -p ~/omarchy-arm-build/dl
-cp alpine-virt-*-aarch64.iso  ~/omarchy-arm-build/dl/alpine-virt-aarch64.iso
-cp ArchLinuxARM-aarch64-*.tar.gz ~/omarchy-arm-build/dl/alarm-rootfs.tgz
+cp alpine-virt-3.22.2-aarch64.iso ~/omarchy-arm-build/dl/alpine-virt-aarch64.iso
+cp ArchLinuxARM-aarch64-latest.tar.gz ~/omarchy-arm-build/dl/alarm-rootfs.tgz
 ```
+
+La fase `fetch` compara ambos ficheros contra `checksums/base-images.sha256`,
+que es una lista revisada a mano, y **se detiene** si no coinciden: una ISO de
+otra versión no acelera la construcción, la aborta en el minuto uno. Los nombres
+exactos y sus sha256 están en ese fichero; para pasar a una versión nueva,
+`scripts/update-base-image-pins.sh`. El rootfs, además, se contrasta con el MD5
+publicado por Arch Linux ARM, que cambia cada pocas semanas: si no cuadra, se
+borra y se vuelve a descargar.
 
 El directorio de trabajo es `~/omarchy-arm-build` salvo que pongas otro:
 
@@ -71,18 +83,21 @@ Y ya está. Con terminal te hará primero seis preguntas **prerrellenadas con lo
 que detecta de tu Mac**, así que se contestan con Enter:
 
 ```
-━━━ configuracion ━━━
-  Zona horaria [Europe/Madrid]:            ← de /etc/localtime
-  Teclado (consola) [es]:                  ← de las preferencias de macOS
-  Teclado (Hyprland/Wayland) [es]:
-  Nucleos para la VM [6]:                  ← la mitad de tus núcleos de rendimiento
-  Memoria para la VM (MiB) [12288]:        ← según tu RAM
-  Tamano del disco [80G]:
+━━━ configuration ━━━
+  Time zone [Europe/Madrid]:               ← de /etc/localtime
+  Keyboard (console) [es]:                 ← de las preferencias de macOS
+  Keyboard (Hyprland/Wayland) [es]:
+  Cores for the VM [6]:                    ← la mitad de tus núcleos de rendimiento
+  Memory for the VM (MiB) [12288]:         ← según tu RAM
+  Disk size [80G]:
 ```
+
+(Los rótulos van en inglés: el script está escrito en inglés de punta a punta.
+Esta guía es la única parte en castellano.)
 
 Y luego las tres que **sí cambian el resultado**:
 
-- **¿Compilar las 17 herramientas de Omarchy que no existen para ARM?**
+- **¿Compilar las 18 herramientas de Omarchy que no existen para ARM?**
   Son ~40 minutos. Si dices que no, el escritorio funciona igual pero faltarán
   `ttfx` (el salvapantallas), `tensaku` (anotar capturas), `omacalc`, `omacut`,
   `omawrite`, `aether`, `cliamp` y `omarchy-nvim`. `aether` y `cliamp` se pueden
@@ -124,12 +139,12 @@ compiladas y sin OBS ni Pinta:
 | `prepare` | calcula la lista de paquetes cruzando la rama viva de Omarchy con el índice de ARM | ~10 s |
 | `build` | arranca Alpine headless, particiona, despliega el rootfs y corre las tres etapas en chroot | **~40 min** |
 | `utm` | escribe el bundle `.utm` y lo registra en UTM | ~1 min |
-| `verify` | arranca la VM y le exige dentro siete condiciones: Hyprland y quickshell vivos, ≥400 comandos, ≤5 enlaces rotos, ≥6 unidades `omarchy-*`, versión 4 y el portapapeles completo. Si alguna falla, la construcción se detiene aquí | ~4 min |
+| `verify` | arranca la VM y le exige dentro **trece** condiciones: Hyprland y quickshell vivos, ≥400 comandos, ≤5 enlaces rotos, ≥6 unidades `omarchy-*`, versión 4, la cuenta **fuera** del grupo `docker`, `ufw` habilitado, cero símbolos sin resolver en Hyprland y en hyprpaper/hyprland-dialog, el registro de lo compilado presente, la base de pacman consistente (`pacman -Dk`) y el portapapeles completo (5 de 5). Si alguna falla, la construcción se detiene aquí | ~4 min |
 | `sanitize` | copia el disco y lo limpia para distribuir | ~10 min |
 | `package` | compacta el qcow2, crea el bundle y lo comprime | ~3 min |
 
 **Total: entre 76 y 83 minutos**, medido en dos tandas completas sobre un M3
-Max con los valores por defecto —con las 17 herramientas, con OBS y con Pinta,
+Max con los valores por defecto —con las 18 herramientas, con OBS y con Pinta,
 que es exactamente lo que lleva la imagen que se distribuye—, y el resultado son
 **3,6 GB** de `.zip`. Decir que no a OBS y Pinta ahorra unos 45 minutos: OBS se
 compila entero desde fuente y es, con diferencia, lo más caro del proceso.
@@ -154,7 +169,7 @@ Cada fase es reanudable, así que **no hay que empezar de cero**:
 ```
 
 Reanudar **no vuelve a preguntar**: lo contestado se guarda en
-`~/omarchy-arm-build/respuestas.env` y se recupera solo. Manda, por este orden,
+`~/omarchy-arm-build/answers.env` y se recupera solo. Manda, por este orden,
 lo que pongas en el entorno, lo guardado, lo detectado de tu Mac y el valor por
 defecto — así `UTM_MEM=16384 ./build-omarchy-arm.sh --from utm` respeta tus
 16384. `--from` y `--only` son excluyentes y los dos exigen el nombre de una

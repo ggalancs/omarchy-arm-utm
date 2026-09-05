@@ -20,8 +20,14 @@ COMMANDS = {
     'omarchy-arm-hypr-local': 'provision/src/omarchy-arm-hypr-local',
     'my-apps.sh':            'scripts/my-apps.sh',
 }
-DOCS = ['README.md', 'EMPEZAR.md', 'dist/VERSIONS.md', 'dist/README.md',
-        'provision/src/README.md', 'provision/src/README-hyprlocal.md']
+# README.es.md was NOT on this list, and that is where `./my-apps.sh --ejemplo`
+# and `--comprobar` lived: two flags the script has never accepted, in the
+# document a Spanish-speaking reader follows, invisible to the one check
+# written for exactly this class of defect. A page being in another language
+# does not make the commands it prints optional.
+DOCS = ['README.md', 'README.es.md', 'EMPEZAR.md', 'dist/VERSIONS.md',
+        'dist/README.md', 'provision/src/README.md',
+        'provision/src/README-hyprlocal.md']
 
 # The DISPATCH surface, not the whole file.
 #

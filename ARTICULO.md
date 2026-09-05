@@ -838,10 +838,14 @@ fuente y un `config.plist` escrito a mano funciona perfectamente.
 
 Tres cosas que hay que saber:
 
-**Las diez claves de primer nivel son obligatorias.** Se decodifican con
+**Las doce claves de primer nivel son obligatorias.** Se decodifican con
 `decode()`, no con `decodeIfPresent()`: omitir aunque sea un `<array/>` vacío
-hace que UTM rechace el bundle. Son `Information`, `System`, `QEMU`, `Input`,
-`Sharing`, `Display`, `Drive`, `Network`, `Serial` y `Sound`.
+hace que UTM rechace el bundle. Son `Backend`, `ConfigurationVersion`,
+`Information`, `System`, `QEMU`, `Input`, `Sharing`, `Display`, `Drive`,
+`Network`, `Serial` y `Sound`. Este texto decía diez y dejaba fuera las dos
+primeras: `ConfigurationVersion` es justo la que UTM lee para rechazar un
+bundle de otra versión, así que un plist escrito siguiendo la lista corta no
+se importa.
 
 **La mitad VARS del firmware UEFI aarch64 es `edk2-arm-vars.fd`**, no
 `edk2-aarch64-vars.fd`, que no existe. La mitad CODE la aporta UTM en tiempo de
@@ -1044,7 +1048,7 @@ lo comprobaba con `grep -qa VEREDICTO_OK` sobre el log, y el log contiene el
 **eco** del propio comando, que lleva dentro `then echo VEREDICTO_OK`. La fase
 no podía fallar. Lo demuestra el log de la imagen que llegué a publicar: la
 línea 6 es el eco, la línea 8 dice `VEREDICTO_KO`, y el constructor cantó éxito.
-Ahora el token viaja partido —`VERED"ICTO_OK"`—, que es algo que el eco no puede
+Ahora el token viaja partido —`VERD"ICT_OK"`—, que es algo que el eco no puede
 contener.
 
 Ese `extras=si menu=si hook=si` es la prueba que importa: son los tres que

@@ -4665,11 +4665,24 @@ while IFS=$'\t' read -r name ver recipe tag pbsha srcsha when why; do
   # answer yes. Appending on the first and trying to remove on the second is how
   # this was written first, and ${ARRAY[@]/x} rewrites a substring rather than
   # dropping an element -- it left a mangled entry behind.
+  # Compared against the TAG this was built from, not against what is
+  # installed. Our pkgrel carries a local suffix on purpose -- hyprtoolkit
+  # ships as 0.5.4-5.1 over upstream's 0.5.4-5 -- so measuring the repository
+  # against the installed version meant our own suffix always won, repo_ahead
+  # stayed 0 for ever, and `--replace` answered "Nothing to replace" in exactly
+  # the case it exists for. The line further down says so itself: "an equal
+  # version must still be replaced, which is exactly the hyprtoolkit case this
+  # command exists for". The gate contradicted the action.
+  #
+  # Arch Linux ARM normally rebuilds a package without touching its pkgrel, so
+  # "caught up" here means: the repository now offers at least the upstream
+  # version we based ours on. Whether it can actually be installed is the
+  # separate question below, and both have to answer yes.
   repo_ahead=0; pac_ok=0
   if [ -z "$repo" ]; then
     echo "                 ${c_warn}the repository does not carry it at all${c_off}"
-  elif [ "$(vercmp "${inst:-0}" "$repo")" -gt 0 ]; then
-    echo "                 ${c_warn}ours is still newer; an update will not replace it${c_off}"
+  elif [ "$(vercmp "$repo" "${tag:-0}")" -lt 0 ]; then
+    echo "                 ${c_warn}the repository is still behind $tag${c_off}"
   else
     echo "                 ${c_ok}the repository has caught up${c_off}"
     repo_ahead=1
@@ -4995,7 +5008,7 @@ cat > "$W/scripts/make-utm.sh" <<'__PAYLOAD_SCRIPTS_MAKE-UTM_SH__'
 # UTM 4.7 only scans ~/Library/Containers/com.utmapp.UTM/Data/Documents/ once,
 # when the app starts (listRefresh() is called from ContentView.onAppear), so
 # UTM has to be quit, the bundle written, and the app opened again.
-# config.plist requires all TEN top-level keys: they are decoded with decode(),
+# config.plist requires all TWELVE top-level keys: they are decoded with decode(),
 # not decodeIfPresent(), and omitting any one makes UTM reject it.
 set -euo pipefail
 
@@ -6282,7 +6295,7 @@ questionnaire() {
   # a VM for your own use.
   info "Two possible uses:"
   info "  - image to hand out  -> renames the user to '$DIST_NEW_USER', wipes"
-  info "    SSH keys and identity, and produces a ~6.5 GB zip (~30 min extra)"
+  info "    SSH keys and identity, and produces a ~3.6 GB zip (~13 min extra)"
   info "  - VM for yourself    -> left as it is, with the user '$VM_USER'"
   if confirm "Prepare the image for distribution?" no; then
     BUILD_DIST=yes
