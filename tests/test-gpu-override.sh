@@ -105,8 +105,14 @@ echo 'LIBGL_ALWAYS_SOFTWARE=1' > "$CONF"
 [ -z "$(warn_override)" ] && echo "  ok  no note when the edited file is the decider" \
                           || { echo "  !! warn_override fires when it should not"; fails=$((fails+1)); }
 echo 'LIBGL_ALWAYS_SOFTWARE=0' > "$U/99-gl.conf"
-warn_override | grep -q "99-gl.conf" && echo "  ok  the note names the file that wins" \
-                                     || { echo "  !! warn_override does not name the winner"; fails=$((fails+1)); }
+# Process substitution, NOT a pipe. The sourced library brings `set -uo
+# pipefail` with it, warn_override is four separate echos, and `grep -q` exits
+# on the match in the third -- so the fourth echo takes SIGPIPE, the pipeline
+# reports 141, and this line failed on correct code in about one run in five.
+# Measured: 13 red out of 60. The sibling test already uses this idiom for the
+# same reason; this file was the one left as a pipe.
+grep -q "99-gl.conf" < <(warn_override) && echo "  ok  the note names the file that wins" \
+                                        || { echo "  !! warn_override does not name the winner"; fails=$((fails+1)); }
 
 echo
 [ "$fails" -eq 0 ] && echo "  gpu override resolution: green" || echo "  $fails failure(s)"

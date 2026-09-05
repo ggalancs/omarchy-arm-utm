@@ -87,13 +87,67 @@ N_TOOL=$(sed -n '/^  CONTRACT=(/,/)$/p' provision/src/stage3.sh \
          | tr ' ()' '\n\n\n' | grep -v '^CONTRACT=' | grep -cv '^$')
 claim EMPEZAR.md "las $N_TOOL herramientas de Omarchy" "EMPEZAR.md states the $N_TOOL compiled tools"
 claim guia.html  "las $N_TOOL herramientas de Omarchy" "guia.html states the $N_TOOL compiled tools"
-if [ "$(grep -c '^  \|^- ' /dev/null 2>/dev/null || echo 0)" = 0 ]; then :; fi
+# --- the omarchy-* command count, which no document can recompute (guest-check
+#     only asserts >= 400) but which every document must AGREE on. Three said
+#     445 and two said 442 about the same run, which is how the discrepancy
+#     survived: each file was internally consistent.
+#
+#     (A gutted version of this check sat here for a day: an `if` whose grep
+#     read /dev/null, so the count was always 0 and the body was `:`. It could
+#     not do anything under any input, in a file where every other line is a
+#     real claim.)
+# Lines about DANGLING links are excluded: 431 is a different measurement from
+# a different day -- how many omarchy-* symlinks were left pointing at a home
+# that no longer existed -- and three documents state it consistently. Only the
+# figure that describes what the image ships is compared here.
+# In python, because the sentences WRAP: README.md says "439 links dangled —
+# including all\n  431 omarchy-* commands", so a line-based filter sees the
+# number on one line and the word that disqualifies it on another. The whole
+# document is flattened and a window before each match is inspected.
+cmd_counts() { # file -> the distinct image command counts it states
+  python3 - "$1" <<'COUNTS'
+import re, sys
+t = re.sub(r'\s+', ' ', open(sys.argv[1], errors='replace').read())
+out = []
+for m in re.finditer(r'(\d{3}) (?:comandos )?`omarchy-\*`', t):
+    before = t[max(0, m.start() - 140):m.start()].lower()
+    if re.search(r'dangl|colgando|enlaces|links|symlink', before):
+        continue          # the dangling-symlink count, a different measurement
+    if m.group(1) not in out:
+        out.append(m.group(1))
+print(' '.join(out))
+COUNTS
+}
+N_CMD=$(cmd_counts README.md | awk '{print $1}')
+if [ -z "$N_CMD" ]; then
+  echo "  !! README.md no longer states a command count to compare the others against"
+  fail=$((fail+1))
+else
+  for d in README.md README.es.md dist/README.md ARTICULO.md; do
+    OTHER=$(cmd_counts "$d")
+    if [ -z "$OTHER" ] || [ "$OTHER" = "$N_CMD" ]; then
+      echo "  ok  $d agrees on $N_CMD omarchy-* commands"
+    else
+      echo "  !! $d states [$OTHER] omarchy-* commands, README.md states $N_CMD"
+      fail=$((fail+1))
+    fi
+  done
+fi
 
 # --- the saved-answers file, which two documents named wrongly for weeks
-ANSW=$(grep -o '\$W/[a-z-]*\.env' build-omarchy-arm.sh | sort -u | grep -v config | head -1)
+# The character class takes digits and underscores too, and an empty result is
+# refused. It was `[a-z-]*`, so renaming the file to anything with a digit or
+# an underscore in it left ANSW empty -- and `grep -q ""` matches every file,
+# so both documents passed unconditionally in exactly the scenario this check
+# exists to catch.
+ANSW=$(grep -o '\$W/[A-Za-z0-9_-]*\.env' build-omarchy-arm.sh | sort -u | grep -v config | head -1)
 ANSW=${ANSW#\$W/}
+if [ -z "$ANSW" ]; then
+  echo "  !! could not find the saved-answers filename in build-omarchy-arm.sh"
+  fail=$((fail+1))
+fi
 for d in EMPEZAR.md README.es.md; do
-  if grep -q "$ANSW" "$d" && ! grep -q 'respuestas\.env' "$d"; then
+  if [ -n "$ANSW" ] && grep -q "$ANSW" "$d" && ! grep -q 'respuestas\.env' "$d"; then
     echo "  ok  $d names the saved-answers file $ANSW"
   else
     echo "  !! $d does not name $ANSW, or still names respuestas.env"

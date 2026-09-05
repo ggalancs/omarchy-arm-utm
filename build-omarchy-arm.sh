@@ -4912,16 +4912,27 @@ send "mount -o subvol=@ /dev/vda2 /mnt 2>/dev/null || mount /dev/vda2 /mnt; moun
 # and skipped the `sync; umount -R /mnt; poweroff -f` on the next line, on a
 # disk QEMU has open with cache=writeback. The report was a gate, and one that
 # left the image unflushed.
+# A TOKEN, not just a note. The whole of expect's output goes into
+# $W/logs/build.log, which the caller only prints inside its two die branches,
+# so a `puts` here was written where nothing reads it: the arm could report a
+# missing compositor and still not turn anything red. The token below is
+# grepped by ph_build, which is what makes this a check rather than a remark.
+# (The run would still have died two phases later at verify, on the same
+# condition; what was lost is the cheap early signal, and the utm phase runs
+# for nothing in between.)
 expect {
     -ex "TOK_VERIFY_0"          {}
-    -re {TOK_VERIFY_[1-9][0-9]*} { puts "\n!! the post-install check reported a problem (Hyprland missing?)" }
-    timeout                      { puts "\n!! the post-install check timed out" }
-    eof                          { puts "\n!! EOF during the post-install check" }
+    -re {TOK_VERIFY_[1-9][0-9]*} { puts "\n!! the post-install check reported a problem (Hyprland missing?)"; set VERIFY_BAD 1 }
+    timeout                      { puts "\n!! the post-install check timed out"; set VERIFY_BAD 1 }
+    eof                          { puts "\n!! EOF during the post-install check"; set VERIFY_BAD 1 }
 }
 
 send "sync; umount -R /mnt 2>/dev/null; poweroff -f\r"
 expect eof
 puts "\n===== BUILD VM POWERED OFF ====="
+# AFTER the flush and the poweroff, so a failed probe still leaves a consistent
+# disk -- that is why this is a token and not an early exit.
+if {[info exists VERIFY_BAD]} { puts "TOK_VERIFY_BAD" }
 exit 0
 __PAYLOAD_SCRIPTS_BUILD_EXP__
 chmod +x "$W/scripts/build.exp"
@@ -5465,6 +5476,13 @@ ph_build() {
     sed 's/\x1b\[[0-9;?=]*[a-zA-Z]//g' "$W/logs/build.log" | grep -aE "^(!!|==>)" | tail -25
     die "stage3 failed: the disk exists but has no Omarchy configuration. Log: $W/logs/build.log"
   fi
+  # The post-install probe inside the guest. It reports a missing compositor by
+  # emitting this token after the poweroff; without reading it, the run went on
+  # to build the UTM bundle and only failed two phases later at verify.
+  grep -qa "TOK_VERIFY_BAD" "$W/logs/build.log" && {
+    sed 's/\x1b\[[0-9;?=]*[a-zA-Z]//g' "$W/logs/build.log" | grep -aE "^!!" | tail -10
+    die "the post-install check inside the guest failed (Hyprland missing?); check $W/logs/build.log"
+  }
   grep -qa "TOK_BUILD_0" "$W/logs/build.log" || {
     sed 's/\x1b\[[0-9;?=]*[a-zA-Z]//g' "$W/logs/build.log" | tail -40
     die "the build failed (rc=$rc); check $W/logs/build.log"

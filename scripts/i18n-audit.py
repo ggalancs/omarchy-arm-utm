@@ -127,7 +127,13 @@ def is_code(line):
 # it would report the evidence as the defect.
 EXEMPT_NAMES = ('i18n-audit.py', 'english-exceptions.txt', 'known-identifiers.txt',
                 'ARTICULO.md', 'articulo.html', 'README.es.md', 'EMPEZAR.md',
-                'guia.html', 'test-audit-surfaces.sh')
+                'guia.html', 'test-audit-surfaces.sh',
+                # Same case again: it carries the Spanish words that identify a
+                # sentence about dangling symlinks, so that the command count in
+                # that sentence is not compared against the one describing the
+                # image. Those words are data the check needs, not text to
+                # translate.
+                'test-documented-counts.sh')
 EXEMPT_DIRS = ('provision/repair-iso',)
 
 def is_exempt(path):
@@ -533,6 +539,14 @@ def spanish_identifiers(path):
     except OSError:
         return hits
     for n, l in enumerate(lines, 1):
+        # Comments are not declarations. Without this, DEF_FOR matched the
+        # phrase "for nothing in between" inside a comment and reported
+        # `nothing` as an undeclared identifier -- and the ledger is the one
+        # place where a false positive costs something, because the answer is
+        # to write the word into a file of reviewed names, which quietly makes
+        # the real check weaker.
+        if l.lstrip().startswith('#'):
+            continue
         # finditer, not search: one line can declare more than one name --
         # `local src="$1" pkg="$2"` is the idiom this codebase uses everywhere,
         # and taking only the first match reviewed `src` and never `pkg`.
@@ -731,7 +745,12 @@ if __name__ == "__main__":
         ps += [p] if p.is_file() else [q for q in p.rglob("*")
                if q.suffix in (".sh", ".py", ".exp", ".lua") or q.parent.name == "src"]
     if sys.argv[1] == "lint-cont":
-        sys.exit(1 if lint_continuations(args) else 0)
+        # `ps`, not `args`: lint_continuations skips anything that is not a
+        # file, so passing it a DIRECTORY -- or nothing, which defaults to "."
+        # -- reported "no comments inside continued commands" and exited 0
+        # after reading not one line. The same false clean the guard above
+        # exists to prevent, one command away.
+        sys.exit(1 if lint_continuations(ps) else 0)
     if sys.argv[1] == "selftest":
         sys.exit(selftest())
     # Every scanning mode runs the self-test first: a damaged vocabulary must

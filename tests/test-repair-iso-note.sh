@@ -65,9 +65,26 @@ USERS=$(grep -rln 'repair-iso' --include='*.sh' --include='*.py' --include='*.ym
         | grep -v '^./scripts/i18n-audit.py$')
 # And that exemption has to still be there, or the audit will start reporting
 # six Spanish strings in a directory this page says nobody should touch.
-grep -q "provision/repair-iso" scripts/i18n-audit.py \
-  && echo "  ok  the language audit exempts the snapshot, and says why" \
-  || { echo "  !! scripts/i18n-audit.py no longer exempts provision/repair-iso"; fail=$((fail+1)); }
+# The EXEMPT_DIRS assignment, not any mention of the path. The audit explains
+# the exemption in two comments right above it, so a bare grep matched the
+# explanation: rewriting the assignment to `EXEMPT_DIRS = ()` left this line
+# printing "the language audit exempts the snapshot" about an audit that
+# exempted nothing. Behaviour is checked too, which is the part that cannot be
+# satisfied by prose at all.
+grep -qE "^EXEMPT_DIRS *=.*provision/repair-iso" scripts/i18n-audit.py \
+  && echo "  ok  the language audit declares the snapshot exempt" \
+  || { echo "  !! scripts/i18n-audit.py no longer lists provision/repair-iso in EXEMPT_DIRS"; fail=$((fail+1)); }
+if python3 -c "
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location('ia', 'scripts/i18n-audit.py')
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+sys.exit(0 if m.is_exempt('provision/repair-iso/sanitize.sh')
+           and not m.is_exempt('provision/src/sanitize.sh') else 1)" 2>/dev/null; then
+  echo "  ok  and it really does exempt the snapshot, and only the snapshot"
+else
+  echo "  !! is_exempt() does not behave as the exemption claims"
+  fail=$((fail+1))
+fi
 if [ -z "$USERS" ]; then
   echo "  ok  nothing outside the directory reads it"
 else

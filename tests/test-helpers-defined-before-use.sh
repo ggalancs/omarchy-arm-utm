@@ -56,8 +56,13 @@ for f in provision/src/*.sh scripts/*.sh tests/*.sh build-omarchy-arm.sh fixes/*
     [ -n "$fn" ] || continue
     def=$(printf '%s\n' "$code" | grep -nE "^(function[[:space:]]+)?${fn}[[:space:]]*\(\)" | head -1 | cut -d: -f1)
     [ -n "$def" ] || continue
+    # The shapes this codebase actually writes. The first version accepted a
+    # call only at line start or after ; & |, so `if fn; then` (blocked on both
+    # sides) and `X=$(fn)` (both delimiters are parentheses) were invisible --
+    # and `if dns_works; then` is a real top-level line in build-omarchy-arm.sh.
+    # No live violation was hidden by it, but the gap was the whole point.
     first=$(printf '%s\n' "$code" \
-            | grep -nE "(^|[;&|]|\bthen\b|\belse\b|\bdo\b)[[:space:]]*${fn}([[:space:]]|$)" \
+            | grep -nE "(^|[;&|(\`]|\\\$\(|\bif\b|\belif\b|\bthen\b|\belse\b|\bdo\b|\bwhile\b|\buntil\b)[[:space:]]*${fn}([[:space:]);\`]|$)" \
             | grep -vE ":[[:space:]]*(function[[:space:]]+)?${fn}[[:space:]]*\(\)" \
             | head -1 | cut -d: -f1)
     [ -n "$first" ] || continue

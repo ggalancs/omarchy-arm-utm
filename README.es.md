@@ -402,7 +402,7 @@ en vez de depender de la versión que empaqueten los repositorios.
 
 Después se arrancó la **imagen ya empaquetada** —no la VM intermedia— en modo
 solo lectura (`qemu -snapshot`) y se comprobó desde fuera: usuario genérico y la
-cuenta de construcción borrada, 442 comandos `omarchy-*`, Hyprland y quickshell
+cuenta de construcción borrada, 445 comandos `omarchy-*`, Hyprland y quickshell
 vivos, `spice-vdagentd` con `-X` y el agente del portapapeles activo, `sshd`
 deshabilitado, cero claves SSH de host y ninguna ruta de compilación dentro de
 los binarios.

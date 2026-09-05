@@ -16,8 +16,8 @@ LIST=/media/guest-check-base.sh
 # The account name is now the list's second argument. Passed explicitly rather
 # than left to the default, because a batch that relies on the default proves
 # nothing about the parameter.
-USER_IMG=omarchy
-run_list() { bash "$LIST" builder "$USER_IMG" 2>&1; }
+OLD_USER="${1:-builder}"; USER_IMG="${2:-omarchy}"
+run_list() { bash "$LIST" "$OLD_USER" "$USER_IMG" 2>&1; }
 count_failures() {
   case "$1" in
     *VERDICT_CLEAN*) echo 0 ;;

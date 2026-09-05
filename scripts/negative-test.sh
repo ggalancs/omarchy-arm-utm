@@ -20,7 +20,13 @@
 LIST=/media/guest-check-base.sh
 [ -r "$LIST" ] || { echo "cannot find $LIST"; echo "END_CHECK"; exit 2; }
 
-run_list() { bash "$LIST" builder 2>&1; }
+# The accounts come from the harness, which receives them from
+# run-negative-tests.sh. Hardcoding them meant that against an image built with
+# any DIST_NEW_USER other than "omarchy", guest-check's very first assertion
+# failed, VERDICT_CLEAN never printed, and every batch reported failure over a
+# perfectly good image.
+OLD_USER="${1:-builder}"; USER_IMG="${2:-omarchy}"
+run_list() { bash "$LIST" "$OLD_USER" "$USER_IMG" 2>&1; }
 
 # The count comes from the VERDICT, not from counting lines by their prefix.
 # The list prints "  FAIL   ", and the first attempt here grepped for a

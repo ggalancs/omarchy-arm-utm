@@ -95,6 +95,10 @@ step "python syntax"               python_syntax
 step "no comments in continued commands" python3 scripts/i18n-audit.py lint-cont $(git ls-files '*.sh')
 step "payloads match their sources"      python3 scripts/sync-payloads.py --check
 step "language self-test"                python3 scripts/i18n-audit.py selftest
+# The satisfiability pre-check carries eight assertions over its own
+# classification logic and NOTHING ran them: no CI step, no test, and the build
+# invokes it without the flag. It needs no network and takes no time.
+step "satisfiability self-test"          python3 scripts/check-alarm-satisfiable.py --self-test
 step "no Spanish in comments"            python3 scripts/i18n-audit.py audit       $(git ls-files)
 step "no Spanish in strings"             python3 scripts/i18n-audit.py strings     $(git ls-files)
 step "no Spanish in identifiers"         python3 scripts/i18n-audit.py identifiers $(git ls-files)
