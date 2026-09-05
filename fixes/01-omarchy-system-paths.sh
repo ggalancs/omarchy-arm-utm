@@ -46,7 +46,7 @@ done
 [ -d "$OM/etc/fastfetch" ] && cp -a "$OM/etc/fastfetch" /etc/ 2>/dev/null || true
 [ -d "$OM/etc/gnupg" ] && cp -a "$OM/etc/gnupg/." /etc/gnupg/ 2>/dev/null || true
 
-log "5/8 SDDM: tema Omarchy, compositor y autologin"
+log "5/8 SDDM: Omarchy theme, compositor and autologin"
 mkdir -p /usr/share/sddm/themes /usr/local/share/wayland-sessions /etc/sddm.conf.d
 cp -a "$OM/default/sddm/omarchy" /usr/share/sddm/themes/ 2>/dev/null || true
 [ -f "$OM/default/sddm/hyprland.lua" ] && cp -a "$OM/default/sddm/hyprland.lua" /usr/share/sddm/hyprland.lua

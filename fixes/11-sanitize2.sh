@@ -21,7 +21,7 @@ echo "  passwd: $(getent passwd $NEW)"
 echo "  home:   $(ls -ld /home/$NEW | awk '{print $3, $4, $9}')"
 echo "  symlink omarchy: $(readlink /home/$NEW/.local/share/omarchy)"
 echo "  autologin: $(grep -h User= /etc/sddm.conf.d/*.conf 2>/dev/null | tr '\n' ' ')"
-echo "  binarios omarchy: $(ls /usr/local/bin | wc -l)"
+echo "  omarchy binaries: $(ls /usr/local/bin | wc -l)"
 echo "  ttfx: $(command -v ttfx || echo NO)"
 echo "  migrations sealed:   $(ls -1 /home/$NEW/.local/state/omarchy/migrations 2>/dev/null | wc -l)"
 sync

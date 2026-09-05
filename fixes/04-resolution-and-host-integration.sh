@@ -49,7 +49,7 @@ printf "  %-18s %s\n" spice-vdagentd "$(systemctl is-active spice-vdagentd 2>/de
 printf "  %-18s %s\n" spice-vdagent  "$(pgrep -a spice-vdagent | head -1 || echo NO)"
 printf "  %-18s %s\n" qemu-ga        "$(systemctl is-active qemu-guest-agent 2>/dev/null)"
 
-log "captura final"
+log "final screenshot"
 mkdir -p ~/shots && grim ~/shots/final.png && ls -lh ~/shots/final.png
 echo ""
 echo "==> FIX4_OK"

@@ -35,7 +35,18 @@ shell_syntax()  { local f r=0; while IFS= read -r f; do bash -n "$f" || r=1; don
 python_syntax() { local f r=0; while IFS= read -r f; do python3 -m py_compile "$f" || r=1; done < <(git ls-files '*.py'); return $r; }
 unit_tests()    { local t r=0; for t in tests/*.sh; do [ -e "$t" ] || continue; bash "$t" || r=1; done; return $r; }
 shellcheck_errors() {
-  command -v shellcheck >/dev/null 2>&1 || { echo "shellcheck not installed"; return 0; }
+  # return 1, not 0. `step` prints "ok" for a 0 and only shows the captured
+  # output when a step FAILS -- so on a machine without the linter this said
+  # "ok shellcheck (errors only)", hid the explanation, and went on to print
+  # "safe to ask about a remote run". The remote workflow apt-installs it and
+  # runs it, so a tree certified here was certified against a check the runner
+  # would still apply.
+  #
+  # (The line above does not start with the linter's name: a comment whose
+  # first word is that name is parsed as a directive, and shellcheck itself
+  # then fails with SC1072.)
+  command -v shellcheck >/dev/null 2>&1 \
+    || { echo "shellcheck is not installed: this tree cannot be certified locally (brew install shellcheck)"; return 1; }
   local f r=0
   while IFS= read -r f; do shellcheck -S error -e SC1090,SC1091 "$f" || r=1; done < <(git ls-files '*.sh')
   return $r
@@ -57,7 +68,8 @@ shellcheck_errors() {
 #   SC2024  a redirect after sudo, into a file the invoking user already owns
 #   SC2034  an unused index in a `for i in $(seq ...)` retry loop
 shellcheck_warnings() {
-  command -v shellcheck >/dev/null 2>&1 || { echo "shellcheck not installed"; return 0; }
+  command -v shellcheck >/dev/null 2>&1 \
+    || { echo "shellcheck is not installed: this tree cannot be certified locally (brew install shellcheck)"; return 1; }
   local f r=0
   for f in build-omarchy-arm.sh provision/src/*.sh scripts/*.sh tests/*.sh; do
     [ -f "$f" ] || continue

@@ -49,7 +49,7 @@ cp "$GS" "$TMP/iso/check.sh" || { echo "could not prepare the ISO" >&2; exit 2; 
 # GUEST_SCRIPT can invoke it -- for instance to sabotage the image and confirm
 # the checks know how to go red -- without duplicating it.
 cp scripts/guest-check.sh "$TMP/iso/guest-check-base.sh"
-hdiutil makehybrid -quiet -iso -joliet -default-volume-name CHEQUEO \
+hdiutil makehybrid -quiet -iso -joliet -default-volume-name CHECK \
   -o "$TMP/check.iso" "$TMP/iso" >/dev/null || { echo "could not create the ISO"; exit 2; }
 
 cat > "$TMP/t.exp" <<'EXPEOF'
@@ -103,6 +103,14 @@ FW="$(brew --prefix qemu)/share/qemu/edk2-aarch64-code.fd" \
 # buffer does not flush in time and the caller's grep finds an empty file --
 # whereas log_file writes unbuffered. Trusting stdout has twice failed a gate
 # over an image that was perfectly fine.
+# TWO ranges, because two different scripts travel down this channel. The
+# filter used to open only on `== identity ==`, which guest-check.sh prints --
+# but every negative-test batch captures that output into a variable and only
+# ever re-emits it through `grep FAIL`, so the heading never reached the
+# transcript, the range never opened, and stdout carried nothing but three
+# progress lines. The caller then looked for NEGATIVE_TEST_OK, did not find it,
+# and reported a failure for a batch that had passed: the always-red twin of a
+# check that cannot fail.
 sed 's/\x1b\[[0-9;?=]*[a-zA-Z]//g' "$TR" | grep -av '^]3008' \
-  | sed -n '/^== identity ==/,/^VERDICT_/p'
+  | sed -n '/^== identity ==/,/^VERDICT_/p; /^== 1\./,/^END_CHECK/p'
 grep -q "VERDICT_CLEAN" "$TR" 2>/dev/null

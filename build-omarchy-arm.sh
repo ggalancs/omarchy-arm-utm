@@ -3544,7 +3544,7 @@ for k in "${SELECTED[@]}"; do
   if run_item "$k"; then OK_LIST+=("$k"); else KO_LIST+=("$k"); fi
 done
 
-title "Resumen"
+title "Summary"
 [ ${#OK_LIST[@]} -gt 0 ] && ok "installed: ${OK_LIST[*]}"
 if [ ${#KO_LIST[@]} -gt 0 ]; then
   fail "failed: ${KO_LIST[*]}"
@@ -4702,7 +4702,7 @@ expect {
     -re {TOK_BUILD_[1-9][0-9]*} {
         puts "\n\n!!!!!! THE BUILD FAILED !!!!!!\n"
         set timeout 300
-        send "echo; echo ---- ultimas 80 file_lines ----; tail -n 80 /tmp/build.log; echo TOK_TAIL_\$?\r"
+        send "echo; echo ---- last 80 lines ----; tail -n 80 /tmp/build.log; echo TOK_TAIL_\$?\r"
         catch { wait_for "TOK_TAIL_" 15 "tail" 300 }
         exit 20
     }
@@ -4715,9 +4715,21 @@ send "mount -o subvol=@ /dev/vda2 /mnt 2>/dev/null || mount /dev/vda2 /mnt; moun
 # TOK_VERIFY_0, not the prefix. `wait_for "TOK_VERIFY_"` matched TOK_VERIFY_2
 # -- Hyprland absent from the installed system -- exactly as happily as
 # TOK_VERIFY_0, so the one post-install probe for the compositor binary could
-# never report its absence. The catch stays: this is a report, not a gate, and
-# the gate is ph_verify on the booted image.
-catch { wait_for "TOK_VERIFY_0" 17 "verification" 600 }
+# never report its absence.
+#
+# And NOT `catch { wait_for ... }`. The comment used to say the catch made this
+# a report rather than a gate; it did not. wait_for's failure paths call `die`,
+# which calls `exit`, and Tcl's exit is process termination, not a TCL_ERROR --
+# `catch` cannot intercept it. So a missing Hyprland aborted the script here
+# and skipped the `sync; umount -R /mnt; poweroff -f` on the next line, on a
+# disk QEMU has open with cache=writeback. The report was a gate, and one that
+# left the image unflushed.
+expect {
+    -ex "TOK_VERIFY_0"          {}
+    -re {TOK_VERIFY_[1-9][0-9]*} { puts "\n!! the post-install check reported a problem (Hyprland missing?)" }
+    timeout                      { puts "\n!! the post-install check timed out" }
+    eof                          { puts "\n!! EOF during the post-install check" }
+}
 
 send "sync; umount -R /mnt 2>/dev/null; poweroff -f\r"
 expect eof
@@ -4735,7 +4747,7 @@ set timeout 900
 log_user 1
 match_max 400000
 set FIX [lindex $argv 0]
-if {$FIX eq ""} { puts "uso: repair.exp <fix.sh>"; exit 1 }
+if {$FIX eq ""} { puts "usage: repair.exp <fix.sh>"; exit 1 }
 
 proc wait_for {pat code msg {t 900}} {
     set timeout $t
@@ -4753,9 +4765,9 @@ if {[string match "@*@" $ROOT]} {
 # with a space in it spawned the wrong argv and expect reported a login
 # timeout that never mentioned the path.
 spawn -noecho "$ROOT/scripts/qemu-build.sh"
-wait_for "localhost login:" 10 "login de Alpine" 300
+wait_for "localhost login:" 10 "the Alpine login" 300
 send "root\r"
-wait_for "localhost:~#" 11 "shell de root" 120
+wait_for "localhost:~#" 11 "the root shell" 120
 send "export PS1='RDY> '; echo TOK_SH_\$?\r"
 wait_for "TOK_SH_0" 12 "prompt" 60
 send "mkdir -p /media/prov; for d in /dev/vd? /dev/sr?; do mount -t iso9660 -o ro \$d /media/prov 2>/dev/null && \[ -f /media/prov/repair.sh \] && break; umount /media/prov 2>/dev/null; done; ls /media/prov; echo TOK_PROV_\$?\r"

@@ -54,7 +54,7 @@ hyprctl dispatch exec alacritty 2>&1 | head -2
 sleep 5
 hyprctl clients 2>/dev/null | grep -E "^Window|class:" | head -6
 
-log "captura"
+log "screenshot"
 grim /tmp/kbd.png && ls -l /tmp/kbd.png
 echo ""
 echo "==> FIX6_OK"

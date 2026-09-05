@@ -391,7 +391,7 @@ for k in "${SELECTED[@]}"; do
   if run_item "$k"; then OK_LIST+=("$k"); else KO_LIST+=("$k"); fi
 done
 
-title "Resumen"
+title "Summary"
 [ ${#OK_LIST[@]} -gt 0 ] && ok "installed: ${OK_LIST[*]}"
 if [ ${#KO_LIST[@]} -gt 0 ]; then
   fail "failed: ${KO_LIST[*]}"

@@ -9,7 +9,7 @@
 #  a) `grep -rl <user>` returned 0 matches because grep reads CONTENT, and a
 #     symlink's target is not content. 439 links were still pointing at the old
 #     home, including the 431 omarchy-* commands in /usr/local/bin and the
-#     fondo activo (~/.local/state/omarchy/current/background).
+#     active background (~/.local/state/omarchy/current/background).
 #
 #  b) mako, swayosd, walker and elephant were installed. Omarchy 4 retires them
 #     (bin/omarchy-upgrade-to-quattro uninstalls them) because quickshell does
@@ -29,7 +29,7 @@ for l in "${BAD[@]:-}"; do
   t=$(readlink "$l"); ln -sfn "${t//\/home\/$OLD\//\/home\/$NEW\/}" "$l"
 done
 echo "  remaining: $(find /home/$NEW /etc /usr/local /opt -xdev -type l -lname "*/home/$OLD/*" 2>/dev/null | wc -l)"
-echo "  fondo: $(readlink -f /home/$NEW/.local/state/omarchy/current/background)"
+echo "  background: $(readlink -f /home/$NEW/.local/state/omarchy/current/background)"
 
 echo "==> b) packages Omarchy 4 retires"
 pacman -Rns --noconfirm mako swayosd walker elephant 2>&1 | tail -3
@@ -38,6 +38,6 @@ rm -f  /usr/local/bin/walker
 O=$(pacman -Qtdq 2>/dev/null | tr '\n' ' '); [ -n "${O// /}" ] && pacman -Rns --noconfirm $O >/dev/null 2>&1
 
 echo "==> verification"
-echo "  enlaces rotos: $(find /home/$NEW /usr/local/bin -xdev -type l ! -exec test -e {} \; -print 2>/dev/null | wc -l)"
+echo "  broken links: $(find /home/$NEW /usr/local/bin -xdev -type l ! -exec test -e {} \; -print 2>/dev/null | wc -l)"
 echo "  retired ones present: $(for p in mako swayosd walker elephant; do pacman -Q $p >/dev/null 2>&1 && echo -n "$p "; done; echo -n none)"
 sync

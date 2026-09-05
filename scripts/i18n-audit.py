@@ -104,6 +104,27 @@ def is_code(line):
     st = line.lstrip()
     return bool(st) and not st.startswith('#') and not st.startswith('--')
 
+# One exemption list, used by every audit mode. It used to be repeated by name
+# in two of the four, so `strings` skipped the vocabulary files and `prose` and
+# `identifiers` did not.
+#
+# provision/repair-iso/ is a frozen snapshot: it is the payload set that built
+# the images published before this repository grew a payload generator, kept as
+# the record of how those were made, and its own README says nothing reads it.
+# Translating it would edit the record rather than the code -- and the code it
+# duplicates is provision/src/, which IS audited. That directory is also
+# guarded by tests/test-repair-iso-note.sh, which fails the moment anything
+# outside it starts depending on it, so the exemption cannot quietly widen.
+EXEMPT_NAMES = ('i18n-audit.py', 'english-exceptions.txt', 'known-identifiers.txt')
+EXEMPT_DIRS = ('provision/repair-iso',)
+
+def is_exempt(path):
+    p = pathlib.Path(path)
+    if p.name in EXEMPT_NAMES:
+        return True
+    posix = p.as_posix()
+    return any(posix == d or ('/' + d + '/') in ('/' + posix) for d in EXEMPT_DIRS)
+
 def audit(paths):
     total = 0
     rows = []
@@ -116,11 +137,7 @@ def audit(paths):
             continue
         # The morphological test, same as for strings. The word list below was
         # what this used, and it let "# usuario durante la construccion" past.
-        # These two carry Spanish on purpose: one holds the vocabulary, the
-        # other explains which Spanish words a dictionary wrongly claims.
-        # Counting them makes a total nobody can drive to zero.
-        if p.name in ('i18n-audit.py', 'english-exceptions.txt',
-                      'known-identifiers.txt'):
+        if is_exempt(p):
             continue
         n = sum(1 for _, l in comment_lines(p, t)
                 if looks_spanish(FILEISH.sub(' ', l)))
@@ -187,8 +204,15 @@ def lint_continuations(paths):
 # Every function this codebase prints through, not only the obvious ones. `ok`
 # and `phase` were missing, which is why "working copy made" and a phase
 # title in Spanish came out of a build the audit had cleared.
+# puts/send_user/send_error/send_log are Tcl. Without them the strings audit
+# never even looked at the lines the .exp harnesses print, so the English gate
+# over three operator-facing scripts could not go red: `puts "no aparece el
+# login"` was invisible, and so were "login de Alpine" and "shell de root".
+# The detector could classify all three correctly the whole time; the scanner
+# simply never showed it the line.
 OUTPUT_LINE = re.compile(r'\b(echo|log|warn|die|fail|failed|info|printf|print|'
-                         r'note|ok|ok_|okk|bad|title|phase|step|hdr|say)\b')
+                         r'note|ok|ok_|okk|bad|title|phase|step|hdr|say|'
+                         r'puts|send_user|send_error|send_log)\b')
 QUOTED = re.compile(r'"([^"\\]*(?:\\.[^"\\]*)*)"')
 SUBST = re.compile(r'\$\([^)]*\)|\$\{[^}]*\}|\$\w+|-\w+')
 
@@ -281,7 +305,17 @@ PLAIN_ES = {'libre', 'libres', 'fichero', 'ficheros', 'carpeta', 'carpetas',
             'instalar', 'escribe', 'escribir', 'lee', 'leer', 'borra',
             'borrar', 'crea', 'crear', 'guarda', 'guardar', 'muestra',
             'mostrar', 'espera', 'esperar', 'termina', 'terminar', 'cancela',
-            'cancelado', 'cancelada', 'pulsa', 'pulsar', 'elige', 'elegir'}
+            'cancelado', 'cancelada', 'pulsa', 'pulsar', 'elige', 'elegir',
+            # A third batch, from the .exp and screenshot scripts: `---- ultimas
+            # 80 lineas ----` in the failed-build banner and `captura: $OUT`
+            # as a screenshot tool's only line of output. Neither was caught by
+            # anything, and the first had survived a blanket rename that left
+            # it in neither language.
+            'ultima', 'ultimas', 'ultimo', 'ultimos', 'captura', 'capturas',
+            'pantalla', 'pantallas', 'tema', 'temas', 'fondo', 'fondos',
+            'sistema', 'sistemas', 'ajuste', 'ajustes', 'resumen', 'resumenes',
+            'modulo', 'modulos', 'enlace', 'enlaces', 'vuelta', 'vueltas',
+            'binario', 'binarios', 'ruta', 'salida', 'entrada'}
 # Technical English that a general wordlist tends not to carry, and that would
 # otherwise trip the morphology.
 # 'timezone' is the reason this list exists: it is not in the dictionary, and
@@ -505,6 +539,8 @@ CODE_ASSIGN = re.compile(r'^\s*[\w.\[\]]+\s*=\s*[\'"]?[a-z]{2}(_[A-Z]{2})?[\'"]?
 def audit_prose(paths):
     total, rows = 0, []
     for p in paths:
+        if is_exempt(p):
+            continue
         try:
             hits = [(n, l.strip()) for n, l in heredoc_prose(p)
                     if len(l.split()) >= 3 and not CODE_ASSIGN.match(l)
@@ -526,6 +562,8 @@ def audit_identifiers(paths):
     total = 0
     rows = []
     for p in paths:
+        if is_exempt(p):
+            continue
         try:
             hits = spanish_identifiers(p)
         except (OSError, UnicodeDecodeError):
@@ -543,10 +581,7 @@ def audit_strings(paths):
     total = 0
     rows = []
     for p in paths:
-        # This file carries lists of Spanish words on purpose; scanning it
-        # reports the vocabulary as untranslated text for ever.
-        if getattr(p, 'name', '') in ('i18n-audit.py', 'english-exceptions.txt',
-                                      'known-identifiers.txt'):
+        if is_exempt(p):
             continue
         try:
             hits = spanish_strings(p) + spanish_config(p)

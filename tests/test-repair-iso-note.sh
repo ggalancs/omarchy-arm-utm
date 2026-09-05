@@ -54,8 +54,20 @@ fi
 
 # Nothing may start depending on the snapshot: the moment something does, it is
 # no longer a snapshot and the page's central claim is false.
+#
+# scripts/i18n-audit.py is allowed to NAME the directory, and only that one.
+# It exempts the snapshot from the English rule -- those files were written in
+# Spanish and translating them would edit the record rather than the code --
+# which is the opposite of depending on it: it is the audit declining to read
+# it. Any OTHER file that mentions the path is a dependency and fails here.
 USERS=$(grep -rln 'repair-iso' --include='*.sh' --include='*.py' --include='*.yml' . 2>/dev/null \
-        | grep -v '^./provision/repair-iso/' | grep -v '^./tests/test-repair-iso-note.sh')
+        | grep -v '^./provision/repair-iso/' | grep -v '^./tests/test-repair-iso-note.sh' \
+        | grep -v '^./scripts/i18n-audit.py$')
+# And that exemption has to still be there, or the audit will start reporting
+# six Spanish strings in a directory this page says nobody should touch.
+grep -q "provision/repair-iso" scripts/i18n-audit.py \
+  && echo "  ok  the language audit exempts the snapshot, and says why" \
+  || { echo "  !! scripts/i18n-audit.py no longer exempts provision/repair-iso"; fail=$((fail+1)); }
 if [ -z "$USERS" ]; then
   echo "  ok  nothing outside the directory reads it"
 else

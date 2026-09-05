@@ -5,7 +5,7 @@ set timeout 900
 log_user 1
 match_max 400000
 set FIX [lindex $argv 0]
-if {$FIX eq ""} { puts "uso: repair.exp <fix.sh>"; exit 1 }
+if {$FIX eq ""} { puts "usage: repair.exp <fix.sh>"; exit 1 }
 
 proc wait_for {pat code msg {t 900}} {
     set timeout $t
@@ -23,9 +23,9 @@ if {[string match "@*@" $ROOT]} {
 # with a space in it spawned the wrong argv and expect reported a login
 # timeout that never mentioned the path.
 spawn -noecho "$ROOT/scripts/qemu-build.sh"
-wait_for "localhost login:" 10 "login de Alpine" 300
+wait_for "localhost login:" 10 "the Alpine login" 300
 send "root\r"
-wait_for "localhost:~#" 11 "shell de root" 120
+wait_for "localhost:~#" 11 "the root shell" 120
 send "export PS1='RDY> '; echo TOK_SH_\$?\r"
 wait_for "TOK_SH_0" 12 "prompt" 60
 send "mkdir -p /media/prov; for d in /dev/vd? /dev/sr?; do mount -t iso9660 -o ro \$d /media/prov 2>/dev/null && \[ -f /media/prov/repair.sh \] && break; umount /media/prov 2>/dev/null; done; ls /media/prov; echo TOK_PROV_\$?\r"

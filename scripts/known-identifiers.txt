@@ -445,3 +445,6 @@ UTM_SEED
 _bg
 _pkg
 _seeded_uuid
+BATCHES
+TRDIR
+tr_file
