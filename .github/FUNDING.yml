@@ -1,0 +1,18 @@
+# Shows the Sponsor button on this repository.
+#
+# GitHub only reads this file from the DEFAULT branch, so it lives on main
+# rather than travelling with a feature branch.
+#
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+
+github: [ggalancs]
+
+# Other platforms, if they are ever wanted. Uncomment and fill in; each key
+# takes either a single username or a list.
+#
+# ko_fi: username
+# buy_me_a_coffee: username
+# liberapay: username
+# open_collective: project
+# patreon: username
+# custom: ["https://example.com/donate"]
