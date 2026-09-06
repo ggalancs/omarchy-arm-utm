@@ -532,3 +532,7 @@ HYPR_UNDECLARED
 firstbuild
 TRANSCRIPT
 pair
+UTM_CPUS
+mon_send
+spacedir
+tracked_files

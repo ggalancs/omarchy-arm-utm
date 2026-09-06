@@ -50,6 +50,10 @@ claim() { # file  needle  description
 N_PAY=$(grep -c "cat > \"\$W/.*<<'__PAYLOAD_" build-omarchy-arm.sh)
 claim README.md  "embeds the $(word "$N_PAY") files" "README.md states the $N_PAY embedded payloads"
 claim EMPEZAR.md "los $(es_word "$N_PAY") ficheros"  "EMPEZAR.md states the $N_PAY embedded payloads"
+# guia.html is EMPEZAR.md's HTML twin and repeats the same sentence. It was not
+# claimed here, and it sat at "quince" for as long as EMPEZAR.md said
+# "diecinueve" -- the same shape as articulo.html's command count.
+claim guia.html   "los $(es_word "$N_PAY") ficheros"  "guia.html states the $N_PAY embedded payloads"
 
 # --- how many repair scripts are in fixes/
 N_FIX=$(find fixes -maxdepth 1 -name '*.sh' | wc -l | tr -d ' ')

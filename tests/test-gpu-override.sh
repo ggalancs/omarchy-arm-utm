@@ -37,7 +37,11 @@ printf '%s\n' "${SHIPPED[@]}" | head -1 | grep -q "environment.d" \
   || { echo "  !! the shipped ENVDIRS is not the four directories systemd reads"; shipped_fails=$((shipped_fails+1)); }
 # The user directory has to come FIRST, or same-name shadowing runs backwards.
 case "${SHIPPED[0]}" in
-  */.config/environment.d|"$XDG_CONFIG_HOME"/environment.d) ;;
+  # ${XDG_CONFIG_HOME:-} , not $XDG_CONFIG_HOME: this file runs under `set -u`
+  # through the sourced library, and the variable is unset on most machines --
+  # so the case arm that checks the ordering killed the test on the very path
+  # it exists to guard. It only ever ran because the first arm matched first.
+  */.config/environment.d|"${XDG_CONFIG_HOME:-}"/environment.d) ;;
   *) echo "  !! the user directory is not first in the shipped ENVDIRS"; shipped_fails=$((shipped_fails+1)) ;;
 esac
 [ "$shipped_fails" -eq 0 ] && echo "  ok  the shipped ENVDIRS is the four systemd directories, user first"

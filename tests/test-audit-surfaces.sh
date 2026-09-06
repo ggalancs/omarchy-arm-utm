@@ -67,6 +67,40 @@ echo "the image is ready"
 EOF
 expect_hits strings "$TMP/notprose.sh" 0 "a mirror URL, an awk program and hash(es) are not Spanish"
 
+# --- the three modes with no positive fixture at all. audit (comments), prose
+#     (heredocs) and lint-cont were asserted only through the "no such path"
+#     case, so every one of them could be blinded outright -- returning zero on
+#     any input -- and this file would still have gone green.
+cat > "$TMP/comment.sh" <<'EOF'
+#!/bin/bash
+# el usuario no tiene permisos sobre la carpeta de destino
+echo "ready"
+EOF
+expect_hits audit "$TMP/comment.sh" 1 "a Spanish comment line is reported by the comment audit"
+
+cat > "$TMP/heredoc.sh" <<'EOF'
+#!/bin/bash
+cat > /etc/motd <<'MOTD'
+  Bienvenido a la maquina virtual, la contrasena es la misma que el usuario
+MOTD
+EOF
+expect_hits prose "$TMP/heredoc.sh" 1 "Spanish prose inside a heredoc is reported by the prose audit"
+
+# lint-cont counts differently: it prints findings but no TOTAL line, so it is
+# driven by exit status instead.
+cat > "$TMP/cont.sh" <<'EOF'
+#!/bin/bash
+qemu-system-aarch64 \
+  # this comment truncates the command
+  -m 4096
+EOF
+if python3 scripts/i18n-audit.py lint-cont "$TMP/cont.sh" >/dev/null 2>&1; then
+  echo "  !! lint-cont does not report a comment between two continued lines"
+  fail=$((fail+1))
+else
+  echo "  ok  a comment inside a continued command is reported"
+fi
+
 # --- a path that does not exist must never read as clean, in ANY mode
 for mode in audit strings identifiers prose lint-cont; do
   if python3 scripts/i18n-audit.py "$mode" "$TMP/does-not-exist.sh" >/dev/null 2>&1; then

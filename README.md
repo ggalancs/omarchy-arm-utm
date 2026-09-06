@@ -140,7 +140,10 @@ instead, and are not compared against).
 
 ### How long
 
-Measured on an M3 Max, tools compiled, without OBS/Pinta:
+Measured on an M3 Max, tools compiled, without OBS/Pinta. These are from
+before the local Hyprland build existed: a run that has to compile hyprtoolkit
+and hyprland itself adds roughly half an hour, and the first complete run with
+it took about two hours and a half end to end.
 
 | Phase | | Time |
 |---|---|---|

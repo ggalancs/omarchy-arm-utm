@@ -145,7 +145,9 @@ so the clock was wrong out of the box. Reported by mphaxise.
 ## What to expect
 
 Works: the full Hyprland desktop with Omarchy's bar, themes, menu, terminal,
-browser, and the 445 `omarchy-*` commands.
+browser, and every `omarchy-*` command Omarchy ships (run `ls /usr/bin/omarchy-* | wc -l`
+to count the ones in your copy: the number moves with each Omarchy release, and
+a figure written in here would be describing a different image within weeks).
 
 It also carries **18 packages compiled for aarch64**, because none of them
 has an aarch64 build upstream. Nine come from Omarchy's own package repository:

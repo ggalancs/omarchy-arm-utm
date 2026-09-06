@@ -808,12 +808,23 @@ if [ "$OLD" != "$NEW" ]; then
   if ! command -v strings >/dev/null 2>&1; then
     echo "  ? /usr/local/bin binaries: without 'strings' this cannot be checked"
   else
+    # /usr/bin too, not only /usr/local/bin. The build path can survive in the
+    # debug info of ANYTHING compiled here, and after the local Hyprland work
+    # the compiled set is no longer confined to /usr/local/bin: hyprland,
+    # hyprtoolkit and the eighteen tools are installed as packages, into
+    # /usr/bin. Scanning one directory that happens to hold one compiled binary
+    # made this close to a check that cannot fail.
+    #
+    # Only files that are actually ELF are read: /usr/bin holds ~450 shell
+    # wrappers and symlinks, and `strings` on each of them is minutes wasted.
     DIRTY=""
-    for b in /usr/local/bin/*; do
+    for b in /usr/local/bin/* /usr/bin/*; do
       [ -f "$b" ] || continue
+      [ -L "$b" ] && continue
+      head -c 4 "$b" 2>/dev/null | grep -q 'ELF' || continue
       strings "$b" 2>/dev/null | grep -q "/home/$OLD" && DIRTY="$DIRTY $b"
     done
-    [ -z "$DIRTY" ] && ok_ "no /usr/local/bin binary mentions the build account" \
+    [ -z "$DIRTY" ] && ok_ "no compiled binary in /usr/bin or /usr/local/bin mentions the build account" \
                      || bad "binaries carrying the build path inside:$DIRTY (see RUSTFLAGS/CARGO_HOME in stage3)"
   fi
 fi

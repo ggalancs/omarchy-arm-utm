@@ -214,17 +214,43 @@ ph_deps() {
   done
   command -v qemu-system-aarch64 >/dev/null || die "qemu-system-aarch64 is missing"
   command -v expect >/dev/null || die "expect is missing"
-  # git and python3 come from the Command Line Tools, which are not there on a
-  # brand-new Mac. They are used in 'prepare' and in the branch check.
-  for c in git python3 zip shasum curl hdiutil; do
-    command -v "$c" >/dev/null || die "missing '$c' (did you run 'xcode-select --install'?)"
+  # aria2c is the ONLY downloader ph_fetch has -- there is no curl fallback --
+  # and it was installed above without ever being checked, unlike its two
+  # neighbours. A brew install that failed, or an installed-but-unlinked keg
+  # (which `brew list --formula` accepts), surfaced two phases later as
+  # "could not download Alpine <url>": a mirror blamed for a missing binary.
+  command -v aria2c >/dev/null || die "aria2c is missing (brew install aria2)"
+  # git and python3 come from the Command Line Tools, and `command -v` cannot
+  # see whether they work: /usr/bin/git, /usr/bin/python3 and /usr/bin/clang are
+  # ONE hardlinked xcode-select shim that macOS ships whether or not the tools
+  # are installed. So that loop passed on a Mac whose developer directory is
+  # missing or stale -- after a major upgrade, say -- and the build died forty
+  # minutes later in ph_prepare, blaming Omarchy's branch for a toolchain that
+  # was never there. They are RUN here, which is the only thing that answers.
+  for c in zip shasum curl hdiutil; do
+    command -v "$c" >/dev/null || die "missing '$c'"
+  done
+  for c in git python3; do
+    command -v "$c" >/dev/null \
+      || die "missing '$c' (did you run 'xcode-select --install'?)"
+    "$c" --version >/dev/null 2>&1 \
+      || die "'$c' is the xcode-select shim and does not work: the Command Line Tools are not installed, or the developer directory is stale. Run: xcode-select --install"
   done
   [[ -x $UTMCTL ]] || die "UTM is missing: brew install --cask utm"
   # Measured on a real build: the disk reaches 9.5 GB, the copy for sanitizing
   # another 6.5, and the zip 4. With APFS clones the peak is around 30.
-  local free; free=$(df -g "$HOME" | tail -1 | awk '{print $4}')
-  (( free > 40 )) || die "~40 GB of free space are needed (there are ${free} GB)"
-  ok "qemu $(qemu-system-aarch64 --version | head -1 | awk '{print $4}'), UTM $(defaults read /Applications/UTM.app/Contents/Info.plist CFBundleShortVersionString), ${free} GB free"
+  # $W, not $HOME. Every large artifact is written under $W, which EMPEZAR.md
+  # documents as overridable precisely so the build can go on an external
+  # volume -- and this measured the internal disk, so a 20 GB external drive
+  # passed a gate reporting 500 GB and the build died forty minutes later as an
+  # ENOSPC from qemu-img, or as expect reporting that Alpine never booted.
+  # $W may not exist yet (ensure_dirs runs after this), so the nearest existing
+  # ancestor is what gets measured.
+  local spacedir="$W"
+  while [ ! -d "$spacedir" ] && [ "$spacedir" != / ]; do spacedir=$(dirname "$spacedir"); done
+  local free; free=$(df -g "$spacedir" | tail -1 | awk '{print $4}')
+  (( free > 40 )) || die "~40 GB of free space are needed under $W (there are ${free} GB on $spacedir)"
+  ok "qemu $(qemu-system-aarch64 --version | head -1 | awk '{print $4}'), UTM $(defaults read /Applications/UTM.app/Contents/Info.plist CFBundleShortVersionString), ${free} GB free on $spacedir"
 }
 
 # Any phase can be run on its own with --only/--from, so the directories cannot
@@ -316,8 +342,15 @@ ph_fetch() {
 
   if [[ ! -s $tgz ]]; then
     info "Arch Linux ARM rootfs (~800 MB)"
-    aria2c -x8 -s8 -c --file-allocation=none -q -d "$W/dl" -o "$(basename "$tgz")" \
+    # To a .partial and moved on success, the way the Alpine download above
+    # already does it. Written straight to the final name, an interrupted
+    # transfer left a non-empty file that `[[ ! -s $tgz ]]` accepts as complete
+    # for ever -- and offline, the pin then fails and check_pin blames upstream,
+    # pointing at a script that would commit the truncated file's sha256 as a
+    # reviewed pin.
+    aria2c -x8 -s8 -c --file-allocation=none -q -d "$W/dl" -o "$(basename "$tgz").partial" \
       "$ALARM_URL" || die "could not download the ALARM rootfs"
+    mv "$W/dl/$(basename "$tgz").partial" "$tgz"
   fi
   # The tarball is rebuilt every few weeks: verified against the published MD5
   local want got
@@ -1961,8 +1994,20 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
   # was killed by build.exp during exactly this phase. That harness now re-arms
   # its clock on every line it receives, which is what makes a line a minute
   # worth printing: it is the difference between a slow compile and a hang.
+  # `timeout` is what keeps this bounded, and it became REQUIRED today rather
+  # than merely prudent. Until this morning build.exp's clock was a budget for
+  # the whole run, so a wedged tool was killed at ninety minutes whatever it
+  # did. Now that clock re-arms on every line -- correctly -- and the heartbeat
+  # below prints a line a minute whether makepkg is progressing or wedged, so
+  # between them the two fixes removed the only upper bound this loop had. A
+  # stall here is not hypothetical: the comment further up records that pacman
+  # inherits DisableDownloadTimeout and waits rather than failing, which is the
+  # twenty-hour hang build.exp was written for.
+  #
+  # 3600 s per attempt, and there are two attempts. stage2 uses 5400 for
+  # hyprland, which is a far bigger compile than anything in this list.
   local _t=0 _bg
-  ( cd "$dir" && makepkg -s --noconfirm --needed --noprogressbar --nocheck ) >"$dir/build.log" 2>&1 &
+  ( cd "$dir" && timeout 3600 makepkg -s --noconfirm --needed --noprogressbar --nocheck ) >"$dir/build.log" 2>&1 &
   _bg=$!
   while kill -0 "$_bg" 2>/dev/null; do
     sleep 60; _t=$((_t+60))
@@ -3239,12 +3284,23 @@ if [ "$OLD" != "$NEW" ]; then
   if ! command -v strings >/dev/null 2>&1; then
     echo "  ? /usr/local/bin binaries: without 'strings' this cannot be checked"
   else
+    # /usr/bin too, not only /usr/local/bin. The build path can survive in the
+    # debug info of ANYTHING compiled here, and after the local Hyprland work
+    # the compiled set is no longer confined to /usr/local/bin: hyprland,
+    # hyprtoolkit and the eighteen tools are installed as packages, into
+    # /usr/bin. Scanning one directory that happens to hold one compiled binary
+    # made this close to a check that cannot fail.
+    #
+    # Only files that are actually ELF are read: /usr/bin holds ~450 shell
+    # wrappers and symlinks, and `strings` on each of them is minutes wasted.
     DIRTY=""
-    for b in /usr/local/bin/*; do
+    for b in /usr/local/bin/* /usr/bin/*; do
       [ -f "$b" ] || continue
+      [ -L "$b" ] && continue
+      head -c 4 "$b" 2>/dev/null | grep -q 'ELF' || continue
       strings "$b" 2>/dev/null | grep -q "/home/$OLD" && DIRTY="$DIRTY $b"
     done
-    [ -z "$DIRTY" ] && ok_ "no /usr/local/bin binary mentions the build account" \
+    [ -z "$DIRTY" ] && ok_ "no compiled binary in /usr/bin or /usr/local/bin mentions the build account" \
                      || bad "binaries carrying the build path inside:$DIRTY (see RUSTFLAGS/CARGO_HOME in stage3)"
   fi
 fi
@@ -3573,12 +3629,18 @@ do_pinta() {
   title "Pinta"
   info "Microsoft does publish .NET for linux-arm64; Arch only packages it for x86_64."
   info "The runtime is installed from the official tarball, then Pinta's package, which is arch=any."
+  # The gate FIRST. It refuses whenever ALLOW_UNVERIFIED is unset, which is
+  # every default run -- and it used to sit below the .NET build, so the image
+  # paid for the whole runtime and then was told no. The build log proves it:
+  # sanitize later removes dotnet-sdk-bin and the targeting packs, which can
+  # only have come from a dotnet build that happened, for a Pinta that never
+  # installed. A refusal that is known in advance must cost nothing.
+  unverified_gate pinta || return 1
   aur_build dotnet-runtime-bin dotnet-runtime-bin || { fail "without the .NET runtime there is no way to continue"; return 1; }
   local url=https://geo.mirror.pkgbuild.com/extra/os/x86_64/
   local file; file=$(curl -fsSL --max-time 30 "$url" | grep -o 'pinta-[0-9][^"]*-any\.pkg\.tar\.zst' | sort -V | tail -1)
   [ -n "$file" ] || { fail "could not find the Pinta package"; return 1; }
   info "$file  ${c_dim}(the path says x86_64 but the package is arch=any)${c_off}"
-  unverified_gate pinta || return 1
   mkdir -p "$WORK"; curl -fL --progress-bar "$url$file" -o "$WORK/$file" || return 1
   sudo pacman -U --noconfirm "$WORK/$file" >/dev/null 2>&1 && ok "$(pacman -Q pinta)" || { fail "pacman -U failed"; return 1; }
   warn "outside the update manager: every new version has to be repeated by hand"
@@ -3711,6 +3773,12 @@ else
   rm -rf "$WORK"
 fi
 echo
+# The exit status has to carry the failures. This script ends in a bare `echo`
+# and runs without `set -e`, so it returned 0 no matter what: stage3 calls it
+# inside an `if` and took the success branch over `✗ failed: pinta`, and its
+# warn branch was unreachable for the one thing it was written for. A scripted
+# caller got a false success too.
+[ "${#KO_LIST[@]}" -eq 0 ] || exit 1
 __PAYLOAD_PROVISION_EXTRAS_SH__
 chmod +x "$W/provision/extras.sh"
 
@@ -5356,7 +5424,13 @@ if [ "$DEST_DIR" = "$DOCS" ] && pgrep -x UTM >/dev/null; then
     echo "$VMS_RUNNING" | sed 's/^/      /'
     echo "    Registering the bundle needs UTM restarted, and that would cut them off."
     if [ -t 0 ] && [ "${ASSUME_YES:-}" != "1" ]; then
-      printf "    Close them and restart UTM? [y/N]: "
+      # The question goes to /dev/tty, where the answer is read from. The
+      # builder runs this with stdout AND stderr redirected into a log file and
+      # stdin left on the terminal, so a prompt printed the ordinary way is
+      # invisible: the operator sees the phase banner, then nothing, for ever,
+      # after a two-hour build.
+      printf "    Close them and restart UTM? [y/N]: " > /dev/tty 2>/dev/null \
+        || printf "    Close them and restart UTM? [y/N]: "
       read -r R </dev/tty || R=""
       case "$(printf '%s' "$R" | tr '[:upper:]' '[:lower:]')" in
         s|si|y|yes) : ;;
@@ -5397,7 +5471,7 @@ cat > "$BUNDLE/config.plist" <<PLIST
 	<key>Information</key>
 	<dict>
 		<key>Name</key>
-		<string>$NAME</string>
+		<string>$(xmlq "$NAME")</string>
 		<key>UUID</key>
 		<string>$VM_UUID</string>
 		<key>IconCustom</key>
@@ -5984,7 +6058,13 @@ ph_package() {
   info "hashing the image to seed the bundle's identifiers..."
   local SEED; SEED=$(shasum -a 256 "$W/dist/slim.qcow2" | cut -d' ' -f1)
   [ ${#SEED} -eq 64 ] || die "could not hash $W/dist/slim.qcow2"
-  SRC_QCOW="$W/dist/slim.qcow2" DEST_DIR="$W/dist" UTM_CPUS=$UTM_CPUS UTM_MEM=$UTM_MEM \
+  # NOT the builder's UTM_CPUS/UTM_MEM. Those are autotuned from THIS Mac --
+  # half its performance cores, a share of its RAM -- and the bundle that ships
+  # goes to strangers whose machines are not this one. A 12-core M3 Max stamps
+  # 6 CPUs and 12 GB into an image someone imports on an 8 GB M1, where UTM
+  # refuses to start it. Fixed, modest defaults instead, overridable.
+  SRC_QCOW="$W/dist/slim.qcow2" DEST_DIR="$W/dist" \
+    UTM_CPUS="${DIST_UTM_CPUS:-4}" UTM_MEM="${DIST_UTM_MEM:-4096}" \
     NOTES_USER="$DIST_NEW_USER" NOTES_PASS="$DIST_NEW_USER" \
     UTM_SEED="$SEED/$DNAME" \
     bash "$W/scripts/make-utm.sh" "$DNAME" >/dev/null \
@@ -6094,6 +6174,8 @@ ph_package() {
   elif [ "$DESYNC" = 0 ]; then
     ok "the published sha256 agrees in the $SEEN document(s) that quote it ($QUIET quote none)"
   else
+    warn "the intermediate VM '$VM_NAME' is still registered in UTM (~11 GB):"
+    warn "  it is only needed by '--from sanitize'; '--only package' does not use it."
     die "the documentation names a different artifact than the one just built. Put $NEWSUM in the files above and package again."
   fi
 
@@ -6112,6 +6194,12 @@ ph_package() {
   # It is only deleted if this invocation created it -- its UUID is in
   # make-utm.log -- and we reached the end. KEEP_VM=yes keeps it for
   # debugging.
+  # This stays BELOW the checksum gate, deliberately, and the gate now says so.
+  # Moving it above would have been the obvious fix for "the VM survives every
+  # run that dies at the gate" -- and would have broken the documented recovery:
+  # ph_sanitize takes its source disk from exactly this VM, so `--from sanitize`
+  # after a failed gate would find nothing. An 11 GB leftover the operator is
+  # told about beats a silent deletion of what they may need next.
   if [ "${KEEP_VM:-}" != yes ] && [ -f "$W/logs/make-utm.log" ]; then
     local VU
     VU=$(grep -o 'UUID: *[0-9A-Fa-f-]\{36\}' "$W/logs/make-utm.log" | tail -1 | awk '{print $2}')
@@ -6280,7 +6368,9 @@ so the clock was wrong out of the box. Reported by mphaxise.
 ## What to expect
 
 Works: the full Hyprland desktop with Omarchy's bar, themes, menu, terminal,
-browser, and the 445 `omarchy-*` commands.
+browser, and every `omarchy-*` command Omarchy ships (run `ls /usr/bin/omarchy-* | wc -l`
+to count the ones in your copy: the number moves with each Omarchy release, and
+a figure written in here would be describing a different image within weeks).
 
 It also carries **18 packages compiled for aarch64**, because none of them
 has an aarch64 build upstream. Nine come from Omarchy's own package repository:

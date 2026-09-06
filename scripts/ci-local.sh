@@ -48,9 +48,19 @@ step() {
 # None of them was ever syntax-checked or linted, and omssh had an unbalanced
 # quote that made it unparseable from the day it was written, through every
 # green CI run since.
+# A copy that is not a git checkout produced an EMPTY file list, and every step
+# that iterates over it then reported ok having examined nothing -- ending in
+# "15 green, 0 red. Safe to ASK about a remote run". The listing has to fail
+# loudly instead.
+tracked_files() {
+  local out
+  out=$(git ls-files 2>/dev/null) || { echo "ci-local: this is not a git checkout" >&2; return 1; }
+  [ -n "$out" ] || { echo "ci-local: git ls-files returned nothing" >&2; return 1; }
+  printf '%s\n' "$out"
+}
 shell_files() {
   local f
-  git ls-files | while IFS= read -r f; do
+  tracked_files | while IFS= read -r f; do
     case "$f" in *.sh) printf '%s\n' "$f"; continue ;; esac
     [ -f "$f" ] || continue
     head -1 "$f" 2>/dev/null | grep -qE '^#!.*[/ ](bash|sh)$' && printf '%s\n' "$f"
@@ -58,7 +68,7 @@ shell_files() {
 }
 python_files() {
   local f
-  git ls-files | while IFS= read -r f; do
+  tracked_files | while IFS= read -r f; do
     case "$f" in *.py) printf '%s\n' "$f"; continue ;; esac
     [ -f "$f" ] || continue
     head -1 "$f" 2>/dev/null | grep -qE '^#!.*python' && printf '%s\n' "$f"

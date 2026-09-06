@@ -351,8 +351,20 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
   # was killed by build.exp during exactly this phase. That harness now re-arms
   # its clock on every line it receives, which is what makes a line a minute
   # worth printing: it is the difference between a slow compile and a hang.
+  # `timeout` is what keeps this bounded, and it became REQUIRED today rather
+  # than merely prudent. Until this morning build.exp's clock was a budget for
+  # the whole run, so a wedged tool was killed at ninety minutes whatever it
+  # did. Now that clock re-arms on every line -- correctly -- and the heartbeat
+  # below prints a line a minute whether makepkg is progressing or wedged, so
+  # between them the two fixes removed the only upper bound this loop had. A
+  # stall here is not hypothetical: the comment further up records that pacman
+  # inherits DisableDownloadTimeout and waits rather than failing, which is the
+  # twenty-hour hang build.exp was written for.
+  #
+  # 3600 s per attempt, and there are two attempts. stage2 uses 5400 for
+  # hyprland, which is a far bigger compile than anything in this list.
   local _t=0 _bg
-  ( cd "$dir" && makepkg -s --noconfirm --needed --noprogressbar --nocheck ) >"$dir/build.log" 2>&1 &
+  ( cd "$dir" && timeout 3600 makepkg -s --noconfirm --needed --noprogressbar --nocheck ) >"$dir/build.log" 2>&1 &
   _bg=$!
   while kill -0 "$_bg" 2>/dev/null; do
     sleep 60; _t=$((_t+60))
