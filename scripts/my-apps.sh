@@ -28,6 +28,13 @@
 #  ────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 
+# The help text is the file's own header, and its END is where the comments
+# stop -- not a line number counted by hand. Every one of these ranges either
+# overshot and printed a shell directive as the last line of the help, or
+# undershot and cut a sentence in half. Computed, so it cannot drift again.
+usage_header() { awk 'NR>2 && /^#/ {sub(/^#{0,2} ?/,""); print; next} NR>2 {exit}' "$0"; }
+
+
 red()  { printf '\033[31m%s\033[0m\n' "$*"; }
 green() { printf '\033[32m%s\033[0m\n' "$*"; }
 amber() { printf '\033[33m%s\033[0m\n' "$*"; }
@@ -47,7 +54,7 @@ LIST
 
 case "${1:-}" in
   --example|-e) example_list; exit 0 ;;
-  -h|--help)    sed -n '3,26p' "$0" | sed 's/^#\{0,2\} \{0,1\}//'; exit 0 ;;
+  -h|--help)    usage_header; exit 0 ;;
 esac
 
 CHECK_ONLY=0
@@ -90,16 +97,32 @@ printf '  AUR           : %d\n' "${#FROM_AUR[@]}"
 printf '  no aarch64    : %d\n' "${#MISSING[@]}"
 echo "─────────────────────────────────────────────"
 
+# Two different answers, and they were being given as one. Without an AUR
+# helper nothing can be looked up in the AUR, so a name that is not in the
+# repositories is UNKNOWN, not absent: google-chrome, 1password-cli, typora and
+# localsend all have aarch64 AUR builds, and this told the user they are
+# "only published for x86_64". The warning that was meant to explain it could
+# not fire either -- FROM_AUR is only appended to inside the branch that
+# requires a helper, so `[ -z "$AUR" ] && [ ${#FROM_AUR[@]} -gt 0 ]` was
+# unsatisfiable by construction.
 if [ "${#MISSING[@]}" -gt 0 ]; then
   echo
-  amber "These have no aarch64 build and will not be installed:"
-  printf '    %s\n' "${MISSING[@]}"
-  echo
-  echo "  Not a fault in the image: that software is only published for x86_64."
-  echo "  Look for a native alternative, a web version, or an aarch64 Flatpak."
+  if [ -z "$AUR" ]; then
+    amber "These could not be checked: there is no AUR helper on this machine."
+    printf '    %s\n' "${MISSING[@]}"
+    echo
+    echo "  They may well have an aarch64 build in the AUR. Install a helper first:"
+    echo "    sudo pacman -S --needed base-devel git"
+    echo "    git clone https://aur.archlinux.org/yay-bin.git && cd yay-bin && makepkg -si"
+  else
+    amber "These have no aarch64 build and will not be installed:"
+    printf '    %s\n' "${MISSING[@]}"
+    echo
+    echo "  Not a fault in the image: $AUR was asked and neither the repositories"
+    echo "  nor the AUR publish them for aarch64."
+    echo "  Look for a native alternative, a web version, or an aarch64 Flatpak."
+  fi
 fi
-
-[ -z "$AUR" ] && [ "${#FROM_AUR[@]}" -gt 0 ] && amber "  (no yay or paru: AUR packages skipped)"
 
 if [ "$CHECK_ONLY" = 1 ]; then
   echo; echo "Check only. Drop --check to install."

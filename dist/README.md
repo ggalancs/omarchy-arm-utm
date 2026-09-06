@@ -307,9 +307,24 @@ failing halfway through.
 
 ## Resolution
 
-Fixed at 1920x1200. To change it, edit `~/.config/hypr/monitors.lua` and
-**restart the VM** — switching mode while running leaves the screen blank under
-virtio-gpu.
+Ships at 1920x1200, and it is one command either way:
+
+```bash
+omarchy-arm-display --status    # what is in effect
+omarchy-arm-display --retina    # 3840x2400 at scale 2
+omarchy-arm-display --default   # back to 1920x1200
+```
+
+That was measured on the packaged image under UTM 4.7.5: the mode applies with
+`hyprctl reload`, with no restart and with the session intact. Enable "Retina
+Mode" in the VM's Display settings in UTM first, or macOS scales the 4K
+framebuffer down again.
+
+Retina is four times the pixels, so on software rendering it costs; pair it
+with `omarchy-arm-gpu --on` where the host supports that.
+
+A hand edit of `~/.config/hypr/monitors.lua` still needs a restart — the tool
+rewrites the file and reloads in one step, which is what makes it safe.
 
 ## Note
 

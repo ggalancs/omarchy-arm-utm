@@ -50,13 +50,27 @@ default branch **`quattro`** (4.x). They are different products:
 | Hyprland config | `.conf` | **Lua** (`hyprland.lua`, `bootstrap.lua`) |
 | Distribution | scripts in `~/.local/share` | **pacman package** in `/usr/share/omarchy` |
 
-The package itself is **`arch=('any')`** — pure scripts, Lua and QML. What is
-x86_64-only is the *repository* it is published in, so on ARM you cannot
-`pacman -S omarchy` and the files never land. Copy just the dotfiles and
-`OMARCHY_PATH` goes unset, `bashrc` errors out, Hyprland cannot find
+What is x86_64-only is the *repository* the package is published in, so on ARM
+you cannot `pacman -S omarchy` and the files never land. Copy just the dotfiles
+and `OMARCHY_PATH` goes unset, `bashrc` errors out, Hyprland cannot find
 `bootstrap.lua`, and you get a bare compositor instead of a desktop.
 `stage3.sh` reproduces by hand what that package would have installed, into
-`/usr/bin` — the same place upstream uses. An earlier version put them in
+`/usr/bin` — the same place upstream uses.
+
+> **Correction, 2026-09-04.** This section used to say the package is
+> **`arch=('any')`**. That was true when it was written and **it is not any
+> more**: on 2026-09-02, `omacom-io/omarchy-pkgs` commit `4ed5f14` changed
+> `omarchy` and `omarchy-settings` to `arch=('x86_64' 'aarch64')`, each with its
+> own `depends_<arch>` and a `package()` that drops the x86 boot and memory
+> stack on ARM. The *conclusion* is unchanged and re-verified the same day:
+> `pkgs.omarchy.org/stable/aarch64/omarchy.db` and
+> `stable-mirror.omarchy.org/core/os/aarch64/core.db` are both **404** while
+> their x86_64 counterparts are **200**. The recipe can be built for aarch64;
+> the repository still does not exist.
+>
+> `build-omarchy-arm.sh` — the one this README describes, and the one that
+> produced the published image — **reproduces** that package by hand. An
+> earlier version put them in
 `/usr/local/bin`, which seemed tidier but broke things: the tree hardcodes
 `/usr/bin/omarchy-*` in thirteen places, five of them `.service` files.
 `/usr/local/bin` is still used, but only for the few ARM-specific wrappers that
@@ -107,13 +121,22 @@ so Enter accepts them, then three decisions (compile the tools? include OBS and
 Pinta? prepare the image for distribution?) and a couple of follow-ups depending
 on the last one. Add `--yes` to skip all of it; with no tty it never asks.
 
-**The script is a single self-contained file.** It embeds the fifteen files it
-needs — three install stages, the sanitiser, the repair harness, the optional-app
-installer, the post-update hook, the clipboard agent, the shared-folder mounter,
-the VM config, two `expect` harnesses, the QEMU launcher, the `.utm` bundle
-writer and the README that ships inside the image — and writes them out at
-startup. You can
-copy just that file to another Mac.
+**The script is a single self-contained file.** It embeds the nineteen files
+it needs — three install stages, the sanitiser, the repair harness, the
+optional-app installer, the post-update hook, the clipboard agent, the SPICE
+clipboard agent, the shared-folder mounter, the account tool, the GPU switch,
+the Hyprland bootstrap check, the display switch, the local-build reporter, two
+`expect` harnesses, the QEMU launcher, the `.utm` bundle writer and the two
+READMEs that ship inside the image — and writes them out at startup. The VM
+configuration is not on that list: it is generated from your answers rather
+than embedded. You can copy just that file to another Mac.
+
+Three things that file cannot carry with it, and that it will tell you about
+rather than skip: `scripts/check-alarm-satisfiable.py`, the ten-second
+pre-flight; `checksums/base-images.sha256`, the reviewed pins for the two base
+images; and the documents that publish the image's sha256 (four of the six
+quote it — `README.es.md` and `dist/README.md` link to the `.sha256` file
+instead, and are not compared against).
 
 ### How long
 
@@ -193,15 +216,28 @@ have, run [`fixes/18-avisos-que-no-se-apagan.sh`](fixes/18-avisos-que-no-se-apag
 inside it — no need to re-download. For the clipboard, run
 [`fixes/19-portapapeles.sh`](fixes/19-portapapeles.sh) the same way.
 
+**And run [`fixes/20-seguridad-y-servicios.sh`](fixes/20-seguridad-y-servicios.sh)
+whichever image you have.** Auditing this build against Omarchy's own `install/`
+scripts on 2026-09-04 turned up five differences, two of them about security:
+the account was left in the `docker` group — which Omarchy refuses to grant,
+because it is equivalent to passwordless root — and no firewall was ever
+enabled, while the system this reproduces ships `ufw` turned on. It also
+enables `cups`, `avahi-daemon`, `power-profiles-daemon` and `systemd-resolved`,
+which upstream turns on and this build did not. Docker is not removed and
+`sudo docker` keeps working. The build script is fixed as well.
+
 ## What does not work
 
-- **No GL acceleration inside the VM.** Under virtio-gpu, GPU clients map but
-  never paint; only `wl_shm` clients render. Fixed with
-  `LIBGL_ALWAYS_SOFTWARE=1`, so blur and shadows are disabled. Fine for normal
-  use, not for video or 3D.
-- **Resolution is fixed at boot** (1920x1200 by default, editable in
-  `~/.config/hypr/monitors.lua`). Changing the mode at runtime whites out the
-  screen under virtio-gpu.
+- **Software rendering by default, under UTM 4.7.** GPU clients map their
+  windows and never paint them there, so the image ships
+  `LIBGL_ALWAYS_SOFTWARE=1` and blur and shadows are off. **Under UTM 5.0.x
+  that bug is gone** and the GPU works: `omarchy-arm-gpu --on` (and `--off` if
+  anything renders black). The guest cannot tell which UTM is hosting it, which
+  is why this is a command and not a default.
+- **Ships at 1920x1200**, changed at runtime with `omarchy-arm-display
+  --retina` / `--default`, measured on the packaged image under UTM 4.7.5. A
+  hand edit of `~/.config/hypr/monitors.lua` still needs a restart; the command
+  rewrites and reloads in one step, which is what makes it safe.
 - Single monitor.
 
 ## Clipboard and shared folder
@@ -288,12 +324,15 @@ restores the shipped setting.
 If you rename the account or add another one, point autologin at it:
 
 ```bash
-omarchy-arm-user --ask       # pick from the accounts on the machine
-omarchy-arm-user someuser    # set it directly
+omarchy-arm-user             # list the accounts on the machine
+omarchy-arm-user someuser    # set autologin to that account
+omarchy-arm-user --ask       # turn autologin OFF: SDDM will ask on every boot
 ```
 
-It edits `[Autologin] User=` in `/etc/sddm.conf.d/autologin.conf` and leaves
-`Session=` alone.
+With an account name it edits `[Autologin] User=` in
+`/etc/sddm.conf.d/autologin.conf` and leaves `Session=` alone. `--ask` does not
+pick an account — it removes that file, so the greeter asks for a username and
+a password from the next boot. To go back, run it again with an account name.
 
 The image ships **UTC**. Set yours with `sudo timedatectl set-timezone <zone>` (`timedatectl list-timezones` lists them). Earlier images carried the builder's own timezone, which is why the clock was wrong out of the box.
 
@@ -402,7 +441,7 @@ EMPEZAR.md             how to run it (ES) — requirements, timings, troubleshoo
 ARTICULO.md            how it was figured out (ES)
 provision/src/         stage1..3.sh, repair.sh, sanitize.sh, omarchy-arm-extras, hooks/
 scripts/               qemu, expect harnesses, .utm bundle writer
-fixes/                 the 19 corrections found along the way, as a record
+fixes/                 the 20 corrections found along the way, as a record
 dist/README.md         the README that ships inside the image
 ```
 
@@ -417,6 +456,11 @@ The guest-side verdict, read back over the serial console:
 ### H=1 Q=1 BINS=445 ROTOS=1 UNITS=7 VER=4 CLIP=5/5
 VEREDICTO_OK
 ```
+
+That is the output of the builder **as it stood on 2026-08-25**, kept as the
+record of that run. Today's verdict line carries thirteen fields and the tokens
+are in English: `### H= Q= BINS= BROKEN= UNITS= VER= DOCKERGRP= UFW= LDD=
+HYPRDEPS= REC= PACDB= CLIP=` followed by `VERDICT_OK`.
 
 **All 18 packages build**, `herdr` included: it comes from Omarchy's own PKGBUILD,
 which declares `aarch64` and fetches the official Zig 0.15.2 from ziglang.org

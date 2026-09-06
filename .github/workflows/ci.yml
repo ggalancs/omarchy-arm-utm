@@ -6,9 +6,13 @@ name: CI
 
 # MANUAL ONLY. Never push/pull_request/schedule/tag.
 #
-# This workflow was added with automatic triggers and ran three times on
-# GitHub without the owner asking for it, two of those failing in public. The
-# rule already existed, written down in six other projects of his: CI on
+# This workflow was added with `on: push` and ran twelve times on GitHub
+# without the owner asking for it, four of them red in public. (This file used
+# to say three runs and two failures; `gh run list` shows twelve push runs on
+# 2026-09-03, four failed. scripts/ci-local.sh had the right numbers and this
+# one did not, in the two files whose job is to justify the manual trigger from
+# that history.) The rule already existed, written down in six other projects
+# of his: CI on
 # GitHub does not run without his explicit confirmation, every job is
 # reproduced locally first, and only then is it triggered by hand.
 #
@@ -29,22 +33,58 @@ jobs:
       - name: Shell syntax
         run: |
           set -euo pipefail
+          # Selected by SHEBANG, not by suffix: ten tracked shell programs have
+          # no suffix at all -- the eight omarchy-arm-* commands that ship
+          # inside the image, the update hook, and scripts/omssh -- so every
+          # '*.sh' glob here skipped them. omssh had an unbalanced quote that
+          # made it unparseable from the day it was written, through every
+          # green run of this workflow.
+          shell_files() {
+            git ls-files | while IFS= read -r f; do
+              case "$f" in *.sh) printf '%s\n' "$f"; continue ;; esac
+              [ -f "$f" ] || continue
+              head -1 "$f" 2>/dev/null | grep -qE '^#!.*[/ ](bash|sh)$' && printf '%s\n' "$f"
+            done
+          }
           fail=0
           while IFS= read -r f; do
             bash -n "$f" || { echo "::error file=$f::bash -n failed"; fail=1; }
-          done < <(git ls-files '*.sh')
+          done < <(shell_files)
           exit $fail
 
       - name: Python syntax
         run: |
           set -euo pipefail
-          while IFS= read -r f; do python3 -m py_compile "$f"; done < <(git ls-files '*.py')
+          # provision/src/omarchy-arm-vdagent has no .py suffix and is python.
+          python_files() {
+            git ls-files | while IFS= read -r f; do
+              case "$f" in *.py) printf '%s\n' "$f"; continue ;; esac
+              [ -f "$f" ] || continue
+              head -1 "$f" 2>/dev/null | grep -qE '^#!.*python' && printf '%s\n' "$f"
+            done
+          }
+          while IFS= read -r f; do python3 -m py_compile "$f"; done < <(python_files)
 
       # A comment between two backslash-continued lines is accepted by `bash -n`
       # and silently truncates the command. It cost a 40-minute build: the QEMU
       # invocation lost networking, the RNG and -nographic.
       - name: No comments inside continued commands
-        run: python3 scripts/i18n-audit.py lint-cont $(git ls-files '*.sh')
+        run: |
+          set -euo pipefail
+          # Selected by SHEBANG, not by suffix: ten tracked shell programs have
+          # no suffix at all -- the eight omarchy-arm-* commands that ship
+          # inside the image, the update hook, and scripts/omssh -- so every
+          # '*.sh' glob here skipped them. omssh had an unbalanced quote that
+          # made it unparseable from the day it was written, through every
+          # green run of this workflow.
+          shell_files() {
+            git ls-files | while IFS= read -r f; do
+              case "$f" in *.sh) printf '%s\n' "$f"; continue ;; esac
+              [ -f "$f" ] || continue
+              head -1 "$f" 2>/dev/null | grep -qE '^#!.*[/ ](bash|sh)$' && printf '%s\n' "$f"
+            done
+          }
+          python3 scripts/i18n-audit.py lint-cont $(shell_files)
 
       # The generated copies inside build-omarchy-arm.sh must match their
       # sources. When they drifted, the script shipped a README asserting things
@@ -69,6 +109,10 @@ jobs:
           # vocabulary and deleted two words from it, and every total after
           # that was measured with a detector that could not see them.
           python3 scripts/i18n-audit.py selftest
+          # And the satisfiability pre-check's own assertions, which nothing
+          # ran: the build invokes that script without --self-test, so its
+          # eight classification cases had never executed anywhere.
+          python3 scripts/check-alarm-satisfiable.py --self-test
           python3 scripts/i18n-audit.py audit       $(git ls-files)
           python3 scripts/i18n-audit.py strings     $(git ls-files)
           python3 scripts/i18n-audit.py identifiers $(git ls-files)
@@ -98,8 +142,48 @@ jobs:
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
           set -euo pipefail
+          # Selected by SHEBANG, not by suffix: ten tracked shell programs have
+          # no suffix at all -- the eight omarchy-arm-* commands that ship
+          # inside the image, the update hook, and scripts/omssh -- so every
+          # '*.sh' glob here skipped them. omssh had an unbalanced quote that
+          # made it unparseable from the day it was written, through every
+          # green run of this workflow.
+          shell_files() {
+            git ls-files | while IFS= read -r f; do
+              case "$f" in *.sh) printf '%s\n' "$f"; continue ;; esac
+              [ -f "$f" ] || continue
+              head -1 "$f" 2>/dev/null | grep -qE '^#!.*[/ ](bash|sh)$' && printf '%s\n' "$f"
+            done
+          }
           fail=0
           while IFS= read -r f; do
             shellcheck -S error -e SC1090,SC1091 "$f" || fail=1
-          done < <(git ls-files '*.sh')
+          done < <(shell_files)
+          exit $fail
+
+      # Severity `error` alone missed SC2164 -- `cd` with no `|| exit` -- in
+      # four scripts, one of them the local CI runner itself, where it would
+      # have meant checking the wrong tree and calling it green. The excluded
+      # codes are listed with their reasons in scripts/ci-local.sh.
+      - name: ShellCheck warnings (live sources)
+        run: |
+          set -euo pipefail
+          # Selected by SHEBANG, not by suffix: ten tracked shell programs have
+          # no suffix at all -- the eight omarchy-arm-* commands that ship
+          # inside the image, the update hook, and scripts/omssh -- so every
+          # '*.sh' glob here skipped them. omssh had an unbalanced quote that
+          # made it unparseable from the day it was written, through every
+          # green run of this workflow.
+          shell_files() {
+            git ls-files | while IFS= read -r f; do
+              case "$f" in *.sh) printf '%s\n' "$f"; continue ;; esac
+              [ -f "$f" ] || continue
+              head -1 "$f" 2>/dev/null | grep -qE '^#!.*[/ ](bash|sh)$' && printf '%s\n' "$f"
+            done
+          }
+          fail=0
+          while IFS= read -r f; do
+            case "$f" in fixes/*|provision/repair-iso/*) continue ;; esac
+            shellcheck -S warning -e SC1090,SC1091,SC2046,SC2024,SC2034 "$f" || fail=1
+          done < <(shell_files)
           exit $fail

@@ -2,10 +2,24 @@
 # Usage: scripts/repair.exp <script-inside-the-ISO.sh>
 # Boots Alpine with the disk ALREADY installed and runs that script in the chroot.
 set timeout 900
+
+# UNBUFFERED to disk, which stdout redirected to a file is not. The builder
+# runs this as `expect -f repair.exp sanitize.sh > $W/logs/sanitize.log`, and a
+# phase that produces little output leaves its last chunk sitting in the
+# buffer: on 2026-09-06 that log had not moved for an hour while sanitize was
+# working perfectly, and the run was killed on the strength of it. check-image
+# already carries this lesson in its own words -- "hours have gone into reading
+# a frozen log, believing the guest was hung when it had already finished" --
+# and this file never got it.
+if {[info exists env(TRANSCRIPT)]} {
+  log_file -a $env(TRANSCRIPT)
+} else {
+  log_file -a "/tmp/omarchy-repair-session.log"
+}
 log_user 1
 match_max 400000
 set FIX [lindex $argv 0]
-if {$FIX eq ""} { puts "uso: repair.exp <fix.sh>"; exit 1 }
+if {$FIX eq ""} { puts "usage: repair.exp <fix.sh>"; exit 1 }
 
 proc wait_for {pat code msg {t 900}} {
     set timeout $t
@@ -19,21 +33,44 @@ set ROOT "@OMARM_ROOT@"
 if {[string match "@*@" $ROOT]} {
   set ROOT [expr {[info exists env(OMARM_ROOT)] ? $env(OMARM_ROOT) : [pwd]}]
 }
-spawn -noecho $ROOT/scripts/qemu-build.sh
-wait_for "localhost login:" 10 "login de Alpine" 300
+# Braced, not bare. Tcl word-splits an unbraced $ROOT, so a build directory
+# with a space in it spawned the wrong argv and expect reported a login
+# timeout that never mentioned the path.
+spawn -noecho "$ROOT/scripts/qemu-build.sh"
+wait_for "localhost login:" 10 "the Alpine login" 300
 send "root\r"
-wait_for "localhost:~#" 11 "shell de root" 120
+wait_for "localhost:~#" 11 "the root shell" 120
 send "export PS1='RDY> '; echo TOK_SH_\$?\r"
 wait_for "TOK_SH_0" 12 "prompt" 60
 send "mkdir -p /media/prov; for d in /dev/vd? /dev/sr?; do mount -t iso9660 -o ro \$d /media/prov 2>/dev/null && \[ -f /media/prov/repair.sh \] && break; umount /media/prov 2>/dev/null; done; ls /media/prov; echo TOK_PROV_\$?\r"
 wait_for "TOK_PROV_0" 13 "provisioning ISO" 120
 
-set timeout -1
+# NOT `set timeout -1`, and build.exp says why in its own words: it used to be
+# that, and a stalled mirror hung a build for twenty hours in "Retrieving
+# packages...". That lesson was applied there and never here, in the file that
+# runs sanitize -- which removes 469 MB of documentation, walks the whole
+# filesystem twice and runs fstrim. Any of those stalling used to mean waiting
+# for ever, with no output and no way to tell a slow run from a dead one.
+#
+# 3600 s is generous for a phase that takes about three minutes, and it is a
+# number. A run that reaches it has hung.
+#
+# And it is 3600 s of SILENCE, which needed the catch-all below to be true:
+# expect's timeout is a budget for the whole command, not an inactivity timer.
+# Measured, not assumed -- `set timeout 5` against a process printing every two
+# seconds expires at five. build.exp carried the same mistake and it killed a
+# healthy build at the ninety-minute mark on 2026-09-05.
+set timeout 3600
 send "export FIXSCRIPT=$FIX; sh /media/prov/repair.sh 2>&1 | tee /tmp/repair.log\r"
 expect {
     -ex "TOK_REPAIR_0" { puts "\n\n===== REPAIR COMPLETED =====\n" }
     -re {TOK_REPAIR_[1-9][0-9]*} { puts "\n\n!!!!! THE REPAIR FAILED !!!!!\n"; exit 20 }
+    timeout { puts "\n!! the repair produced nothing for 3600 s: it has hung, not stalled"; exit 21 }
     eof { puts "\n!! EOF"; exit 16 }
+    # Any other line re-arms the clock. A newline, not `.+`: expect consumes
+    # what it matches, and `.+` can eat a buffer ending in a half-arrived
+    # "TOK_REPAI" so the token never matches afterwards.
+    -re {\n} { exp_continue }
 }
 set timeout 300
 send "sync; poweroff -f\r"

@@ -6,7 +6,7 @@
 |---|---|---|
 | | **← download this one** | the first release |
 | Size | 3.6 GB (3.8 GB unpacked) | 6.5 GB (13 GB unpacked) |
-| Published | 2026-09-02 | 2026-08-23 |
+| Published | 2026-09-03 | 2026-08-23 |
 | Shared clipboard | **works, verified both ways** | does not work |
 | "Update System" notification | gone | repeats on every boot |
 | "Reboot?" after each update | gone | repeats forever |
@@ -16,6 +16,14 @@
 The plain name belongs to the first release and keeps it, so links and checksums
 published back in August still resolve to the exact bytes they were written
 for. That is the only reason the better file is the one with `-v2` in its name.
+
+**`omarchy-arm-utm-v2.zip` has been replaced under the same name more than
+once**, on 2 and 3 September, while the community's reports were being worked
+through. If you downloaded during those days and `shasum -a 256 -c` now fails,
+that is this file changing underneath the name, not a corrupt download: fetch
+it again and it will match. The published sha256 always describes the bytes
+that are on archive.org today. (This table said 2026-09-02 for a while, which
+is the date of a version that was superseded the next day.)
 
 ```bash
 shasum -a 256 -c omarchy-arm-utm-v2.zip.sha256
@@ -165,6 +173,35 @@ image no longer carries and what was proven about it:
   documentation, and the .NET SDK only needed to *build* Pinta and OBS. The Rust
   and Go toolchains stay, so `yay` still works.
 
+## Every image so far: run this one
+
+**2026-09-04.** Both files above ship five differences from Omarchy 4, and two
+of them are about security. Auditing the build against Omarchy's own
+`install/` scripts turned them up:
+
+- **The account is in the `docker` group.** Omarchy 4 refuses to grant it and
+  says why in `install/config/docker.sh`: *"membership in the docker group is
+  equivalent to passwordless root: any process in it can `docker run -v /:/host`
+  and rewrite the host as root"*. The build granted it and the sanitising step
+  never took it away.
+- **No firewall.** `install/config/firewall.sh` turns `ufw` on with "deny
+  incoming, allow outgoing" plus the LocalSend ports. The build never enabled
+  it, so the image shipped with the firewall off.
+- `cups`, `avahi-daemon`, `power-profiles-daemon` and `linux-modules-cleanup`
+  were never enabled — without the third, Omarchy's power menu has nobody to
+  talk to.
+- `systemd-resolved` was disabled, while Omarchy enables it and ships drop-ins
+  for it that therefore did nothing.
+
+Run this inside the VM. It does not remove Docker and `sudo docker` keeps
+working:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ggalancs/omarchy-arm-utm/main/fixes/20-seguridad-y-servicios.sh | bash
+```
+
+The build script is fixed too, so images built from now on are born correct.
+
 ## Already downloaded the first one?
 
 You do not need to fetch 3.6 GB. Run these inside the VM:
@@ -176,10 +213,11 @@ curl -fsSL https://raw.githubusercontent.com/ggalancs/omarchy-arm-utm/main/fixes
 
 ## What does not work in either
 
-- **No GPU acceleration inside the VM.** Software rendering; blur and shadows
-  are off. Fine for normal use, not for video or 3D.
-- **Resolution is fixed at boot** (1920x1200, editable in
-  `~/.config/hypr/monitors.lua`). Changing it at runtime whites out the screen.
+- **Software rendering by default, under UTM 4.7** — not a limitation of the
+  image. Under UTM 5.0.x the GPU works: `omarchy-arm-gpu --on`.
+- **Ships at 1920x1200**, changed at runtime with `omarchy-arm-display
+  --retina` / `--default`. A hand edit of `~/.config/hypr/monitors.lua` still
+  needs a restart; the command does not.
 - Single monitor.
 - Proprietary apps are not bundled, on purpose. `omarchy-arm-extras` fetches
   1Password, Obsidian, Typora, LocalSend and Chrome from their official source.

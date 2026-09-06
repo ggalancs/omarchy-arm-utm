@@ -42,14 +42,14 @@ VERSION               = 6
 CLIENT_DISCONNECTED   = 12
 
 SEL_CLIPBOARD = 0          # VD_AGENT_CLIPBOARD_SELECTION_CLIPBOARD
-TIPO_UTF8     = 1          # VD_AGENT_CLIPBOARD_UTF8_TEXT
+TYPE_UTF8     = 1          # VD_AGENT_CLIPBOARD_UTF8_TEXT
 
 DEBUG = bool(os.environ.get("VDAGENT_DEBUG"))
 def log(*a):
     if DEBUG: print("[vdagent]", *a, file=sys.stderr, flush=True)
 
 
-class Agente:
+class Agent:
     def __init__(self, sock):
         self.s = sock
         self.lock = threading.Lock()
@@ -57,13 +57,13 @@ class Agente:
         self.waiting = threading.Event()
         self.received = None
 
-    def enviar(self, tipo, arg1=0, arg2=0, datos=b""):
-        cab = struct.pack("<IIII", tipo, arg1, arg2, len(datos))
+    def send(self, kind, arg1=0, arg2=0, data=b""):
+        header = struct.pack("<IIII", kind, arg1, arg2, len(data))
         with self.lock:
-            self.s.sendall(cab + datos)
-        log("→", tipo, arg1, arg2, len(datos))
+            self.s.sendall(header + data)
+        log("→", kind, arg1, arg2, len(data))
 
-    def _leer(self, n):
+    def _read(self, n):
         b = b""
         while len(b) < n:
             t = self.s.recv(n - len(b))
@@ -71,36 +71,36 @@ class Agente:
             b += t
         return b
 
-    def bucle(self):
+    def loop(self):
         while True:
             try:
-                tipo, a1, a2, size = struct.unpack("<IIII", self._leer(16))
-                datos = self._leer(size) if size else b""
+                kind, a1, a2, size = struct.unpack("<IIII", self._read(16))
+                data = self._read(size) if size else b""
             except (EOFError, OSError) as e:
                 log("socket closed:", e); return
-            log("←", tipo, a1, a2, size)
+            log("←", kind, a1, a2, size)
 
-            if tipo == CLIPBOARD_GRAB:
+            if kind == CLIPBOARD_GRAB:
                 # the host is offering something: ask for it
-                self.enviar(CLIPBOARD_REQUEST, SEL_CLIPBOARD, TIPO_UTF8)
+                self.send(CLIPBOARD_REQUEST, SEL_CLIPBOARD, TYPE_UTF8)
 
-            elif tipo == CLIPBOARD_REQUEST:
-                texto = leer_portapapeles() or ""
-                self.enviar(CLIPBOARD_DATA, SEL_CLIPBOARD, TIPO_UTF8,
-                            texto.encode("utf-8"))
+            elif kind == CLIPBOARD_REQUEST:
+                text = read_clipboard() or ""
+                self.send(CLIPBOARD_DATA, SEL_CLIPBOARD, TYPE_UTF8,
+                            text.encode("utf-8"))
 
-            elif tipo == CLIPBOARD_DATA:
-                if a2 == TIPO_UTF8:
-                    texto = datos.decode("utf-8", "replace")
-                    escribir_portapapeles(texto)
-                    self.last_local = texto
-                    log("  received from the host:", len(texto), "bytes")
+            elif kind == CLIPBOARD_DATA:
+                if a2 == TYPE_UTF8:
+                    text = data.decode("utf-8", "replace")
+                    write_clipboard(text)
+                    self.last_local = text
+                    log("  received from the host:", len(text), "bytes")
 
-            elif tipo == VERSION:
-                log("  vdagentd version:", datos.decode("utf8", "replace").strip())
+            elif kind == VERSION:
+                log("  vdagentd version:", data.decode("utf8", "replace").strip())
 
 
-def leer_portapapeles():
+def read_clipboard():
     try:
         r = subprocess.run(["wl-paste", "--no-newline", "--type", "text/plain"],
                            capture_output=True, timeout=5)
@@ -109,10 +109,10 @@ def leer_portapapeles():
         return None
 
 
-def escribir_portapapeles(texto):
+def write_clipboard(text):
     try:
         subprocess.run(["wl-copy", "--type", "text/plain;charset=utf-8"],
-                       input=texto.encode("utf-8"), timeout=5)
+                       input=text.encode("utf-8"), timeout=5)
     except Exception as e:
         log("wl-copy failed:", e)
 
@@ -133,12 +133,12 @@ def resolution():
 def watch(ag):
     """If the user copies inside the VM, offer it to the host."""
     while True:
-        t = leer_portapapeles()
+        t = read_clipboard()
         if t is not None and t != ag.last_local:
             ag.last_local = t
             if t:
-                ag.enviar(CLIPBOARD_GRAB, SEL_CLIPBOARD, 0,
-                          struct.pack("<I", TIPO_UTF8))
+                ag.send(CLIPBOARD_GRAB, SEL_CLIPBOARD, 0,
+                          struct.pack("<I", TYPE_UTF8))
         time.sleep(1)
 
 
@@ -148,14 +148,14 @@ def main():
                           capture_output=True).returncode != 0:
             print(f"{c} is missing (wl-clipboard package)", file=sys.stderr); return 1
     if not os.path.exists(SOCK):
-        print(f"no existe {SOCK}.", file=sys.stderr)
-        print("Arranca el demonio:  sudo systemctl start spice-vdagentd",
+        print(f"{SOCK} does not exist.", file=sys.stderr)
+        print("Start the daemon:  sudo systemctl start spice-vdagentd",
               file=sys.stderr)
         return 1
 
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.connect(SOCK)
-    ag = Agente(s)
+    ag = Agent(s)
 
     # The stock agent announces its resolution as soon as it connects;
     # vdagentd uses that to know a live graphical session is behind it.
@@ -163,13 +163,13 @@ def main():
     # display_id (vdagentd-proto.h:51). If the size does not match exactly,
     # vdagentd drops the agent without a word (vdagentd.c:1088).
     width, height = resolution()
-    ag.enviar(GUEST_XORG_RESOLUTION, width, height,
+    ag.send(GUEST_XORG_RESOLUTION, width, height,
               struct.pack("<iiiii", width, height, 0, 0, 0))
 
-    ag.last_local = leer_portapapeles()
+    ag.last_local = read_clipboard()
     threading.Thread(target=watch, args=(ag,), daemon=True).start()
     try:
-        ag.bucle()
+        ag.loop()
     except KeyboardInterrupt:
         pass
     finally:

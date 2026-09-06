@@ -29,6 +29,5 @@ system-config-printer
 tesseract
 tesseract-data-eng
 tree-sitter-cli
-ufw
 usage
 xournalpp

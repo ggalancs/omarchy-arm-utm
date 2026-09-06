@@ -20,8 +20,8 @@ totalmente automatizada desde macOS: ni un clic en la interfaz de UTM.
 
 ## Por qué no se instala Omarchy tal cual
 
-Omarchy 4 no se puede instalar en ARM64. Verificado contra las fuentes
-primarias:
+Omarchy 4 no se puede instalar en ARM64 *tal cual*. Verificado contra las
+fuentes primarias:
 
 | Comprobación (23-08-2026) | Resultado |
 |---|---|
@@ -55,13 +55,27 @@ defecto **`quattro`** (4.0.0.alpha). Son dos productos distintos:
 | Config de Hyprland | `.conf` | **Lua** (`hyprland.lua`, `bootstrap.lua`) |
 | Distribución | scripts en `~/.local/share` | **paquete pacman** en `/usr/share/omarchy` |
 
-El paquete en sí es **`arch=('any')`** —scripts, Lua y QML—. Lo que es
-x86_64-only es el *repositorio* donde se publica, así que en ARM no puedes
-`pacman -S omarchy` y los ficheros nunca llegan. Copiando solo los dotfiles,
-`OMARCHY_PATH` queda sin definir, el `bashrc` da error, Hyprland no encuentra
-`bootstrap.lua` y te quedas con un compositor pelado en vez de un escritorio.
-`stage3.sh` replica a mano lo que habría instalado ese paquete, en `/usr/bin`
-—el mismo sitio que usa upstream—. Una versión anterior los ponía en
+Lo que es x86_64-only es el *repositorio* donde se publica el paquete, así que
+en ARM no puedes `pacman -S omarchy` y los ficheros nunca llegan. Copiando solo
+los dotfiles, `OMARCHY_PATH` queda sin definir, el `bashrc` da error, Hyprland
+no encuentra `bootstrap.lua` y te quedas con un compositor pelado en vez de un
+escritorio. `stage3.sh` replica a mano lo que habría instalado ese paquete, en
+`/usr/bin` —el mismo sitio que usa upstream—.
+
+> **Corrección del 04-09-2026.** Aquí se decía que el paquete es
+> **`arch=('any')`**. Era cierto cuando se escribió y **ya no lo es**: el
+> 02-09-2026, el commit `4ed5f14` de `omacom-io/omarchy-pkgs` pasó `omarchy` y
+> `omarchy-settings` a `arch=('x86_64' 'aarch64')`, cada uno con su
+> `depends_<arch>` y un `package()` que retira el stack de arranque x86 en ARM.
+> La *conclusión* no cambia, y se ha vuelto a comprobar el mismo día:
+> `pkgs.omarchy.org/stable/aarch64/omarchy.db` y
+> `stable-mirror.omarchy.org/core/os/aarch64/core.db` siguen devolviendo **404**
+> mientras los de x86_64 devuelven **200**. La receta ya se puede construir para
+> aarch64; el repositorio publicado sigue sin existir.
+>
+> `build-omarchy-arm.sh` —el que describe este documento y el que produjo la
+> imagen publicada— **replica** ese paquete a mano. Una versión anterior los
+> ponía en
 `/usr/local/bin`, que parecía más limpio pero rompía cosas: el árbol lleva trece
 rutas `/usr/bin/omarchy-*` cableadas, cinco en ficheros `.service`.
 `/usr/local/bin` se sigue usando, pero sólo para los pocos envoltorios propios
@@ -74,13 +88,13 @@ de ARM que necesitan precedencia en el `PATH`.
 - **Hyprland 0.56.1** con el stack de Omarchy 4: quickshell —que es a la vez
   barra, menú, OSD y demonio de notificaciones—, hyprlock, hypridle, hyprsunset,
   uwsm, xdg-desktop-portal-hyprland, SDDM con autologin y tema Omarchy
-- **Dotfiles, temas y los 442 comandos `omarchy-*`**, en `/usr/bin` como hace
+- **Dotfiles, temas y los 445 comandos `omarchy-*`**, en `/usr/bin` como hace
   el paquete de upstream
 - **18 paquetes construidos para aarch64** que no se publican
   para ARM: `tensaku`, `omacalc`, `omacut`, `omawrite`, `aether`, `cliamp`,
   `ttfx`, `omarchy-nvim`, `mise`, `tzupdate`, `yaru-icon-theme`,
   `ttf-ia-writer`, `hyprland-preview-share-picker`, `xdg-terminal-exec`,
-  `tobi-try`, `ufw-docker` y `yay`. (`quickshell` no está aquí: sí existe en los
+  `tobi-try`, `ufw-docker`, `herdr` y `yay`. (`quickshell` no está aquí: sí existe en los
   repos de Arch Linux ARM y se instala como paquete normal.)
 - **OBS Studio 32.2.2 y Pinta 3.1.2** compilados para ARM (software libre, sí
   van dentro)
@@ -127,6 +141,17 @@ que la primera). Para arreglar una VM que ya tengas, sin volver a descargar,
 ejecuta dentro [`fixes/18-avisos-que-no-se-apagan.sh`](fixes/18-avisos-que-no-se-apagan.sh),
 y para el portapapeles [`fixes/19-portapapeles.sh`](fixes/19-portapapeles.sh).
 
+**Y ejecuta [`fixes/20-seguridad-y-servicios.sh`](fixes/20-seguridad-y-servicios.sh)
+tengas la imagen que tengas.** Auditar esta construcción contra los propios
+scripts `install/` de Omarchy el 04-09-2026 sacó cinco diferencias, dos de ellas
+de seguridad: la cuenta quedaba en el grupo `docker` —que Omarchy se niega a
+conceder, porque equivale a root sin contraseña— y nunca se activaba el
+cortafuegos, mientras que el sistema que esto reproduce trae `ufw` encendido.
+También habilita `cups`, `avahi-daemon`, `power-profiles-daemon` y
+`systemd-resolved`, que upstream enciende y esta construcción no. No desinstala
+Docker: `sudo docker` sigue funcionando. El script de construcción también está
+corregido.
+
 ## Uso
 
 ```bash
@@ -146,7 +171,7 @@ realmente cambian el resultado son si compilar las herramientas (~40 min), si
 incluir OBS Studio y Pinta (~45 min, y es lo más caro de toda la construcción) y
 si preparar la imagen para repartir; si eliges «VM para ti», se salta `sanitize`
 y `package` y conserva tu usuario. Lo contestado se guarda en
-`$W/respuestas.env` y se recupera al reanudar con `--from`, así que no hay que
+`$W/answers.env` y se recupera al reanudar con `--from`, así que no hay que
 volver a teclearlo. Sin terminal, o con `--yes`, no pregunta nada: el modo
 desatendido de siempre sigue intacto.
 
@@ -244,8 +269,8 @@ que viene dentro de Google Chrome arm64 (`omarchy-arm-extras chrome spotify-web`
 de paquetes y ejecútalo.
 
 ```bash
-./my-apps.sh --ejemplo > my-apps.txt   # una lista de partida
-./my-apps.sh --comprobar my-apps.txt   # solo comprueba, no instala
+./my-apps.sh --example > my-apps.txt   # una lista de partida
+./my-apps.sh --check my-apps.txt       # solo comprueba, no instala
 ./my-apps.sh my-apps.txt               # comprueba e instala
 ```
 
@@ -302,8 +327,11 @@ logs/
   viaja a UTM, así que el arranque depende de la ruta de reserva
   `\EFI\BOOT\BOOTAA64.EFI`, que systemd-boot instala igualmente.
 - **El bundle `.utm` se escribe a mano.** `utmctl` no crea VMs y UTM solo escanea
-  `Documents/` al arrancar la app. El `config.plist` necesita las **diez** claves
+  `Documents/` al arrancar la app. El `config.plist` necesita las **doce** claves
   de primer nivel: se decodifican con `decode()`, no `decodeIfPresent()`.
+  Dos de ellas —`Backend` y `ConfigurationVersion`— son las que UTM lee para
+  rechazar un bundle de otra versión, así que omitirlas no es una simplificación
+  sino un bundle que no importa.
 - **La mitad VARS del UEFI aarch64 es `edk2-arm-vars.fd`**, no
   `edk2-aarch64-vars.fd` (que no existe). La CODE la aporta UTM vía `-L`.
 - **Los clientes GPU no se pintan bajo virgl.** Se mapean pero quedan vacíos;
@@ -359,9 +387,14 @@ Validado con una construcción completa desde cero el 25-08-2026: **8 de 8 fases
 El veredicto que emite el invitado por la consola serie:
 
 ```
-### H=1 Q=1 BINS=442 ROTOS=1 UNITS=7 VER=4 CLIP=5/5
+### H=1 Q=1 BINS=445 ROTOS=1 UNITS=7 VER=4 CLIP=5/5
 VEREDICTO_OK
 ```
+
+Esa es la salida del builder **tal como estaba el 25-08-2026**, y se conserva
+como registro de aquella ejecución. La línea de veredicto de hoy lleva trece
+campos y los rótulos van en inglés: `### H= Q= BINS= BROKEN= UNITS= VER=
+DOCKERGRP= UFW= LDD= HYPRDEPS= REC= PACDB= CLIP=`, seguida de `VERDICT_OK`.
 
 **Compilan las 18 paquetes**, `herdr` incluida: sale del PKGBUILD del propio
 Omarchy, que declara `aarch64` y se descarga el Zig 0.15.2 oficial de ziglang.org
@@ -369,7 +402,7 @@ en vez de depender de la versión que empaqueten los repositorios.
 
 Después se arrancó la **imagen ya empaquetada** —no la VM intermedia— en modo
 solo lectura (`qemu -snapshot`) y se comprobó desde fuera: usuario genérico y la
-cuenta de construcción borrada, 442 comandos `omarchy-*`, Hyprland y quickshell
+cuenta de construcción borrada, 445 comandos `omarchy-*`, Hyprland y quickshell
 vivos, `spice-vdagentd` con `-X` y el agente del portapapeles activo, `sshd`
 deshabilitado, cero claves SSH de host y ninguna ruta de compilación dentro de
 los binarios.

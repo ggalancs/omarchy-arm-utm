@@ -1,11 +1,24 @@
 #!/usr/bin/expect -f
 # Verifies the VM running in UTM over its serial port (pty).
-# Usage: verify-utm.exp /dev/ttysNNN    (utmctl attach prints the pty)
+#
+# Usage: verify-utm.exp /dev/ttysNNN [account] [password]   (utmctl attach
+# prints the pty). The account defaults to the distributable image's, and the
+# password to the same string, which is what sanitize.sh sets.
+#
+# It used to send `gabriel` / `gabriel` -- the account of a hand-built VM that
+# no image this repository produces has ever had. Every run reached the login
+# prompt, was refused, timed out and exited 3 with "no shell" after verifying
+# absolutely nothing. Nothing in the repository invokes this file, which is why
+# nobody noticed.
 set timeout 120
 log_user 1
 match_max 200000
 set DEV [lindex $argv 0]
-if {$DEV eq ""} { puts "uso: verify-utm.exp /dev/ttysNNN"; exit 1 }
+if {$DEV eq ""} { puts "usage: verify-utm.exp /dev/ttysNNN \[account\] \[password\]"; exit 1 }
+set ACCT [lindex $argv 1]
+if {$ACCT eq ""} { set ACCT "omarchy" }
+set PASS [lindex $argv 2]
+if {$PASS eq ""} { set PASS $ACCT }
 
 set fd [open $DEV w+]
 fconfigure $fd -mode 115200,n,8,1 -translation binary -buffering none
@@ -24,30 +37,31 @@ proc go {cmd tok {t 90}} {
 send "\r"
 expect {
     -re {omarchy login:} {}
-    timeout { puts "\n!! no aparece el login"; exit 2 }
+    timeout { puts "\n!! the login prompt never appeared"; exit 2 }
 }
-send "gabriel\r"
+send "$ACCT\r"
 expect -re {[Pp]assword:}
-send "gabriel\r"
+send "$PASS\r"
 expect {
     -re {\$ $|\$ } {}
-    timeout { puts "\n!! no shell"; exit 3 }
+    -re {[Ll]ogin incorrect} { puts "\n!! the account '$ACCT' was refused"; exit 3 }
+    timeout { puts "\n!! no shell after logging in as '$ACCT'"; exit 3 }
 }
 send "export PS1='V> ' TERM=dumb; stty cols 160; echo TOK_SH_\$?\r"
 expect -re {TOK_SH_[0-9]+}
 
 puts "\n\n============== VERIFICATION =============="
-go "echo; echo '### sistema'; uname -srm; grep PRETTY /etc/os-release" T1_
+go "echo; echo '### system'; uname -srm; grep PRETTY /etc/os-release" T1_
 go "echo '### storage'; findmnt -no SOURCE,FSTYPE,OPTIONS / ; findmnt -no SOURCE,FSTYPE /home; findmnt -no SOURCE,FSTYPE /boot; df -h / | tail -1" T2_
 go "echo '### services'; systemctl is-active sddm NetworkManager systemd-logind; echo '--- failed:'; systemctl --failed --no-pager --no-legend" T3_
 go "echo '### packages'; pacman -Q hyprland waybar uwsm sddm mesa walker elephant xdg-terminal-exec 2>&1" T4_
-go "echo '### dotfiles'; ls ~/.config | tr '\\n' ' '; echo; echo -n 'tema: '; readlink -f ~/.config/omarchy/current/theme" T5_
+go "echo '### dotfiles'; ls ~/.config | tr '\\n' ' '; echo; echo -n 'theme: '; readlink -f ~/.local/state/omarchy/current/theme" T5_
 go "echo '### omarchy bin'; ls ~/.local/share/omarchy/bin | wc -l; command -v omarchy-theme-set omarchy-menu 2>&1" T6_
-go "echo '### red'; ip -4 -br addr show scope global; ping -c2 -W3 mirror.archlinuxarm.org 2>&1 | tail -2" T7_
+go "echo '### network'; ip -4 -br addr show scope global; ping -c2 -W3 mirror.archlinuxarm.org 2>&1 | tail -2" T7_
 go "echo '### graphical session'; loginctl list-sessions --no-legend; pgrep -a Hyprland | head -2; pgrep -a sddm | head -2" T8_
 go "echo '### GPU / virgl'; ls /dev/dri/ 2>&1; lspci 2>/dev/null | grep -i -E 'vga|display|gpu'; dmesg 2>/dev/null | grep -i -E 'virtio_gpu|drm' | tail -6" T9_
 go "echo '### boot errors'; journalctl -b -p err --no-pager 2>&1 | tail -25" TA_ 150
-puts "\n============== FIN =============="
+puts "\n============== END =============="
 send "exit\r"
 sleep 1
 exit 0

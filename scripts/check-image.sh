@@ -10,10 +10,13 @@
 #
 # It modifies nothing: -snapshot writes to a temporary overlay.
 set -uo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 
 BUNDLE="${1:-}"; OLD="${2:-builder}"
-[ -d "$BUNDLE" ] || { echo "usage: $0 <bundle.utm> [build-account]"; exit 2; }
+# The account the image is expected to ship. guest-check no longer hardcodes it,
+# so it has to arrive from here; the default matches DIST_NEW_USER's default.
+NEWU="${3:-omarchy}"
+[ -d "$BUNDLE" ] || { echo "usage: $0 <bundle.utm> [build-account] [image-account]"; exit 2; }
 DISK=$(find "$BUNDLE/Data" -name '*.qcow2' | head -1)
 [ -s "$DISK" ] || { echo "cannot find the qcow2 in $BUNDLE"; exit 2; }
 
@@ -46,7 +49,7 @@ cp "$GS" "$TMP/iso/check.sh" || { echo "could not prepare the ISO" >&2; exit 2; 
 # GUEST_SCRIPT can invoke it -- for instance to sabotage the image and confirm
 # the checks know how to go red -- without duplicating it.
 cp scripts/guest-check.sh "$TMP/iso/guest-check-base.sh"
-hdiutil makehybrid -quiet -iso -joliet -default-volume-name CHEQUEO \
+hdiutil makehybrid -quiet -iso -joliet -default-volume-name CHECK \
   -o "$TMP/check.iso" "$TMP/iso" >/dev/null || { echo "could not create the ISO"; exit 2; }
 
 cat > "$TMP/t.exp" <<'EXPEOF'
@@ -77,7 +80,7 @@ expect {
 expect -re {[❯#] $|[❯#]$|\$ $} { }
 # Headroom for SDDM to bring up the graphical session and start its services.
 sleep 75
-send "mkdir -p /media; mount -o ro /dev/vdb /media 2>/dev/null || mount -o ro /dev/vdc /media; bash /media/check.sh '$env(OLDUSER)' > /tmp/report.txt 2>&1; true\r"
+send "mkdir -p /media; mount -o ro /dev/vdb /media 2>/dev/null || mount -o ro /dev/vdc /media; bash /media/check.sh '$env(OLDUSER)' '$env(NEWUSER)' > /tmp/report.txt 2>&1; true\r"
 expect -re {[❯#] $|[❯#]$|\$ $} { }
 sleep 3
 send "cat /tmp/report.txt\r"
@@ -91,7 +94,7 @@ echo "  starting $(basename "$BUNDLE") ... (~4 min)"
 # it is the only thing that says where. It has been lost twice already by
 # writing it inside the temporary directory that gets deleted on exit.
 echo "  transcript: $TR"
-EFI="$TMP/efi.fd" DISK="$DISK" ISO="$TMP/check.iso" OLDUSER="$OLD" TRANSCRIPT="$TR" \
+EFI="$TMP/efi.fd" DISK="$DISK" ISO="$TMP/check.iso" OLDUSER="$OLD" NEWUSER="$NEWU" TRANSCRIPT="$TR" \
 FW="$(brew --prefix qemu)/share/qemu/edk2-aarch64-code.fd" \
   expect "$TMP/t.exp" >/dev/null 2>&1
 
@@ -100,6 +103,14 @@ FW="$(brew --prefix qemu)/share/qemu/edk2-aarch64-code.fd" \
 # buffer does not flush in time and the caller's grep finds an empty file --
 # whereas log_file writes unbuffered. Trusting stdout has twice failed a gate
 # over an image that was perfectly fine.
+# TWO ranges, because two different scripts travel down this channel. The
+# filter used to open only on `== identity ==`, which guest-check.sh prints --
+# but every negative-test batch captures that output into a variable and only
+# ever re-emits it through `grep FAIL`, so the heading never reached the
+# transcript, the range never opened, and stdout carried nothing but three
+# progress lines. The caller then looked for NEGATIVE_TEST_OK, did not find it,
+# and reported a failure for a batch that had passed: the always-red twin of a
+# check that cannot fail.
 sed 's/\x1b\[[0-9;?=]*[a-zA-Z]//g' "$TR" | grep -av '^]3008' \
-  | sed -n '/^== identity ==/,/^VERDICT_/p'
+  | sed -n '/^== identity ==/,/^VERDICT_/p; /^== 1\./,/^END_CHECK/p'
 grep -q "VERDICT_CLEAN" "$TR" 2>/dev/null

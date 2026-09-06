@@ -11,7 +11,7 @@ USR=gabriel
 OM=/home/$USR/.local/share/omarchy
 log() { echo ""; echo "==> $*"; }
 
-[ -d "$OM" ] || { echo "!! no existe $OM"; exit 1; }
+[ -d "$OM" ] || { echo "!! $OM does not exist"; exit 1; }
 
 log "1/8 tree at /usr/share/omarchy"
 ln -sfn "$OM" /usr/share/omarchy
@@ -46,7 +46,7 @@ done
 [ -d "$OM/etc/fastfetch" ] && cp -a "$OM/etc/fastfetch" /etc/ 2>/dev/null || true
 [ -d "$OM/etc/gnupg" ] && cp -a "$OM/etc/gnupg/." /etc/gnupg/ 2>/dev/null || true
 
-log "5/8 SDDM: tema Omarchy, compositor y autologin"
+log "5/8 SDDM: Omarchy theme, compositor and autologin"
 mkdir -p /usr/share/sddm/themes /usr/local/share/wayland-sessions /etc/sddm.conf.d
 cp -a "$OM/default/sddm/omarchy" /usr/share/sddm/themes/ 2>/dev/null || true
 [ -f "$OM/default/sddm/hyprland.lua" ] && cp -a "$OM/default/sddm/hyprland.lua" /usr/share/sddm/hyprland.lua
@@ -63,10 +63,10 @@ for p in /etc/pam.d/sddm /etc/pam.d/sddm-autologin /etc/pam.d/sddm-greeter; do
 done
 ls /usr/share/sddm/themes/ /etc/sddm.conf.d/
 
-log "6/8 theme-system.sh de Omarchy"
+log "6/8 Omarchy's theme-system.sh"
 bash "$OM/install/config/theme-system.sh" 2>&1 | tail -3 || true
 
-log "7/8 servicios y acceso"
+log "7/8 services and access"
 systemctl enable systemd-oomd.service 2>/dev/null || true
 systemctl enable sshd.service 2>/dev/null || true
 systemctl mask NetworkManager-wait-online.service 2>/dev/null || true
@@ -75,9 +75,15 @@ install -d -m700 -o $USR -g $USR /home/$USR/.ssh
 # HISTORICAL: a development public key used to be installed here so SSH access
 # was possible during the build. No key is distributed: the final image ships
 # with sshd disabled and no authorized_keys.
-[ -f /root/prov/omkey.pub ] && cp /root/prov/omkey.pub /home/$USR/.ssh/authorized_keys
-chown $USR:$USR /home/$USR/.ssh/authorized_keys
-chmod 600 /home/$USR/.ssh/authorized_keys
+# All three inside the guard. The cp was conditional and the chown and chmod
+# were not, so on every run of this script -- and no key IS distributed, as the
+# note above says -- both printed "No such file or directory" into a transcript
+# people read as the record of what happened.
+if [ -f /root/prov/omkey.pub ]; then
+  cp /root/prov/omkey.pub /home/$USR/.ssh/authorized_keys
+  chown $USR:$USR /home/$USR/.ssh/authorized_keys
+  chmod 600 /home/$USR/.ssh/authorized_keys
+fi
 
 log "8/8 theme as the user, now with the right environment"
 su - $USR -c 'export OMARCHY_PATH=/usr/share/omarchy; export PATH=/usr/local/bin:$PATH; mkdir -p ~/.config/omarchy/themes; omarchy-theme-set "Tokyo Night" 2>&1 | tail -5' || echo "  (theme-set failed)"

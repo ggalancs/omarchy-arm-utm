@@ -82,7 +82,7 @@ build aur herdr
 build omapkgs tensaku
 build omapkgs hyprland-preview-share-picker
 
-log "RESUMEN"
+log "SUMMARY"
 echo "  built (${#OK[@]}): ${OK[*]:-none}"
 echo "  failed  (${#KO[@]}): ${KO[*]:-none}"
 echo ""

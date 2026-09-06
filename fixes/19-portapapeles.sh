@@ -28,29 +28,29 @@ set -uo pipefail
 RAW=https://raw.githubusercontent.com/ggalancs/omarchy-arm-utm/main/provision/src/omarchy-arm-vdagent
 SOCK=/run/spice-vdagentd/spice-vdagent-sock
 
-echo "==> requisitos"
+echo "==> requirements"
 failed_pkg=0
 for c in python3 wl-copy wl-paste; do
   command -v "$c" >/dev/null 2>&1 && echo "  ✓ $c" || { echo "  ✗ missing $c"; failed_pkg=1; }
 done
 if [ ! -e /dev/virtio-ports/com.redhat.spice.0 ]; then
-  echo "  ✗ no existe /dev/virtio-ports/com.redhat.spice.0"
+  echo "  ✗ /dev/virtio-ports/com.redhat.spice.0 does not exist"
   echo "    Enable 'Share clipboard' in UTM, then power the VM off and on."
   failed_pkg=1
 else
-  echo "  ✓ canal SPICE presente"
+  echo "  ✓ the SPICE channel is present"
 fi
 pacman -Q spice-vdagent >/dev/null 2>&1 && echo "  ✓ spice-vdagent installed" \
   || { echo "  x spice-vdagent missing: sudo pacman -S spice-vdagent"; failed_pkg=1; }
 [ "$failed_pkg" -ne 0 ] && { echo; echo "Fix the above and try again."; exit 1; }
 
 echo
-echo "==> agente"
+echo "==> agent"
 if [ -f /usr/share/omarchy-arm-vdagent ]; then
   sudo install -Dm755 /usr/share/omarchy-arm-vdagent /usr/local/bin/omarchy-arm-vdagent
 else
   tmp=$(mktemp)
-  curl -fsSL "$RAW" -o "$tmp" || { echo "  ✗ no pude descargarlo"; rm -f "$tmp"; exit 1; }
+  curl -fsSL "$RAW" -o "$tmp" || { echo "  ✗ could not download it"; rm -f "$tmp"; exit 1; }
   python3 -c "import ast,sys;ast.parse(open(sys.argv[1]).read())" "$tmp" \
     || { echo "  x what was downloaded is not valid Python"; rm -f "$tmp"; exit 1; }
   sudo install -Dm755 "$tmp" /usr/local/bin/omarchy-arm-vdagent; rm -f "$tmp"
@@ -117,15 +117,27 @@ sleep 1
 # they are not masked and that the socket is alive.
 sudo systemctl unmask spice-vdagentd.socket spice-vdagentd.service 2>/dev/null || true
 sudo systemctl start spice-vdagentd.socket 2>/dev/null || true
+# The moment the daemon was restarted, so the check below can look at THIS
+# invocation instead of the whole boot -- which necessarily contains the errors
+# this script has just repaired.
+RESTART_TS=$(date '+%Y-%m-%d %H:%M:%S')
 sudo systemctl restart spice-vdagentd
 sleep 3
 echo "  spice-vdagentd: $(systemctl is-active spice-vdagentd)"
 pgrep -af spice-vdagentd | grep -q -- ' -X' \
   && echo "  the daemon is running with -X" || echo "  x the daemon did not pick up -X"
 # The virtual absolute pointer: if this complains, the mouse is not captured.
-journalctl -u spice-vdagentd -b --no-pager 2>/dev/null | grep -q "uinput" \
-  && echo "  x uinput errors are still there (the mouse will not be captured)" \
-  || echo "  no uinput errors (the mouse is captured on its own)"
+# --since the restart, and with sudo. Reading the whole boot reported failure
+# on exactly the machines this script had just fixed, because the errors it
+# repairs were logged earlier in that same boot; and running journalctl
+# unprivileged on a machine where the user cannot read the system journal
+# matched nothing and printed the green line instead. It got it wrong in both
+# directions.
+if sudo journalctl -u spice-vdagentd --since "$RESTART_TS" --no-pager 2>/dev/null | grep -q "uinput"; then
+  echo "  x uinput errors since the restart (the mouse will not be captured)"
+else
+  echo "  no uinput errors since the restart (the mouse is captured on its own)"
+fi
 [ -S "$SOCK" ] && echo "  socket ready" || { echo "  x there is no socket at $SOCK"; exit 1; }
 case "$(systemctl is-enabled spice-vdagentd.socket 2>/dev/null)" in
   masked) echo "  x spice-vdagentd.socket is masked; the clipboard will not come back after a reboot:"

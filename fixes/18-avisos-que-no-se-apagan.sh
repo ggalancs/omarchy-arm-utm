@@ -13,7 +13,7 @@
 #        package, which does not exist for
 #        ARM (docs/file-layout.md: "systemd/user/*.service → /usr/lib/systemd/user/").
 #     2. Those .service files invoke /usr/bin/omarchy-*, and this image had the
-#        comandos en /usr/local/bin.
+#        commands in /usr/local/bin.
 #   Never being marked, first-run repeats on every login and wifi.sh re-raises
 #   the notice.
 #
@@ -23,8 +23,7 @@
 #   on Arch Linux ARM, linux-aarch64 leaves the image in /boot/Image and never
 #   creates that vmlinuz. The loop finds nothing, kernel_updated stays true and
 #   it asks for a reboot on every update. Rebooting does not help: the
-#   condition cannot
-#   volverse falsa.
+#   condition can never become false.
 set -uo pipefail
 echo "==> A. omarchy commands into /usr/bin (where the tree expects them)"
 n=0

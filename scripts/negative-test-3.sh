@@ -11,7 +11,8 @@
 #  ────────────────────────────────────────────────────────────────────────────
 LIST=/media/guest-check-base.sh
 [ -r "$LIST" ] || { echo "cannot find $LIST"; echo "END_CHECK"; exit 2; }
-run_list() { bash "$LIST" builder 2>&1; }
+OLD_USER="${1:-builder}"; USER_IMG="${2:-omarchy}"
+run_list() { bash "$LIST" "$OLD_USER" "$USER_IMG" 2>&1; }
 count_failures() {
   case "$1" in
     *VERDICT_CLEAN*) echo 0 ;;
@@ -51,7 +52,7 @@ done
 
 # autostart launching the stock agent, which is what broke the clipboard on
 # reboot: the line was there, commented out.
-A=/home/omarchy/.config/hypr/autostart.lua
+A=/home/$USER_IMG/.config/hypr/autostart.lua
 [ -f "$A" ] && { echo 'hl.exec_cmd("spice-vdagent")' >> "$A"; \
   echo "   + autostart launching the stock agent"; EXPECTED+=("autostart launches the stock agent"); }
 

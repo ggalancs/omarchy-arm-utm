@@ -19,8 +19,8 @@ for f in /home/$NEW/.config/user-dirs.dirs; do
 done
 
 log "final sweep"
-echo "  /etc:   $(grep -rl '\bgabriel\b' /etc 2>/dev/null | wc -l) coincidencias"
-echo "  /home:  $(grep -rl '\bgabriel\b' /home/$NEW/.config /home/$NEW/.bashrc /home/$NEW/.bash_profile 2>/dev/null | wc -l) coincidencias"
+echo "  /etc:   $(grep -rl '\bgabriel\b' /etc 2>/dev/null | wc -l) matches"
+echo "  /home:  $(grep -rl '\bgabriel\b' /home/$NEW/.config /home/$NEW/.bashrc /home/$NEW/.bash_profile 2>/dev/null | wc -l) matches"
 echo "  (note: /usr/local/bin/ttfx carries the build path in its debug"
 echo "   debug info; it is harmless and exposes nothing useful)"
 

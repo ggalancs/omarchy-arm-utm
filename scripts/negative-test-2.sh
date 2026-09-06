@@ -11,7 +11,8 @@
 #  ────────────────────────────────────────────────────────────────────────────
 LIST=/media/guest-check-base.sh
 [ -r "$LIST" ] || { echo "cannot find $LIST"; echo "END_CHECK"; exit 2; }
-run_list() { bash "$LIST" builder 2>&1; }
+OLD_USER="${1:-builder}"; USER_IMG="${2:-omarchy}"
+run_list() { bash "$LIST" "$OLD_USER" "$USER_IMG" 2>&1; }
 count_failures() {
   case "$1" in
     *VERDICT_CLEAN*) echo 0 ;;
@@ -52,18 +53,18 @@ for c in htop wget rsync; do
 done
 
 # The build path inside a binary in /usr/local/bin.
-printf '#!/bin/sh\n# /home/builder/something\n' > /usr/local/bin/fake-with-path
+printf '#!/bin/sh\n# /home/%s/something\n' "$OLD_USER" > /usr/local/bin/fake-with-path
 chmod +x /usr/local/bin/fake-with-path
-echo "   + binary mentioning /home/builder"
+echo "   + binary mentioning /home/$OLD_USER"
 EXPECTED+=("binaries carrying the build path")
 
 # A filename that mentions the build account.
-touch /etc/config-builder.conf
+touch "/etc/config-$OLD_USER.conf"
 echo "   + file whose name mentions the build account"
 EXPECTED+=("files mention it")
 
 # GECOS carrying an identity.
-usermod -c "Gabriel Real" omarchy 2>/dev/null \
+usermod -c "Gabriel Real" "$USER_IMG" 2>/dev/null \
   && { echo "   + GECOS carrying a real name"; EXPECTED+=("GECOS:"); }
 
 echo

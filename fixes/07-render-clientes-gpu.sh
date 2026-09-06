@@ -14,7 +14,7 @@ log() { echo ""; echo "==> $*"; }
 
 log "LIBGL_ALWAYS_SOFTWARE in the session environment"
 sudo tee /etc/environment.d/90-vm-graphics.conf >/dev/null <<'EOF'
-# virtio-gpu (virgl) bajo UTM/QEMU
+# virtio-gpu (virgl) under UTM/QEMU
 WLR_NO_HARDWARE_CURSORS=1
 AQ_NO_MODIFIERS=1
 WLR_RENDERER_ALLOW_SOFTWARE=1

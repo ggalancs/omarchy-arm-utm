@@ -7,9 +7,18 @@
 #
 # These values are pinned here instead: reviewed once, committed, and compared
 # on every build. They are the exact bytes that produced the image published
-# on 2026-09-03 (sha256 a301f6a8...), which is the strongest provenance this
-# project can offer -- not "what the server served today" but "what the image
+# on 2026-09-03 as omarchy-arm-utm-v2.zip -- the strongest provenance this
+# project can offer: not "what the server served today" but "what the image
 # people downloaded was actually built from".
+#
+# The sha256 of that image is NOT repeated here. It lives in
+# dist/omarchy-arm-utm-v2.zip.sha256, and it lived here too until
+# scripts/update-base-image-pins.sh -- which copies every comment line forward
+# on a refresh -- made this header outlive the values it describes.
+#
+# The sha256 quoted here used to be a301f6a8..., which matches no artifact this
+# repository has ever published, dated to a release that does not exist. In the
+# one file whose entire purpose is provenance.
 #
 # Arch Linux ARM rebuilds its rootfs every few weeks, so this WILL stop
 # matching. That is the point: the build stops and a person looks, instead of

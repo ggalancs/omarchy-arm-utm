@@ -20,7 +20,13 @@
 LIST=/media/guest-check-base.sh
 [ -r "$LIST" ] || { echo "cannot find $LIST"; echo "END_CHECK"; exit 2; }
 
-run_list() { bash "$LIST" builder 2>&1; }
+# The accounts come from the harness, which receives them from
+# run-negative-tests.sh. Hardcoding them meant that against an image built with
+# any DIST_NEW_USER other than "omarchy", guest-check's very first assertion
+# failed, VERDICT_CLEAN never printed, and every batch reported failure over a
+# perfectly good image.
+OLD_USER="${1:-builder}"; USER_IMG="${2:-omarchy}"
+run_list() { bash "$LIST" "$OLD_USER" "$USER_IMG" 2>&1; }
 
 # The count comes from the VERDICT, not from counting lines by their prefix.
 # The list prints "  FAIL   ", and the first attempt here grepped for a
@@ -58,8 +64,11 @@ declare -a EXPECTED=()
 # guest-check.sh. The first attempt made them up from memory, and the test
 # would have said "blind" over a mistake of mine, not the check's.
 
-useradd -m builder 2>/dev/null \
-  && { echo "   + builder account"; EXPECTED+=("build account"); }
+# The account the image was BUILT with, not the literal 'builder': the check
+# this sabotages greps for the name the harness was told about, so planting a
+# different one proved only that guest-check reacts to a name nobody used.
+useradd -m "$OLD_USER" 2>/dev/null \
+  && { echo "   + $OLD_USER account"; EXPECTED+=("build account"); }
 
 ssh-keygen -q -t ed25519 -N "" -f /etc/ssh/ssh_host_ed25519_key >/dev/null 2>&1 \
   && { echo "   + ssh host key"; EXPECTED+=("ssh host keys left behind"); }
@@ -74,9 +83,15 @@ ln -sf /does/not/exist/anywhere /usr/bin/test-broken-link \
 touch /root/failed-packages.txt \
   && { echo "   + /root/failed-packages.txt"; EXPECTED+=("/root/failed-packages.txt left behind"); }
 
-# `git config --global` of whoever runs the list, which here is root.
-git config --global user.name "Prueba Negativa" 2>/dev/null \
-  && { echo "   + git identity"; EXPECTED+=("git user.name:"); }
+# The IMAGE ACCOUNT's gitconfig, not root's. This planted /root/.gitconfig,
+# which is the file guest-check used to read and the one the build never
+# writes -- so the sabotage and the check agreed with each other about a file
+# irrelevant to the artifact. The identity that can actually leak is the
+# builder's, and it travels in /home/<account>/.gitconfig.
+if [ -d "/home/$USER_IMG" ]; then
+  git config --file "/home/$USER_IMG/.gitconfig" user.name "Negative Test" 2>/dev/null \
+    && { echo "   + git identity in /home/$USER_IMG/.gitconfig"; EXPECTED+=("git identity left behind"); }
+fi
 
 systemctl stop spice-vdagentd 2>/dev/null \
   && { echo "   + clipboard daemon stopped"; EXPECTED+=("daemon inactive"); }

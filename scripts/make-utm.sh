@@ -4,7 +4,7 @@
 # UTM 4.7 only scans ~/Library/Containers/com.utmapp.UTM/Data/Documents/ once,
 # when the app starts (listRefresh() is called from ContentView.onAppear), so
 # UTM has to be quit, the bundle written, and the app opened again.
-# config.plist requires all TEN top-level keys: they are decoded with decode(),
+# config.plist requires all TWELVE top-level keys: they are decoded with decode(),
 # not decodeIfPresent(), and omitting any one makes UTM reject it.
 set -euo pipefail
 
@@ -23,7 +23,32 @@ VARS_TPL=/Applications/UTM.app/Contents/Resources/qemu/edk2-arm-vars.fd
 [ -f "$SRC_QCOW" ] || { echo "!! $SRC_QCOW is missing"; exit 1; }
 [ -f "$VARS_TPL" ] || { echo "!! the UEFI NVRAM template $VARS_TPL is missing"; exit 1; }
 
-VM_UUID=$(uuidgen)
+# Identifiers: random by default, DERIVED when UTM_SEED is set.
+#
+# The bundle that ships used to mint a fresh VM UUID, disk UUID and MAC on
+# every run, so the zip's sha256 was different every time. ph_package refuses
+# to finish while the six documents that publish that checksum disagree with
+# it, and told the operator to "put $NEWSUM in the files above and package
+# again" -- which produced yet another hash. The instruction described a loop
+# that could not be closed, and the only way out was to stop believing the
+# gate.
+#
+# With a seed the same image packages to the same bytes, so the checksum can
+# be written down once. The build VM registered in UTM keeps random ones: two
+# VMs sharing a UUID in the same UTM library is a real collision, and that one
+# is not published anyway.
+if [ -n "${UTM_SEED:-}" ]; then
+  # Version and variant nibbles are forced so the result is a well-formed v4
+  # UUID and not merely 32 hex characters with dashes in them.
+  _seeded_uuid() {
+    local h
+    h=$(printf '%s\0%s' "$UTM_SEED" "$1" | shasum -a 256 | cut -c1-32)
+    printf '%s-%s-4%s-8%s-%s' "${h:0:8}" "${h:8:4}" "${h:13:3}" "${h:17:3}" "${h:20:12}"
+  }
+  VM_UUID=$(_seeded_uuid vm)
+else
+  VM_UUID=$(uuidgen)
+fi
 # Whoever receives the bundle reads these notes in UTM before starting it:
 # they have to state the real credentials, not the builder's.
 NOTES_USER="${NOTES_USER:-omarchy}"
@@ -36,8 +61,16 @@ xmlq() { printf "%s" "${1-}" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&
 NOTES_USER=$(xmlq "$NOTES_USER")
 NOTES_PASS=$(xmlq "$NOTES_PASS")
 
-DISK_UUID=$(uuidgen)
-MAC=$(printf '02:%02X:%02X:%02X:%02X:%02X' $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)))
+if [ -n "${UTM_SEED:-}" ]; then
+  DISK_UUID=$(_seeded_uuid disk)
+  # Locally administered unicast, same as the random branch: the 02 prefix is
+  # what makes it legal to invent one at all.
+  _m=$(printf '%s\0mac' "$UTM_SEED" | shasum -a 256 | cut -c1-10)
+  MAC=$(printf '02:%s:%s:%s:%s:%s' "${_m:0:2}" "${_m:2:2}" "${_m:4:2}" "${_m:6:2}" "${_m:8:2}" | tr 'a-f' 'A-F')
+else
+  DISK_UUID=$(uuidgen)
+  MAC=$(printf '02:%02X:%02X:%02X:%02X:%02X' $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)))
+fi
 
 # UTM only scans Documents when the app starts, so it has to be restarted for
 # the bundle to be recognised. But quitting it by force takes down whatever VMs

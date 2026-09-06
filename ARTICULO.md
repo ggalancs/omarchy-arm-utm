@@ -69,6 +69,16 @@ instalar», que es un problema mucho más pequeño —lo cerraría publicar unos
 paquetes aarch64— y que además explica por qué varios proyectos de terceros han
 tenido que montarse su propio repositorio por separado.
 
+> **Nota del 2026-09-04.** Este artículo se escribió en agosto y aquel
+> `arch=('any')` ya no es cierto: el 2026-09-02, el commit `4ed5f14` de
+> `omacom-io/omarchy-pkgs` pasó `omarchy` y `omarchy-settings` a
+> `arch=('x86_64' 'aarch64')`. Lo demás sigue en pie, comprobado el mismo día:
+> `pkgs.omarchy.org/stable/aarch64/omarchy.db` sigue devolviendo **404** y el de
+> x86_64 **200**. Es decir: la receta ya se puede construir para aarch64, el
+> repositorio publicado sigue sin existir. La nota va aquí, fechada, en lugar de
+> reescribir el párrafo, por la misma razón que el propio artículo da dos
+> párrafos más abajo.
+
 Dejo el error a la vista en vez de reescribir la historia, porque es
 representativo: **verifiqué contra la rama equivocada**. `master` suena a rama
 principal; en este repositorio la de por defecto es `quattro`. La misma trampa
@@ -300,9 +310,11 @@ paquete coloca ficheros en rutas fijas del sistema:
 - `/usr/share/uwsm/env.d/10-omarchy` — el gancho para la sesión gráfica
 
 Aquí conviene precisar, porque yo mismo lo escribí mal al principio: **el
-paquete no es x86_64-only**. Su PKGBUILD declara `arch=('any')` —son scripts,
-Lua y QML— e instala los comandos en `/usr/bin`, con enlaces desde
+paquete no es x86_64-only**. Su PKGBUILD declaraba entonces `arch=('any')` —son
+scripts, Lua y QML— e instala los comandos en `/usr/bin`, con enlaces desde
 `/usr/share/omarchy/bin`. Lo x86_64-only es el **repositorio** donde se publica.
+(Desde el 2026-09-02 ese PKGBUILD declara `arch=('x86_64' 'aarch64')`; ver la
+nota del principio. El repositorio aarch64 sigue sin existir.)
 En ARM no hay de dónde instalarlo, y ahí empieza el problema: clonar el
 repositorio en el `$HOME` deja `OMARCHY_PATH` sin definir, el `.bashrc` da
 error, Hyprland no encuentra su `bootstrap.lua` y nada del autostart funciona.
@@ -826,10 +838,14 @@ fuente y un `config.plist` escrito a mano funciona perfectamente.
 
 Tres cosas que hay que saber:
 
-**Las diez claves de primer nivel son obligatorias.** Se decodifican con
+**Las doce claves de primer nivel son obligatorias.** Se decodifican con
 `decode()`, no con `decodeIfPresent()`: omitir aunque sea un `<array/>` vacío
-hace que UTM rechace el bundle. Son `Information`, `System`, `QEMU`, `Input`,
-`Sharing`, `Display`, `Drive`, `Network`, `Serial` y `Sound`.
+hace que UTM rechace el bundle. Son `Backend`, `ConfigurationVersion`,
+`Information`, `System`, `QEMU`, `Input`, `Sharing`, `Display`, `Drive`,
+`Network`, `Serial` y `Sound`. Este texto decía diez y dejaba fuera las dos
+primeras: `ConfigurationVersion` es justo la que UTM lee para rechazar un
+bundle de otra versión, así que un plist escrito siguiendo la lista corta no
+se importa.
 
 **La mitad VARS del firmware UEFI aarch64 es `edk2-arm-vars.fd`**, no
 `edk2-aarch64-vars.fd`, que no existe. La mitad CODE la aporta UTM en tiempo de
@@ -907,7 +923,7 @@ qemu-img create -f qcow2 -b slim.qcow2 -F qcow2 prueba.qcow2
 **Funciona:** Arch Linux ARM aarch64 nativo con HVF, kernel `linux-aarch64` 7.2,
 btrfs con subvolúmenes y compresión zstd, Hyprland 0.56.1 con el stack completo
 de Omarchy 4 —quickshell como barra, menú, OSD y demonio de notificaciones,
-hyprlock, hypridle, uwsm, SDDM con autologin—, los temas, los 442 comandos `omarchy-*`, y `omarchy-update`.
+hyprlock, hypridle, uwsm, SDDM con autologin—, los temas, los 445 comandos `omarchy-*`, y `omarchy-update`.
 
 **No funciona:** la aceleración GL dentro de la VM (render por software). Las
 apps propietarias (1Password, Obsidian,
@@ -1032,7 +1048,7 @@ lo comprobaba con `grep -qa VEREDICTO_OK` sobre el log, y el log contiene el
 **eco** del propio comando, que lleva dentro `then echo VEREDICTO_OK`. La fase
 no podía fallar. Lo demuestra el log de la imagen que llegué a publicar: la
 línea 6 es el eco, la línea 8 dice `VEREDICTO_KO`, y el constructor cantó éxito.
-Ahora el token viaja partido —`VERED"ICTO_OK"`—, que es algo que el eco no puede
+Ahora el token viaja partido —`VERD"ICT_OK"`—, que es algo que el eco no puede
 contener.
 
 Ese `extras=si menu=si hook=si` es la prueba que importa: son los tres que
