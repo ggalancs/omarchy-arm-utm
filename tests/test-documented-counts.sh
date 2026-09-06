@@ -120,7 +120,13 @@ cmd_counts() { # file -> the distinct image command counts it states
 import re, sys
 t = re.sub(r'\s+', ' ', open(sys.argv[1], errors='replace').read())
 out = []
-for m in re.finditer(r'(\d{3}) (?:comandos )?`omarchy-\*`', t):
+# Both renderings of the same sentence. articulo.html and guia.html are the
+# HTML of ARTICULO.md and EMPEZAR.md, and there the name is wrapped in <code>
+# rather than backticks -- so a backtick-only pattern reads those files as
+# stating no count at all, which the branch below used to score as agreement.
+# That is how articulo.html kept saying 442 while ARTICULO.md was corrected to
+# 445 in the same commit that this file was supposed to be policing.
+for m in re.finditer(r'(\d{3}) (?:comandos )?(?:`omarchy-\*`|<code>omarchy-\*</code>)', t):
     before = t[max(0, m.start() - 140):m.start()].lower()
     if re.search(r'dangl|colgando|enlaces|links|symlink', before):
         continue          # the dangling-symlink count, a different measurement
@@ -134,9 +140,19 @@ if [ -z "$N_CMD" ]; then
   echo "  !! README.md no longer states a command count to compare the others against"
   fail=$((fail+1))
 else
-  for d in README.md README.es.md dist/README.md ARTICULO.md; do
+  # "States nothing" is not "agrees". Collapsing the two meant an unreadable
+  # path, a renamed file or a pattern that stopped matching all printed a green
+  # line -- the same distinction the sha256 gate in build-omarchy-arm.sh draws
+  # between a document that quotes a hash and one that does not.
+  for d in README.md README.es.md dist/README.md ARTICULO.md articulo.html guia.html; do
+    if [ ! -f "$d" ]; then
+      echo "  !! $d is not there to be compared"
+      fail=$((fail+1)); continue
+    fi
     OTHER=$(cmd_counts "$d")
-    if [ -z "$OTHER" ] || [ "$OTHER" = "$N_CMD" ]; then
+    if [ -z "$OTHER" ]; then
+      echo "  ..  $d states no command count"
+    elif [ "$OTHER" = "$N_CMD" ]; then
       echo "  ok  $d agrees on $N_CMD omarchy-* commands"
     else
       echo "  !! $d states [$OTHER] omarchy-* commands, README.md states $N_CMD"
