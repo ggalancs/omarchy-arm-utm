@@ -86,6 +86,14 @@ sleep 3
 send "cat /tmp/report.txt\r"
 expect { -re {END_CHECK} { } timeout { puts "TIMEOUT_REPORT" } }
 sleep 2
+# POWER IT OFF. Ending the script and letting expect reap the spawn is not
+# enough: QEMU does not exit when the pty closes, so expect blocks for ever
+# waiting for a child that will not die -- and the caller's `out=$(...)` blocks
+# with it. One run sat like that for four hours and fifty minutes with the
+# batch already finished and its verdict written. The other two harnesses have
+# always sent this; this one never did.
+send "poweroff -f\r"
+expect { eof { } timeout { puts "TIMEOUT_POWEROFF" } }
 EXPEOF
 
 TR="${TRANSCRIPT:-/tmp/check-image-session.log}"; : > "$TR"
