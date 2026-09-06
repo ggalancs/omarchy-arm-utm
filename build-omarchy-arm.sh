@@ -4953,6 +4953,18 @@ set timeout 900
 log_user 1
 match_max 400000
 
+# UNBUFFERED to disk. The builder redirects this script's stdout into
+# $W/logs/build.log, and a redirected stdout is block-buffered: during a quiet
+# stretch -- stage3 compiling a tool, every line of makepkg going to a file --
+# the log stops moving and a healthy build is indistinguishable from a hung
+# one. check-image.sh already says this in its own words; neither harness had
+# it.
+if {[info exists env(TRANSCRIPT)]} {
+  log_file -a $env(TRANSCRIPT)
+} else {
+  log_file -a "/tmp/omarchy-build-session.log"
+}
+
 proc die {code msg} { puts "\n!! $msg"; exit $code }
 proc wait_for {pat code msg {t 900}} {
     set timeout $t
@@ -5132,6 +5144,20 @@ cat > "$W/scripts/repair.exp" <<'__PAYLOAD_SCRIPTS_REPAIR_EXP__'
 # Usage: scripts/repair.exp <script-inside-the-ISO.sh>
 # Boots Alpine with the disk ALREADY installed and runs that script in the chroot.
 set timeout 900
+
+# UNBUFFERED to disk, which stdout redirected to a file is not. The builder
+# runs this as `expect -f repair.exp sanitize.sh > $W/logs/sanitize.log`, and a
+# phase that produces little output leaves its last chunk sitting in the
+# buffer: on 2026-09-06 that log had not moved for an hour while sanitize was
+# working perfectly, and the run was killed on the strength of it. check-image
+# already carries this lesson in its own words -- "hours have gone into reading
+# a frozen log, believing the guest was hung when it had already finished" --
+# and this file never got it.
+if {[info exists env(TRANSCRIPT)]} {
+  log_file -a $env(TRANSCRIPT)
+} else {
+  log_file -a "/tmp/omarchy-repair-session.log"
+}
 log_user 1
 match_max 400000
 set FIX [lindex $argv 0]
@@ -5675,8 +5701,14 @@ ph_build() {
 
   info "starting the builder (Alpine live -> chroot -> 3 stages)"
   info "this takes ~40 min depending on the network; the full log is in $W/logs/build.log"
+  # TRANSCRIPT makes the harness write the session to that same file
+  # UNBUFFERED, through expect's log_file. The redirect alone is block
+  # buffered, so a quiet phase leaves the log frozen and a working build looks
+  # exactly like a hung one from outside. (This comment sits ABOVE the command:
+  # between two backslash-continued lines it truncates it, which is what the
+  # lint-cont check exists for, and what it caught here.)
   VM_SMP=$BUILD_SMP VM_MEM=$BUILD_MEM PROV_ISO="$W/provision/provision.iso" \
-    expect -f "$W/scripts/build.exp" > "$W/logs/build.log" 2>&1
+    TRANSCRIPT="$W/logs/build.log" expect -f "$W/scripts/build.exp" > "$W/logs/build.log" 2>&1
   local rc=$?
   # stage2 emits TOK_STAGE3_<rc>: without checking it, a stage3 that failed
   # outright (no dotfiles, no tools, no theme) passed as a correct build.
@@ -5895,7 +5927,7 @@ ph_sanitize() {
   info "cleaning (generic user, no keys, no identity)..."
   PROV_ISO="$W/provision/repair.iso" DISK_IMG="$W/dist/dist.qcow2" \
   DIST_OLD_USER="$VM_USER" DIST_NEW_USER="$DIST_NEW_USER" \
-    expect -f "$W/scripts/repair.exp" sanitize.sh > "$W/logs/sanitize.log" 2>&1
+    TRANSCRIPT="$W/logs/sanitize.log" expect -f "$W/scripts/repair.exp" sanitize.sh > "$W/logs/sanitize.log" 2>&1
   # TOK_REPAIR_0 only says the chroot did not blow up, and sanitize.sh runs
   # without -e: it returned 0 even when usermod had failed and the image still
   # carried the builder's account. The token that means something is

@@ -72,8 +72,15 @@ N_COND=$(python3 - <<'COUNT'
 import re
 for line in open('build-omarchy-arm.sh'):
     if 'DOCKERGRP' in line and 'send ' in line:
-        m = re.search(r'if (.*?); then echo', line)
-        print(len(re.findall(r'\\\[ [^]]*\]', m.group(1))) if m else 0)
+        # The VERDICT's `if`, which is the LAST one on the line. A non-greedy
+        # regex does not help: re.search takes the leftmost start, so it began
+        # at the `if \[ -x /usr/bin/hyprpaper ]` guard added when the brackets
+        # were escaped and swept its two tests into the count -- thirteen
+        # conditions read as fifteen and this file called the documentation
+        # stale. Cut at the verdict, then take everything after the last `; if`.
+        head = line.split('; then echo VERD')[0]
+        cond = head.rsplit('; if ', 1)[-1]
+        print(len(re.findall(r'\\\[ [^]]*\]', cond)))
         break
 else:
     print(0)

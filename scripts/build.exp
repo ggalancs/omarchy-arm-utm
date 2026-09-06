@@ -4,6 +4,18 @@ set timeout 900
 log_user 1
 match_max 400000
 
+# UNBUFFERED to disk. The builder redirects this script's stdout into
+# $W/logs/build.log, and a redirected stdout is block-buffered: during a quiet
+# stretch -- stage3 compiling a tool, every line of makepkg going to a file --
+# the log stops moving and a healthy build is indistinguishable from a hung
+# one. check-image.sh already says this in its own words; neither harness had
+# it.
+if {[info exists env(TRANSCRIPT)]} {
+  log_file -a $env(TRANSCRIPT)
+} else {
+  log_file -a "/tmp/omarchy-build-session.log"
+}
+
 proc die {code msg} { puts "\n!! $msg"; exit $code }
 proc wait_for {pat code msg {t 900}} {
     set timeout $t

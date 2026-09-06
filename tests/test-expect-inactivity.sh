@@ -77,7 +77,32 @@ r=$(expect -f "$TMP/rearm.exp"  2>/dev/null | tr -d '\r' | grep -ao 'RESULT_[A-Z
   && echo "  ok  with it, a talkative process survives a timeout shorter than its runtime" \
   || { echo "  !! the catch-all does not re-arm the timer ($r)"; fail=$((fail+1)); }
 
+# 4. And the transcript has to reach disk while it is happening. expect's
+#    stdout redirected to a file is block-buffered: during a quiet phase the log
+#    stops moving, and a working run is indistinguishable from a hung one. On
+#    2026-09-06 sanitize.log had not moved for an hour while sanitize was
+#    finishing perfectly, and the run was killed on the strength of it.
+for f in scripts/build.exp scripts/repair.exp; do
+  if grep -q 'log_file -a' "$f"; then
+    echo "  ok  $f writes its session to disk unbuffered"
+  else
+    echo "  !! $f has no log_file: its log lags behind the guest by a whole buffer"
+    fail=$((fail+1))
+  fi
+done
+# ...and the builder has to tell it where, or the transcript lands somewhere
+# nobody reads while the redirect keeps buffering.
+for pair in "build.exp:build.log" "repair.exp:sanitize.log"; do
+  h=${pair%%:*}; l=${pair##*:}
+  if grep -qF 'TRANSCRIPT="$W/logs/'"$l"'" expect -f' build-omarchy-arm.sh; then
+    echo "  ok  the builder points $h's transcript at logs/$l"
+  else
+    echo "  !! build-omarchy-arm.sh does not set TRANSCRIPT for $h"
+    fail=$((fail+1))
+  fi
+done
+
 echo
-[ "$fail" -eq 0 ] && echo "  both harnesses time out on silence, not on the clock" \
+[ "$fail" -eq 0 ] && echo "  both harnesses time out on silence, and say so as it happens" \
                   || echo "  $fail problem(s)"
 exit "$fail"

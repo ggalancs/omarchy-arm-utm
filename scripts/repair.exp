@@ -2,6 +2,20 @@
 # Usage: scripts/repair.exp <script-inside-the-ISO.sh>
 # Boots Alpine with the disk ALREADY installed and runs that script in the chroot.
 set timeout 900
+
+# UNBUFFERED to disk, which stdout redirected to a file is not. The builder
+# runs this as `expect -f repair.exp sanitize.sh > $W/logs/sanitize.log`, and a
+# phase that produces little output leaves its last chunk sitting in the
+# buffer: on 2026-09-06 that log had not moved for an hour while sanitize was
+# working perfectly, and the run was killed on the strength of it. check-image
+# already carries this lesson in its own words -- "hours have gone into reading
+# a frozen log, believing the guest was hung when it had already finished" --
+# and this file never got it.
+if {[info exists env(TRANSCRIPT)]} {
+  log_file -a $env(TRANSCRIPT)
+} else {
+  log_file -a "/tmp/omarchy-repair-session.log"
+}
 log_user 1
 match_max 400000
 set FIX [lindex $argv 0]
