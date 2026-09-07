@@ -60,7 +60,21 @@ A=/home/$USER_IMG/.config/hypr/autostart.lua
 systemd-cat -p err echo "test error from batch 3" 2>/dev/null \
   && { sleep 2; echo "   + priority-err entry in the journal"; EXPECTED+=("errors in the journal"); }
 
-pkill -f quickshell 2>/dev/null && { sleep 2; echo "   + quickshell killed"; EXPECTED+=("quickshell not running"); }
+# The BINARY first, then the process. `pkill` alone does not stick: the
+# graphical session brings quickshell straight back, so the list saw it running
+# and the batch reported BLIND -- honestly, but having proven nothing about a
+# check that is one of the two the whole verdict rests on. Verified dead before
+# the expectation is recorded, so a sabotage that does not hold says so instead
+# of blaming the check.
+mv /usr/bin/quickshell /usr/bin/quickshell.saved 2>/dev/null \
+  || mv /usr/local/bin/quickshell /usr/local/bin/quickshell.saved 2>/dev/null
+pkill -f quickshell 2>/dev/null
+sleep 4
+if [ "$(pgrep -c quickshell)" -eq 0 ]; then
+  echo "   + quickshell removed and killed"; EXPECTED+=("quickshell not running")
+else
+  echo "   - quickshell came back despite the binary being moved (nothing proven)"
+fi
 
 echo
 echo "   sabotages: ${#EXPECTED[@]}"

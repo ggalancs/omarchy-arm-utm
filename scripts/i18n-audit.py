@@ -122,9 +122,10 @@ def is_code(line):
 # what made the exemption necessary to state out loud.
 #
 # tests/test-audit-surfaces.sh is the same case as the vocabulary files: it
-# holds Spanish FIXTURES, because the only way to prove this tool can see a
-# surface is to put Spanish on that surface and check it is reported. Auditing
-# it would report the evidence as the defect.
+# holds FIXTURES -- Spanish on every surface this tool claims to read, and a
+# comment inside a continued command -- because the only way to prove the tool
+# can see something is to put it there and check it is reported. Auditing the
+# file reports the evidence as the defect.
 EXEMPT_NAMES = ('i18n-audit.py', 'english-exceptions.txt', 'known-identifiers.txt',
                 'ARTICULO.md', 'articulo.html', 'README.es.md', 'EMPEZAR.md',
                 'guia.html', 'test-audit-surfaces.sh',
@@ -194,6 +195,14 @@ def lint_continuations(paths):
     for f in paths:
         p = pathlib.Path(f)
         if not p.is_file():
+            continue
+        # The exemption list applies here too. tests/test-audit-surfaces.sh
+        # holds a DELIBERATE comment inside a continued command -- that is the
+        # fixture proving this very check can go red -- so scanning it reports
+        # the evidence as the defect, exactly as auditing its Spanish fixtures
+        # would. Every other exempt file is documentation or the frozen
+        # snapshot, neither of which is shell that gets executed.
+        if is_exempt(p):
             continue
         cont = False
         for i, l in enumerate(p.read_text(errors="ignore").splitlines(), 1):

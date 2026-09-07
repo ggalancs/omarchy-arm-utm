@@ -145,7 +145,9 @@ so the clock was wrong out of the box. Reported by mphaxise.
 ## What to expect
 
 Works: the full Hyprland desktop with Omarchy's bar, themes, menu, terminal,
-browser, and the 445 `omarchy-*` commands.
+browser, and every `omarchy-*` command Omarchy ships (run `ls /usr/bin/omarchy-* | wc -l`
+to count the ones in your copy: the number moves with each Omarchy release, and
+a figure written in here would be describing a different image within weeks).
 
 It also carries **18 packages compiled for aarch64**, because none of them
 has an aarch64 build upstream. Nine come from Omarchy's own package repository:
@@ -268,7 +270,8 @@ It is in the application menu too, as **"Install missing apps (ARM)"**.
 
 **About Spotify**: there is no native ARM client, but the web app works — it
 needs Widevine, which ships inside Google Chrome arm64. Install `chrome`, then
-`spotify-web`. In the terminal you already have `spotify-player`.
+`spotify-web`. There is no terminal client in the image: `spotify-player` is in
+the AUR and can be built with `yay -S spotify-player`.
 
 **`omarchy-update` works**, but the day Omarchy introduces a new package of its
 own, it will skip it with a warning rather than install it.
@@ -287,9 +290,11 @@ belong to them, not here.
 ### Verification
 
 1Password is installed only if its GPG signature verifies: it is a password
-manager, and an unverified one is worse than none. Obsidian and Pinta are
-fetched over TLS from their vendor, who publishes no signature or checksum,
-so the installer stops and says so. TLS proves who served the bytes, not who
+manager, and an unverified one is worse than none. Pinta comes from an Arch
+mirror, which publishes a detached signature beside every package, and it is
+checked with `pacman-key --verify` against the Arch packager keys. Obsidian is
+fetched over TLS from its vendor, who publishes no signature or checksum, so
+the installer stops and says so. TLS proves who served the bytes, not who
 built them. To accept that:
 
 ```bash

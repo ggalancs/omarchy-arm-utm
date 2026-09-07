@@ -42,10 +42,28 @@ sleep "$WAIT"
 
 # Wakes the session: after ~2 min hypridle starts the screensaver and the
 # screenshot would come out black.
-printf 'sendkey esc\n' | nc -U "$MON" >/dev/null
+# NOT `nc -U`. macOS nc does not exit when its stdin reaches EOF and QEMU's
+# HMP monitor keeps the socket open after a command, so this line never
+# returned: the screenshot below was never taken and the trap that kills QEMU
+# never fired. (macOS nc has no -N; `man nc` does not list it.) The `quit` at
+# the end escaped only because it makes QEMU close the socket itself.
+mon_send() { python3 - "$MON" "$1" <<'MONEOF'
+import socket, sys, time
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.settimeout(10)
+s.connect(sys.argv[1])
+time.sleep(0.3)                     # let the banner arrive
+s.sendall(sys.argv[2].encode() + b"\n")
+time.sleep(0.3)
+s.close()
+MONEOF
+}
+mon_send 'sendkey esc' >/dev/null
 sleep 8
 PPM="$SCRATCH/shot.ppm"
-printf 'screendump %s\nquit\n' "$PPM" | nc -U "$MON" >/dev/null
+mon_send "screendump $PPM" >/dev/null
+sleep 2
+mon_send 'quit' >/dev/null
 sleep 3
 sips -s format png "$PPM" --out "$OUT" >/dev/null
 rm -f "$PPM"

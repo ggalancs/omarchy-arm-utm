@@ -37,7 +37,11 @@ printf '%s\n' "${SHIPPED[@]}" | head -1 | grep -q "environment.d" \
   || { echo "  !! the shipped ENVDIRS is not the four directories systemd reads"; shipped_fails=$((shipped_fails+1)); }
 # The user directory has to come FIRST, or same-name shadowing runs backwards.
 case "${SHIPPED[0]}" in
-  */.config/environment.d|"$XDG_CONFIG_HOME"/environment.d) ;;
+  # ${XDG_CONFIG_HOME:-} , not $XDG_CONFIG_HOME: this file runs under `set -u`
+  # through the sourced library, and the variable is unset on most machines --
+  # so the case arm that checks the ordering killed the test on the very path
+  # it exists to guard. It only ever ran because the first arm matched first.
+  */.config/environment.d|"${XDG_CONFIG_HOME:-}"/environment.d) ;;
   *) echo "  !! the user directory is not first in the shipped ENVDIRS"; shipped_fails=$((shipped_fails+1)) ;;
 esac
 [ "$shipped_fails" -eq 0 ] && echo "  ok  the shipped ENVDIRS is the four systemd directories, user first"
@@ -113,6 +117,38 @@ echo 'LIBGL_ALWAYS_SOFTWARE=0' > "$U/99-gl.conf"
 # same reason; this file was the one left as a pipe.
 grep -q "99-gl.conf" < <(warn_override) && echo "  ok  the note names the file that wins" \
                                         || { echo "  !! warn_override does not name the winner"; fails=$((fails+1)); }
+
+# ---- uwsm, which is not environment.d and beats all of it ------------------
+#
+# The session is started by `uwsm start`, and uwsm sources uwsm/env.d/* into the
+# systemd user manager ON TOP of whatever environment.d produced. The build
+# writes ~/.config/uwsm/env.d/20-vm-graphics containing
+# `export LIBGL_ALWAYS_SOFTWARE=1`, so that file decides the whole session --
+# and the tool did not know the path existed. `--on` commented out the systemd
+# file, found nothing else setting the variable, announced hardware GL, and the
+# next login came back software-rendered: issue #7's symptom, by the one route
+# nothing looked at.
+UWSM_ENVD="$TMP/user/uwsm/env.d"; mkdir -p "$UWSM_ENVD"
+rm -f "$U"/*.conf "$E"/*.conf "$L"/*.conf
+
+printf 'export LIBGL_ALWAYS_SOFTWARE=1\n' > "$UWSM_ENVD/20-vm-graphics"
+t "a uwsm fragment is read at all" software "$UWSM_ENVD/20-vm-graphics"
+
+# It is read LAST: a systemd file turning it off does not save you.
+printf 'LIBGL_ALWAYS_SOFTWARE=0\n' > "$E/90-vm-graphics.conf"
+t "uwsm wins over a systemd file that unsets it" software "$UWSM_ENVD/20-vm-graphics"
+
+# And commenting it out there is what actually turns it off.
+printf '#export LIBGL_ALWAYS_SOFTWARE=1\n' > "$UWSM_ENVD/20-vm-graphics"
+t "a commented uwsm line stops deciding" hardware "$E/90-vm-graphics.conf"
+
+# `export` is shell syntax. systemd's environment.d rejects it outright, so the
+# same line in an environment.d file must still count for nothing -- the two
+# kinds of file do not accept the same syntax, and one pattern for both got one
+# of them wrong until this assertion said so.
+rm -f "$UWSM_ENVD"/*
+printf 'export LIBGL_ALWAYS_SOFTWARE=1\n' > "$E/90-vm-graphics.conf"
+t "export in an environment.d file still sets nothing" hardware ""
 
 echo
 [ "$fails" -eq 0 ] && echo "  gpu override resolution: green" || echo "  $fails failure(s)"

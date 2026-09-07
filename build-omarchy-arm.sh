@@ -214,17 +214,43 @@ ph_deps() {
   done
   command -v qemu-system-aarch64 >/dev/null || die "qemu-system-aarch64 is missing"
   command -v expect >/dev/null || die "expect is missing"
-  # git and python3 come from the Command Line Tools, which are not there on a
-  # brand-new Mac. They are used in 'prepare' and in the branch check.
-  for c in git python3 zip shasum curl hdiutil; do
-    command -v "$c" >/dev/null || die "missing '$c' (did you run 'xcode-select --install'?)"
+  # aria2c is the ONLY downloader ph_fetch has -- there is no curl fallback --
+  # and it was installed above without ever being checked, unlike its two
+  # neighbours. A brew install that failed, or an installed-but-unlinked keg
+  # (which `brew list --formula` accepts), surfaced two phases later as
+  # "could not download Alpine <url>": a mirror blamed for a missing binary.
+  command -v aria2c >/dev/null || die "aria2c is missing (brew install aria2)"
+  # git and python3 come from the Command Line Tools, and `command -v` cannot
+  # see whether they work: /usr/bin/git, /usr/bin/python3 and /usr/bin/clang are
+  # ONE hardlinked xcode-select shim that macOS ships whether or not the tools
+  # are installed. So that loop passed on a Mac whose developer directory is
+  # missing or stale -- after a major upgrade, say -- and the build died forty
+  # minutes later in ph_prepare, blaming Omarchy's branch for a toolchain that
+  # was never there. They are RUN here, which is the only thing that answers.
+  for c in zip shasum curl hdiutil; do
+    command -v "$c" >/dev/null || die "missing '$c'"
+  done
+  for c in git python3; do
+    command -v "$c" >/dev/null \
+      || die "missing '$c' (did you run 'xcode-select --install'?)"
+    "$c" --version >/dev/null 2>&1 \
+      || die "'$c' is the xcode-select shim and does not work: the Command Line Tools are not installed, or the developer directory is stale. Run: xcode-select --install"
   done
   [[ -x $UTMCTL ]] || die "UTM is missing: brew install --cask utm"
   # Measured on a real build: the disk reaches 9.5 GB, the copy for sanitizing
   # another 6.5, and the zip 4. With APFS clones the peak is around 30.
-  local free; free=$(df -g "$HOME" | tail -1 | awk '{print $4}')
-  (( free > 40 )) || die "~40 GB of free space are needed (there are ${free} GB)"
-  ok "qemu $(qemu-system-aarch64 --version | head -1 | awk '{print $4}'), UTM $(defaults read /Applications/UTM.app/Contents/Info.plist CFBundleShortVersionString), ${free} GB free"
+  # $W, not $HOME. Every large artifact is written under $W, which EMPEZAR.md
+  # documents as overridable precisely so the build can go on an external
+  # volume -- and this measured the internal disk, so a 20 GB external drive
+  # passed a gate reporting 500 GB and the build died forty minutes later as an
+  # ENOSPC from qemu-img, or as expect reporting that Alpine never booted.
+  # $W may not exist yet (ensure_dirs runs after this), so the nearest existing
+  # ancestor is what gets measured.
+  local spacedir="$W"
+  while [ ! -d "$spacedir" ] && [ "$spacedir" != / ]; do spacedir=$(dirname "$spacedir"); done
+  local free; free=$(df -g "$spacedir" | tail -1 | awk '{print $4}')
+  (( free > 40 )) || die "~40 GB of free space are needed under $W (there are ${free} GB on $spacedir)"
+  ok "qemu $(qemu-system-aarch64 --version | head -1 | awk '{print $4}'), UTM $(defaults read /Applications/UTM.app/Contents/Info.plist CFBundleShortVersionString), ${free} GB free on $spacedir"
 }
 
 # Any phase can be run on its own with --only/--from, so the directories cannot
@@ -316,8 +342,15 @@ ph_fetch() {
 
   if [[ ! -s $tgz ]]; then
     info "Arch Linux ARM rootfs (~800 MB)"
-    aria2c -x8 -s8 -c --file-allocation=none -q -d "$W/dl" -o "$(basename "$tgz")" \
+    # To a .partial and moved on success, the way the Alpine download above
+    # already does it. Written straight to the final name, an interrupted
+    # transfer left a non-empty file that `[[ ! -s $tgz ]]` accepts as complete
+    # for ever -- and offline, the pin then fails and check_pin blames upstream,
+    # pointing at a script that would commit the truncated file's sha256 as a
+    # reviewed pin.
+    aria2c -x8 -s8 -c --file-allocation=none -q -d "$W/dl" -o "$(basename "$tgz").partial" \
       "$ALARM_URL" || die "could not download the ALARM rootfs"
+    mv "$W/dl/$(basename "$tgz").partial" "$tgz"
   fi
   # The tarball is rebuilt every few weeks: verified against the published MD5
   local want got
@@ -1961,8 +1994,20 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
   # was killed by build.exp during exactly this phase. That harness now re-arms
   # its clock on every line it receives, which is what makes a line a minute
   # worth printing: it is the difference between a slow compile and a hang.
+  # `timeout` is what keeps this bounded, and it became REQUIRED today rather
+  # than merely prudent. Until this morning build.exp's clock was a budget for
+  # the whole run, so a wedged tool was killed at ninety minutes whatever it
+  # did. Now that clock re-arms on every line -- correctly -- and the heartbeat
+  # below prints a line a minute whether makepkg is progressing or wedged, so
+  # between them the two fixes removed the only upper bound this loop had. A
+  # stall here is not hypothetical: the comment further up records that pacman
+  # inherits DisableDownloadTimeout and waits rather than failing, which is the
+  # twenty-hour hang build.exp was written for.
+  #
+  # 3600 s per attempt, and there are two attempts. stage2 uses 5400 for
+  # hyprland, which is a far bigger compile than anything in this list.
   local _t=0 _bg
-  ( cd "$dir" && makepkg -s --noconfirm --needed --noprogressbar --nocheck ) >"$dir/build.log" 2>&1 &
+  ( cd "$dir" && timeout 3600 makepkg -s --noconfirm --needed --noprogressbar --nocheck ) >"$dir/build.log" 2>&1 &
   _bg=$!
   while kill -0 "$_bg" 2>/dev/null; do
     sleep 60; _t=$((_t+60))
@@ -2300,6 +2345,15 @@ if [ -f "$HOME/.omarchy-arm-prov/omarchy-arm-share" ]; then
     else
       warn "OBS or Pinta did not install; they can be added later with:"
       warn "  omarchy-arm-extras pinta obs"
+      # And write it down. The failure record is assembled two hundred lines
+      # above this, before either of these is attempted, so a failure here
+      # reached the log and nothing else -- which is how an image shipped with
+      # an empty record while the README inside its own zip listed both as
+      # installed. Appended per package, and only for the one actually missing.
+      for _p in pinta obs-studio; do
+        pacman -Q "$_p" >/dev/null 2>&1 \
+          || echo "$_p" | sudo tee -a /usr/local/share/omarchy-arm/build-failures.txt >/dev/null
+      done
     fi
   else
     echo "  OBS and Pinta skipped (BUILD_FREE_APPS=no)"
@@ -2601,9 +2655,27 @@ log "7c/10 slimming: what was only needed to build"
 # Building the tools leaves whole toolchains behind (the .NET SDK alone is
 # 425 MiB) plus Rust and Go in the home directory. None of it is needed to use
 # the image, and it accounts for ~2 GB of the zip.
-for p in dotnet-sdk-bin dotnet-targeting-pack-bin aspnet-targeting-pack-bin; do
-  pacman -Q "$p" >/dev/null 2>&1 && { pacman -Rns --noconfirm "$p" >/dev/null 2>&1 && echo "  removed $p"; }
+# ONE transaction, and let pacman work out the order. Removed one at a time in
+# the order written here, `dotnet-targeting-pack-bin` came before
+# `aspnet-targeting-pack-bin`, which requires it -- so pacman refused, the `&&`
+# swallowed the refusal, no line was printed, and the package shipped. It is in
+# the image that was packaged: `pacman -Q` on it returns
+# dotnet-targeting-pack-bin 10.0.11.sdk400-1. About 51 MiB of .NET reference
+# assemblies that exist only to compile against.
+SLIM=()
+for p in dotnet-sdk-bin aspnet-targeting-pack-bin dotnet-targeting-pack-bin; do
+  pacman -Q "$p" >/dev/null 2>&1 && SLIM+=("$p")
 done
+if [ "${#SLIM[@]}" -gt 0 ]; then
+  if pacman -Rns --noconfirm "${SLIM[@]}" >/dev/null 2>&1; then
+    echo "  removed ${SLIM[*]}"
+  else
+    # Not silent this time. A refusal here is why the last image shipped 51 MiB
+    # it did not need, and the invariant further down now fails on it.
+    echo "  !! could not remove ${SLIM[*]}"
+    pacman -Rns --noconfirm "${SLIM[@]}" 2>&1 | tail -3 | sed 's/^/     /'
+  fi
+fi
 # Omarchy 4 retires these four: quickshell is the bar, the menu, the OSD and
 # the notification daemon. mako additionally steals
 # org.freedesktop.Notifications through D-Bus activation and leaves
@@ -3067,6 +3139,15 @@ for _p in hyprland hyprtoolkit hyprland-guiutils hyprpaper quickshell sddm; do
   pacman -Q "$_p" >/dev/null 2>&1 && ok_ "$_p installed" || bad "$_p is not installed"
 done
 
+# ---- nothing that exists only to build with
+# The slimming step above used to fail silently, so this asks the question again
+# at the end, where a red line stops the image instead of scrolling past.
+for _p in dotnet-sdk-bin aspnet-targeting-pack-bin dotnet-targeting-pack-bin; do
+  pacman -Q "$_p" >/dev/null 2>&1 \
+    && bad "$_p is still installed: it exists only to compile against" \
+    || ok_ "$_p is gone"
+done
+
 # ---- packages compiled during the build rather than installed
 # The record must EXIST on every image. Its absence is a defect, not a silence:
 # with no file at all there is no way to tell it apart from a build that
@@ -3239,12 +3320,23 @@ if [ "$OLD" != "$NEW" ]; then
   if ! command -v strings >/dev/null 2>&1; then
     echo "  ? /usr/local/bin binaries: without 'strings' this cannot be checked"
   else
+    # /usr/bin too, not only /usr/local/bin. The build path can survive in the
+    # debug info of ANYTHING compiled here, and after the local Hyprland work
+    # the compiled set is no longer confined to /usr/local/bin: hyprland,
+    # hyprtoolkit and the eighteen tools are installed as packages, into
+    # /usr/bin. Scanning one directory that happens to hold one compiled binary
+    # made this close to a check that cannot fail.
+    #
+    # Only files that are actually ELF are read: /usr/bin holds ~450 shell
+    # wrappers and symlinks, and `strings` on each of them is minutes wasted.
     DIRTY=""
-    for b in /usr/local/bin/*; do
+    for b in /usr/local/bin/* /usr/bin/*; do
       [ -f "$b" ] || continue
+      [ -L "$b" ] && continue
+      head -c 4 "$b" 2>/dev/null | grep -q 'ELF' || continue
       strings "$b" 2>/dev/null | grep -q "/home/$OLD" && DIRTY="$DIRTY $b"
     done
-    [ -z "$DIRTY" ] && ok_ "no /usr/local/bin binary mentions the build account" \
+    [ -z "$DIRTY" ] && ok_ "no compiled binary in /usr/bin or /usr/local/bin mentions the build account" \
                      || bad "binaries carrying the build path inside:$DIRTY (see RUSTFLAGS/CARGO_HOME in stage3)"
   fi
 fi
@@ -3566,20 +3658,74 @@ o.bind("SUPER + SHIFT + M", "Spotify", o.launch("google-chrome-stable --app=http
 LUA
     ok "SUPER+SHIFT+M rebound (log out and back in to apply)"
   fi
-  info "${c_dim}Terminal alternative, already installed: spotify-player${c_off}"
+  info "${c_dim}Terminal alternative, from the AUR: yay -S spotify-player${c_off}"
 }
 
 do_pinta() {
   title "Pinta"
   info "Microsoft does publish .NET for linux-arm64; Arch only packages it for x86_64."
   info "The runtime is installed from the official tarball, then Pinta's package, which is arch=any."
-  aur_build dotnet-runtime-bin dotnet-runtime-bin || { fail "without the .NET runtime there is no way to continue"; return 1; }
+  # The package and its signature FIRST, before the .NET runtime. Whichever way
+  # the verdict goes, this reaches it in seconds; the other order reaches it
+  # after forty minutes of compiling a runtime for something that may be
+  # refused -- which is what used to happen, and the build log proves it:
+  # sanitize is left removing dotnet-sdk-bin and the targeting packs for a
+  # Pinta that never installed.
   local url=https://geo.mirror.pkgbuild.com/extra/os/x86_64/
   local file; file=$(curl -fsSL --max-time 30 "$url" | grep -o 'pinta-[0-9][^"]*-any\.pkg\.tar\.zst' | sort -V | tail -1)
   [ -n "$file" ] || { fail "could not find the Pinta package"; return 1; }
   info "$file  ${c_dim}(the path says x86_64 but the package is arch=any)${c_off}"
-  unverified_gate pinta || return 1
   mkdir -p "$WORK"; curl -fL --progress-bar "$url$file" -o "$WORK/$file" || return 1
+  # This went straight to `unverified_gate pinta`, whose refusal reads "upstream
+  # publishes no signature or checksum for this artifact". That was asserted and
+  # never checked, and it is false: the mirror serves a detached .sig beside
+  # every package, 566 bytes for this one. So a refusal written for artifacts
+  # that CANNOT be verified was turned on one that can, Pinta failed to install
+  # on every default run, and the README inside the distributed zip went on
+  # listing it as "Already installed".
+  #
+  # pacman-key --verify checks the detached signature against the pacman
+  # keyring, and Arch Linux ARM ships archlinux-keyring for aarch64, which is
+  # what holds the Arch packager keys. The signature is passed alone, with the
+  # package beside it: that is the form every pacman version accepts.
+  #
+  # Anything that goes wrong here -- no keyring, a key that is not in it, a
+  # tampered download -- falls through to precisely the refusal that was here
+  # before, so this cannot end up more permissive than what it replaces.
+  # The keyring this needs is not the one the build set up. stage2 runs
+  # `pacman-key --populate archlinuxarm` and stops there, so the image holds the
+  # Arch Linux ARM developers' keys and not one of the Arch packagers' -- and an
+  # Arch packager is who signs this file. Without the two lines below the
+  # verification fails for want of a key rather than for anything wrong with the
+  # download, falls through to the gate, and Pinta quietly does not install:
+  # exactly the outcome this change exists to end, reached by a different road.
+  #
+  # Arch Linux ARM serves archlinux-keyring for aarch64, so this is a package
+  # from the image's own mirrors, not a third party. Adding it is additive: the
+  # ALARM keys stay where they are.
+  if ! pacman -Q archlinux-keyring >/dev/null 2>&1; then
+    info "installing archlinux-keyring (the Arch packager keys are not in this image)"
+    sudo pacman -S --needed --noconfirm archlinux-keyring >/dev/null 2>&1 \
+      || warn "archlinux-keyring did not install; the signature check below will fail closed"
+  fi
+  sudo pacman-key --populate archlinux >/dev/null 2>&1 || true
+  if curl -fsSL --max-time 30 "$url$file.sig" -o "$WORK/$file.sig" 2>/dev/null \
+     && sudo pacman-key --verify "$WORK/$file.sig" >/dev/null 2>&1; then
+    ok "Arch packager signature verified"
+  else
+    fail "$file: the signature does not verify against the pacman keyring"
+    # The failing signature must NOT stay beside the package. `pacman -U` picks
+    # up a detached <package>.sig sitting next to what it is installing, and
+    # LocalFileSigLevel is Optional, which forgives a MISSING signature and not
+    # a present untrusted one: it aborts with "invalid or corrupted package".
+    # So leaving the file here disables the documented escape hatch -- someone
+    # who runs ALLOW_UNVERIFIED=yes waits out the whole .NET runtime build and
+    # is then told "pacman -U failed", blaming the installer for a file this
+    # function left behind.
+    rm -f "$WORK/$file.sig"
+    unverified_gate pinta || return 1
+  fi
+  aur_build dotnet-runtime-bin dotnet-runtime-bin || { fail "without the .NET runtime there is no way to continue"; return 1; }
   sudo pacman -U --noconfirm "$WORK/$file" >/dev/null 2>&1 && ok "$(pacman -Q pinta)" || { fail "pacman -U failed"; return 1; }
   warn "outside the update manager: every new version has to be repeated by hand"
 }
@@ -3711,6 +3857,12 @@ else
   rm -rf "$WORK"
 fi
 echo
+# The exit status has to carry the failures. This script ends in a bare `echo`
+# and runs without `set -e`, so it returned 0 no matter what: stage3 calls it
+# inside an `if` and took the success branch over `✗ failed: pinta`, and its
+# warn branch was unreachable for the one thing it was written for. A scripted
+# caller got a false success too.
+[ "${#KO_LIST[@]}" -eq 0 ] || exit 1
 __PAYLOAD_PROVISION_EXTRAS_SH__
 chmod +x "$W/provision/extras.sh"
 
@@ -4382,6 +4534,26 @@ CONF=/etc/environment.d/90-vm-graphics.conf
 # generator(7)); across different basenames the LAST one lexically wins.
 ENVDIRS=("${XDG_CONFIG_HOME:-$HOME/.config}/environment.d" /etc/environment.d /run/environment.d /usr/lib/environment.d)
 
+# And then uwsm, which is not systemd's environment.d at all and beats all of it.
+#
+# The session is started by `uwsm start`, and uwsm sources uwsm/env, uwsm/env.d/*
+# and their per-desktop variants INTO the systemd user manager, on top of
+# whatever environment.d already produced. The build writes
+# ~/.config/uwsm/env.d/20-vm-graphics with `export LIBGL_ALWAYS_SOFTWARE=1` in
+# it, so that file has the last word for the whole graphical session -- and this
+# tool could not see it. `--on` commented out the systemd file, found nothing
+# else setting the variable, announced hardware GL, and changed nothing: uwsm
+# put it straight back at the next login. That is issue #7's symptom exactly,
+# reached by the one path the tool was blind to.
+#
+# These are shell fragments, not *.conf, and they are read last, so they are
+# appended after everything above.
+UWSM_ENVD="${XDG_CONFIG_HOME:-$HOME/.config}/uwsm/env.d"
+uwsm_files() {
+  [ -d "$UWSM_ENVD" ] || return 0
+  find "$UWSM_ENVD" -maxdepth 1 -type f 2>/dev/null | sort
+}
+
 # Every *.conf that will actually be read, in the order systemd reads them.
 # Deliberately without an associative array: it must stay runnable on bash 3.2 so
 # it can be tested on the machine that builds the image, not only inside it.
@@ -4397,18 +4569,35 @@ env_files() {
       [ -f "$d/$b" ] && { printf '%s\n' "$d/$b"; break; }
     done
   done
+  # Last, because they are applied last.
+  uwsm_files
 }
 
 # The file that has the last word on LIBGL_ALWAYS_SOFTWARE, and what it says.
 # Empty output means nothing sets it anywhere.
+# The two file kinds do not accept the same syntax, and reading them with one
+# pattern gets one of them wrong.
+#
+# systemd's environment.d REJECTS a line beginning with `export`: it is not a
+# shell, and such a line sets nothing. This project's own test pins that -- and
+# broke the moment a single permissive pattern was used for everything, which is
+# how this comment came to exist. uwsm's fragments are sourced BY a shell, where
+# `export` is the normal form and is exactly what the build writes.
+pat_for() {
+  case "$1" in
+    "$UWSM_ENVD"/*) printf '%s' '^[[:space:]]*(export[[:space:]]+)?LIBGL_ALWAYS_SOFTWARE[[:space:]]*=' ;;
+    *)              printf '%s' '^[[:space:]]*LIBGL_ALWAYS_SOFTWARE=' ;;
+  esac
+}
+
 decider() {
   local f last=""
   while read -r f; do
-    grep -qE '^[[:space:]]*LIBGL_ALWAYS_SOFTWARE=' "$f" 2>/dev/null && last=$f
+    grep -qE "$(pat_for "$f")" "$f" 2>/dev/null && last=$f
   done < <(env_files)
   [ -n "$last" ] || return 1
   printf '%s\t%s\n' "$last" \
-    "$(grep -E '^[[:space:]]*LIBGL_ALWAYS_SOFTWARE=' "$last" | tail -1 | cut -d= -f2- | tr -d '\"'"'"' ')"
+    "$(grep -E "$(pat_for "$last")" "$last" | tail -1 | cut -d= -f2- | tr -d '\"'"'"' ')"
 }
 
 state() {
@@ -4432,6 +4621,24 @@ warn_override() {
   echo "  NOTE: $CONF is not what decides this."
   echo "        $f is read later and wins. Edit that one,"
   echo "        or remove its LIBGL_ALWAYS_SOFTWARE line."
+}
+
+# Applied to the systemd file AND to the uwsm fragments. Whichever of the two
+# this tool leaves alone is the one that decides, and until today it always left
+# uwsm alone: --on edited $CONF, saw nothing else setting the variable because it
+# was not looking there, and reported success over a session that came back
+# software-rendered.
+sed_all() {
+  local expr=$1; shift
+  local f
+  for f in "$@"; do
+    [ -f "$f" ] || continue
+    if [ -w "$f" ]; then
+      sed -i -E "$expr" "$f" || return 1
+    else
+      sudo sed -i -E "$expr" "$f" || return 1
+    fi
+  done
 }
 
 case "${1:-}" in
@@ -4461,7 +4668,8 @@ case "${1:-}" in
     # Against `LIBGL_ALWAYS_SOFTWARE="1"`, which this project's own test asserts
     # must count as software rendering, the sed matched nothing, exited 0, and
     # the line below announced hardware GL was enabled.
-    sudo sed -i -E 's/^([[:space:]]*)(LIBGL_ALWAYS_SOFTWARE[[:space:]]*=[[:space:]]*"?(1|true|yes)"?)/\1#\2/' "$CONF" || exit 1
+    sed_all 's/^([[:space:]]*)((export[[:space:]]+)?LIBGL_ALWAYS_SOFTWARE[[:space:]]*=[[:space:]]*"?(1|true|yes)"?)/\1#\2/' \
+            "$CONF" $(uwsm_files) || exit 1
     # Checked, not assumed, the same way --off is.
     if [ "$(state)" = software ]; then
       echo "!! nothing changed: $CONF still selects software rendering." >&2
@@ -4479,7 +4687,8 @@ case "${1:-}" in
     ;;
 
   --off)
-    sudo sed -i 's/^#*LIBGL_ALWAYS_SOFTWARE=1/LIBGL_ALWAYS_SOFTWARE=1/' "$CONF" || exit 1
+    sed_all 's/^([[:space:]]*)#+[[:space:]]*((export[[:space:]]+)?LIBGL_ALWAYS_SOFTWARE[[:space:]]*=)/\1\2/' \
+            "$CONF" $(uwsm_files) || exit 1
     grep -q '^LIBGL_ALWAYS_SOFTWARE=1' "$CONF" \
       || printf 'LIBGL_ALWAYS_SOFTWARE=1\n' | sudo tee -a "$CONF" >/dev/null
     echo "Software rendering restored. Log out and back in for it to apply."
@@ -5121,18 +5330,74 @@ send "mount -o subvol=@ /dev/vda2 /mnt 2>/dev/null || mount /dev/vda2 /mnt; moun
 # (The run would still have died two phases later at verify, on the same
 # condition; what was lost is the cheap early signal, and the utm phase runs
 # for nothing in between.)
-expect {
-    -ex "TOK_VERIFY_0"          {}
-    -re {TOK_VERIFY_[1-9][0-9]*} { puts "\n!! the post-install check reported a problem (Hyprland missing?)"; set VERIFY_BAD 1 }
-    timeout                      { puts "\n!! the post-install check timed out"; set VERIFY_BAD 1 }
-    eof                          { puts "\n!! EOF during the post-install check"; set VERIFY_BAD 1 }
+# Wrapped, because there are two ways this can lose the verdict and only one of
+# them is an `eof` arm. If the guest dies DURING this expect, eof fires and the
+# arm runs. If it died earlier, the spawn is already closed and `expect` itself
+# raises "spawn id expN not open" -- no arm runs at all, and the script dies
+# here. Both were measured with expect 5.45.4 rather than reasoned about; the
+# second one is what a minimal reproduction actually produced.
+if {[catch {
+    expect {
+        -ex "TOK_VERIFY_0"          {}
+        -re {TOK_VERIFY_[1-9][0-9]*} { puts "\n!! the post-install check reported a problem (Hyprland missing?)"; set VERIFY_BAD 1 }
+        timeout                      { puts "\n!! the post-install check timed out"; set VERIFY_BAD 1 }
+        eof                          { puts "\n!! EOF during the post-install check"
+                                       set VERIFY_BAD 1; set SPAWN_GONE 1 }
+    }
+} _err]} {
+    puts "\n!! the post-install check could not run: $_err"
+    set VERIFY_BAD 1; set SPAWN_GONE 1
 }
 
+# Ask it to power off, wait, and then do not depend on the answer.
+#
+# `expect eof` on its own is a trap with a very long fuse. expect's exit closes
+# the spawn and WAITS for it, and qemu-build.sh ends in `exec qemu-system-...`,
+# so this pid is QEMU itself: a guest that never reaches poweroff leaves this
+# script blocked for ever on a child that will not die -- with the build long
+# finished and the verdict already decided. check-image.sh hung exactly like
+# this for twelve hours, and fixing it there left the same shape standing here
+# in the harness that matters most.
+# Nothing below may be allowed to prevent the verdict from being printed.
+#
+# The eof arm above sets VERIFY_BAD and fell straight into this send. After EOF
+# the spawn is gone, `send` on a closed spawn raises an uncaught Tcl error, and
+# the script died right here -- before line 212, where TOK_VERIFY_BAD is
+# printed. The caller reads tokens and not exit codes, so it saw TOK_BUILD_0,
+# found no TOK_VERIFY_BAD, and reported "disk built" for a build whose guest had
+# vanished before anything checked it. Reproduced with expect 5.45.4.
+#
+# So: skip the shutdown when the guest is already gone, and wrap what remains in
+# catch, because any other way the spawn can close early would cost the verdict
+# in exactly the same way.
+if {[info exists SPAWN_GONE]} {
+    puts "\n!! the guest is already gone; there is nothing to power off"
+} else {
+  catch {
 send "sync; umount -R /mnt 2>/dev/null; poweroff -f\r"
-expect eof
-puts "\n===== BUILD VM POWERED OFF ====="
+set timeout 600
+expect {
+    eof     { puts "\n===== BUILD VM POWERED OFF =====" }
+    timeout {
+        # Not merely a cleanup problem, which is why this marks the build bad
+        # instead of shipping quietly: the disk is this build's product, and if
+        # the guest would not power off 600 s after the sync then nobody can
+        # say what state the image on it is in.
+        puts "\n!! the guest did not power off 600 s after the sync"
+        puts "!! killing QEMU; THE DISK IMAGE MAY BE INCONSISTENT"
+        set VERIFY_BAD 1
+        catch { exec kill -TERM [exp_pid] }
+        sleep 3
+        catch { exec kill -KILL [exp_pid] }
+    }
+}
+catch { close }
+catch { wait -nowait }
+  }
+}
 # AFTER the flush and the poweroff, so a failed probe still leaves a consistent
-# disk -- that is why this is a token and not an early exit.
+# disk -- that is why this is a token and not an early exit. Reached on every
+# path now, including the one where the guest died before it could be asked.
 if {[info exists VERIFY_BAD]} { puts "TOK_VERIFY_BAD" }
 exit 0
 __PAYLOAD_SCRIPTS_BUILD_EXP__
@@ -5214,9 +5479,27 @@ expect {
     # "TOK_REPAI" so the token never matches afterwards.
     -re {\n} { exp_continue }
 }
+# Same trap as build.exp, same reason it is not just `expect eof`: this pid is
+# QEMU (qemu-build.sh execs it), and expect's exit waits for it. A guest that
+# cannot power itself off would hang the caller for ever with the repair
+# already done.
 set timeout 300
 send "sync; poweroff -f\r"
-expect eof
+expect {
+    eof     { }
+    timeout {
+        puts "\n!! the guest did not power off 300 s after the sync"
+        puts "!! killing QEMU; THE DISK IMAGE MAY BE INCONSISTENT"
+        catch { exec kill -TERM [exp_pid] }
+        sleep 3
+        catch { exec kill -KILL [exp_pid] }
+        catch { close }
+        catch { wait -nowait }
+        exit 22
+    }
+}
+catch { close }
+catch { wait -nowait }
 exit 0
 __PAYLOAD_SCRIPTS_REPAIR_EXP__
 chmod +x "$W/scripts/repair.exp"
@@ -5356,7 +5639,13 @@ if [ "$DEST_DIR" = "$DOCS" ] && pgrep -x UTM >/dev/null; then
     echo "$VMS_RUNNING" | sed 's/^/      /'
     echo "    Registering the bundle needs UTM restarted, and that would cut them off."
     if [ -t 0 ] && [ "${ASSUME_YES:-}" != "1" ]; then
-      printf "    Close them and restart UTM? [y/N]: "
+      # The question goes to /dev/tty, where the answer is read from. The
+      # builder runs this with stdout AND stderr redirected into a log file and
+      # stdin left on the terminal, so a prompt printed the ordinary way is
+      # invisible: the operator sees the phase banner, then nothing, for ever,
+      # after a two-hour build.
+      printf "    Close them and restart UTM? [y/N]: " > /dev/tty 2>/dev/null \
+        || printf "    Close them and restart UTM? [y/N]: "
       read -r R </dev/tty || R=""
       case "$(printf '%s' "$R" | tr '[:upper:]' '[:lower:]')" in
         s|si|y|yes) : ;;
@@ -5397,7 +5686,7 @@ cat > "$BUNDLE/config.plist" <<PLIST
 	<key>Information</key>
 	<dict>
 		<key>Name</key>
-		<string>$NAME</string>
+		<string>$(xmlq "$NAME")</string>
 		<key>UUID</key>
 		<string>$VM_UUID</string>
 		<key>IconCustom</key>
@@ -5984,7 +6273,13 @@ ph_package() {
   info "hashing the image to seed the bundle's identifiers..."
   local SEED; SEED=$(shasum -a 256 "$W/dist/slim.qcow2" | cut -d' ' -f1)
   [ ${#SEED} -eq 64 ] || die "could not hash $W/dist/slim.qcow2"
-  SRC_QCOW="$W/dist/slim.qcow2" DEST_DIR="$W/dist" UTM_CPUS=$UTM_CPUS UTM_MEM=$UTM_MEM \
+  # NOT the builder's UTM_CPUS/UTM_MEM. Those are autotuned from THIS Mac --
+  # half its performance cores, a share of its RAM -- and the bundle that ships
+  # goes to strangers whose machines are not this one. A 12-core M3 Max stamps
+  # 6 CPUs and 12 GB into an image someone imports on an 8 GB M1, where UTM
+  # refuses to start it. Fixed, modest defaults instead, overridable.
+  SRC_QCOW="$W/dist/slim.qcow2" DEST_DIR="$W/dist" \
+    UTM_CPUS="${DIST_UTM_CPUS:-4}" UTM_MEM="${DIST_UTM_MEM:-4096}" \
     NOTES_USER="$DIST_NEW_USER" NOTES_PASS="$DIST_NEW_USER" \
     UTM_SEED="$SEED/$DNAME" \
     bash "$W/scripts/make-utm.sh" "$DNAME" >/dev/null \
@@ -6094,6 +6389,8 @@ ph_package() {
   elif [ "$DESYNC" = 0 ]; then
     ok "the published sha256 agrees in the $SEEN document(s) that quote it ($QUIET quote none)"
   else
+    warn "the intermediate VM '$VM_NAME' is still registered in UTM (~11 GB):"
+    warn "  it is only needed by '--from sanitize'; '--only package' does not use it."
     die "the documentation names a different artifact than the one just built. Put $NEWSUM in the files above and package again."
   fi
 
@@ -6112,6 +6409,12 @@ ph_package() {
   # It is only deleted if this invocation created it -- its UUID is in
   # make-utm.log -- and we reached the end. KEEP_VM=yes keeps it for
   # debugging.
+  # This stays BELOW the checksum gate, deliberately, and the gate now says so.
+  # Moving it above would have been the obvious fix for "the VM survives every
+  # run that dies at the gate" -- and would have broken the documented recovery:
+  # ph_sanitize takes its source disk from exactly this VM, so `--from sanitize`
+  # after a failed gate would find nothing. An 11 GB leftover the operator is
+  # told about beats a silent deletion of what they may need next.
   if [ "${KEEP_VM:-}" != yes ] && [ -f "$W/logs/make-utm.log" ]; then
     local VU
     VU=$(grep -o 'UUID: *[0-9A-Fa-f-]\{36\}' "$W/logs/make-utm.log" | tail -1 | awk '{print $2}')
@@ -6280,7 +6583,9 @@ so the clock was wrong out of the box. Reported by mphaxise.
 ## What to expect
 
 Works: the full Hyprland desktop with Omarchy's bar, themes, menu, terminal,
-browser, and the 445 `omarchy-*` commands.
+browser, and every `omarchy-*` command Omarchy ships (run `ls /usr/bin/omarchy-* | wc -l`
+to count the ones in your copy: the number moves with each Omarchy release, and
+a figure written in here would be describing a different image within weeks).
 
 It also carries **18 packages compiled for aarch64**, because none of them
 has an aarch64 build upstream. Nine come from Omarchy's own package repository:
@@ -6403,7 +6708,8 @@ It is in the application menu too, as **"Install missing apps (ARM)"**.
 
 **About Spotify**: there is no native ARM client, but the web app works — it
 needs Widevine, which ships inside Google Chrome arm64. Install `chrome`, then
-`spotify-web`. In the terminal you already have `spotify-player`.
+`spotify-web`. There is no terminal client in the image: `spotify-player` is in
+the AUR and can be built with `yay -S spotify-player`.
 
 **`omarchy-update` works**, but the day Omarchy introduces a new package of its
 own, it will skip it with a warning rather than install it.
@@ -6422,9 +6728,11 @@ belong to them, not here.
 ### Verification
 
 1Password is installed only if its GPG signature verifies: it is a password
-manager, and an unverified one is worse than none. Obsidian and Pinta are
-fetched over TLS from their vendor, who publishes no signature or checksum,
-so the installer stops and says so. TLS proves who served the bytes, not who
+manager, and an unverified one is worse than none. Pinta comes from an Arch
+mirror, which publishes a detached signature beside every package, and it is
+checked with `pacman-key --verify` against the Arch packager keys. Obsidian is
+fetched over TLS from its vendor, who publishes no signature or checksum, so
+the installer stops and says so. TLS proves who served the bytes, not who
 built them. To accept that:
 
 ```bash

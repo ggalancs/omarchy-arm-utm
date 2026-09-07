@@ -21,7 +21,13 @@ for f in "$ISO" "$TGZ"; do
 done
 
 # The name in the pin file is the upstream one, not the local shortened copy.
-ALPINE_NAME=$(grep -ohE 'alpine-virt-[0-9.]+-aarch64\.iso' "$W"/logs/*.log 2>/dev/null | sort -u | tail -1)
+# `|| ALPINE_NAME=""` is what makes the guard below reachable. Under the
+# `set -euo pipefail` at the top, a grep that matches nothing exits 1, pipefail
+# carries that through `sort | tail`, the assignment fails and the script dies
+# silently -- so the tool whose job is refreshing the pins aborted with no
+# message in exactly the case its own guard was written to explain. Same shape
+# as stage2's index lookup, found the same way.
+ALPINE_NAME=$(grep -ohE 'alpine-virt-[0-9.]+-aarch64\.iso' "$W"/logs/*.log 2>/dev/null | sort -u | tail -1) || ALPINE_NAME=""
 # NOT `basename "$ISO"`. The local copy is named alpine-virt-aarch64.iso, with
 # no version in it, and check_pin looks the artifact up by its UPSTREAM name --
 # so a pin written under the short name is one no build will ever find, and the

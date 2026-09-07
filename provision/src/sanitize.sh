@@ -170,9 +170,27 @@ log "7c/10 slimming: what was only needed to build"
 # Building the tools leaves whole toolchains behind (the .NET SDK alone is
 # 425 MiB) plus Rust and Go in the home directory. None of it is needed to use
 # the image, and it accounts for ~2 GB of the zip.
-for p in dotnet-sdk-bin dotnet-targeting-pack-bin aspnet-targeting-pack-bin; do
-  pacman -Q "$p" >/dev/null 2>&1 && { pacman -Rns --noconfirm "$p" >/dev/null 2>&1 && echo "  removed $p"; }
+# ONE transaction, and let pacman work out the order. Removed one at a time in
+# the order written here, `dotnet-targeting-pack-bin` came before
+# `aspnet-targeting-pack-bin`, which requires it -- so pacman refused, the `&&`
+# swallowed the refusal, no line was printed, and the package shipped. It is in
+# the image that was packaged: `pacman -Q` on it returns
+# dotnet-targeting-pack-bin 10.0.11.sdk400-1. About 51 MiB of .NET reference
+# assemblies that exist only to compile against.
+SLIM=()
+for p in dotnet-sdk-bin aspnet-targeting-pack-bin dotnet-targeting-pack-bin; do
+  pacman -Q "$p" >/dev/null 2>&1 && SLIM+=("$p")
 done
+if [ "${#SLIM[@]}" -gt 0 ]; then
+  if pacman -Rns --noconfirm "${SLIM[@]}" >/dev/null 2>&1; then
+    echo "  removed ${SLIM[*]}"
+  else
+    # Not silent this time. A refusal here is why the last image shipped 51 MiB
+    # it did not need, and the invariant further down now fails on it.
+    echo "  !! could not remove ${SLIM[*]}"
+    pacman -Rns --noconfirm "${SLIM[@]}" 2>&1 | tail -3 | sed 's/^/     /'
+  fi
+fi
 # Omarchy 4 retires these four: quickshell is the bar, the menu, the OSD and
 # the notification daemon. mako additionally steals
 # org.freedesktop.Notifications through D-Bus activation and leaves
@@ -636,6 +654,15 @@ for _p in hyprland hyprtoolkit hyprland-guiutils hyprpaper quickshell sddm; do
   pacman -Q "$_p" >/dev/null 2>&1 && ok_ "$_p installed" || bad "$_p is not installed"
 done
 
+# ---- nothing that exists only to build with
+# The slimming step above used to fail silently, so this asks the question again
+# at the end, where a red line stops the image instead of scrolling past.
+for _p in dotnet-sdk-bin aspnet-targeting-pack-bin dotnet-targeting-pack-bin; do
+  pacman -Q "$_p" >/dev/null 2>&1 \
+    && bad "$_p is still installed: it exists only to compile against" \
+    || ok_ "$_p is gone"
+done
+
 # ---- packages compiled during the build rather than installed
 # The record must EXIST on every image. Its absence is a defect, not a silence:
 # with no file at all there is no way to tell it apart from a build that
@@ -808,12 +835,23 @@ if [ "$OLD" != "$NEW" ]; then
   if ! command -v strings >/dev/null 2>&1; then
     echo "  ? /usr/local/bin binaries: without 'strings' this cannot be checked"
   else
+    # /usr/bin too, not only /usr/local/bin. The build path can survive in the
+    # debug info of ANYTHING compiled here, and after the local Hyprland work
+    # the compiled set is no longer confined to /usr/local/bin: hyprland,
+    # hyprtoolkit and the eighteen tools are installed as packages, into
+    # /usr/bin. Scanning one directory that happens to hold one compiled binary
+    # made this close to a check that cannot fail.
+    #
+    # Only files that are actually ELF are read: /usr/bin holds ~450 shell
+    # wrappers and symlinks, and `strings` on each of them is minutes wasted.
     DIRTY=""
-    for b in /usr/local/bin/*; do
+    for b in /usr/local/bin/* /usr/bin/*; do
       [ -f "$b" ] || continue
+      [ -L "$b" ] && continue
+      head -c 4 "$b" 2>/dev/null | grep -q 'ELF' || continue
       strings "$b" 2>/dev/null | grep -q "/home/$OLD" && DIRTY="$DIRTY $b"
     done
-    [ -z "$DIRTY" ] && ok_ "no /usr/local/bin binary mentions the build account" \
+    [ -z "$DIRTY" ] && ok_ "no compiled binary in /usr/bin or /usr/local/bin mentions the build account" \
                      || bad "binaries carrying the build path inside:$DIRTY (see RUSTFLAGS/CARGO_HOME in stage3)"
   fi
 fi

@@ -46,6 +46,25 @@ V=$(cut -d. -f1 < /usr/share/omarchy/version)
 # That is exactly what happened on the first image that carried it.
 [ -x /usr/bin/herdr ] || [ -x /usr/local/bin/herdr ] && ok_ "herdr present" || bad "herdr missing"
 
+# The applications the distributed README says are already installed.
+#
+# This is the check whose absence let the README ship a lie. dist/README.md
+# lists "Pinta 3.1.2" among what the image carries and answers `pinta` in its
+# table with "Already installed"; the build refused it on every run for four
+# days, printed "pinta: MISSING" into a log nobody read, and nothing here ever
+# asked. A promise in the documentation that no check reads is a promise
+# nobody keeps.
+#
+# Named here rather than derived, because this script runs inside the image
+# where dist/README.md does not exist. tests/test-shipped-apps.sh is what stops
+# the two lists drifting apart.
+echo "== applications the README promises =="
+for _p in obs-studio pinta; do
+  _v=$(pacman -Q "$_p" 2>/dev/null) \
+    && ok_ "$_v" \
+    || bad "$_p is not installed, and the distributed README says it is"
+done
+
 echo "== clipboard =="
 [ -x /usr/local/bin/omarchy-arm-vdagent ] && ok_ "agent installed" || bad "agent missing"
 # Shipped commands. They are the project's whole interface for the things

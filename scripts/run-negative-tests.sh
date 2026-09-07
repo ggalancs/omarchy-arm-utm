@@ -31,10 +31,18 @@ while IFS= read -r b; do BATCHES+=("$b"); done \
   < <(find scripts -maxdepth 1 -name 'negative-test-*.sh' | sort)
 [ ${#BATCHES[@]} -gt 0 ] || { echo "no negative-test*.sh under scripts/"; exit 2; }
 echo "  ${#BATCHES[@]} batches: ${BATCHES[*]##*/}"
-# Kept when something went wrong, removed when everything passed: a transcript
-# is only worth anything while there is a failure to read it for.
-TRDIR=$(mktemp -d)
-echo "  transcripts: $TRDIR"
+# These are kept always, and somewhere that survives the run.
+#
+# This used to be a mktemp directory deleted whenever every batch passed, on the
+# reasoning that "a transcript is only worth anything while there is a failure
+# to read it for". That is exactly backwards, and a green run proved it: batch 5
+# gained a sabotage that removes Pinta, the run reported ok, and there was no
+# way left to tell whether the sabotage had APPLIED or had been skipped because
+# the package was not installed -- both print ok. A pass with no record of what
+# was exercised is a pass you have to take on faith.
+TRDIR=logs/negative
+mkdir -p "$TRDIR"
+echo "  transcripts: $TRDIR (kept)"
 
 fail=0
 for b in "${BATCHES[@]}"; do
@@ -52,7 +60,13 @@ for b in "${BATCHES[@]}"; do
   # guest, an ISO that did not mount -- prints neither, and treating that as a
   # pass is the exact failure this whole family of scripts exists to prevent.
   if grep -qa NEGATIVE_TEST_OK "$tr_file" 2>/dev/null; then
-    echo "    ok  $b"
+    # How many sabotages the batch actually applied, from its own count. A batch
+    # whose sabotages nearly all failed to apply still prints NEGATIVE_TEST_OK,
+    # because it only checks that what it DID break was noticed. The number is
+    # what distinguishes a real pass from a vacuous one, so it goes in the
+    # summary rather than staying buried in a file nobody opens.
+    _sab=$(sed 's/\x1b\[[0-9;]*m//g' "$tr_file" | grep -a 'sabotages:' | tail -1 | tr -dc '0-9')
+    echo "    ok  $b  (${_sab:-?} sabotages applied)"
   else
     echo "    !! $b did not reach NEGATIVE_TEST_OK"
     fail=$((fail+1))
@@ -62,9 +76,9 @@ done
 echo
 if [ "$fail" -eq 0 ]; then
   echo "  ${#BATCHES[@]} batches green: the check list knows how to say no"
-  rm -rf "$TRDIR"
+  echo "  transcripts kept in $TRDIR"
 else
   echo "  $fail of ${#BATCHES[@]} batches did not pass"
-  echo "  the transcripts are kept in $TRDIR"
+  echo "  read the transcripts in $TRDIR"
 fi
 exit "$fail"

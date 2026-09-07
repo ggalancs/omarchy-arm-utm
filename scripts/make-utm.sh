@@ -83,7 +83,13 @@ if [ "$DEST_DIR" = "$DOCS" ] && pgrep -x UTM >/dev/null; then
     echo "$VMS_RUNNING" | sed 's/^/      /'
     echo "    Registering the bundle needs UTM restarted, and that would cut them off."
     if [ -t 0 ] && [ "${ASSUME_YES:-}" != "1" ]; then
-      printf "    Close them and restart UTM? [y/N]: "
+      # The question goes to /dev/tty, where the answer is read from. The
+      # builder runs this with stdout AND stderr redirected into a log file and
+      # stdin left on the terminal, so a prompt printed the ordinary way is
+      # invisible: the operator sees the phase banner, then nothing, for ever,
+      # after a two-hour build.
+      printf "    Close them and restart UTM? [y/N]: " > /dev/tty 2>/dev/null \
+        || printf "    Close them and restart UTM? [y/N]: "
       read -r R </dev/tty || R=""
       case "$(printf '%s' "$R" | tr '[:upper:]' '[:lower:]')" in
         s|si|y|yes) : ;;
@@ -124,7 +130,7 @@ cat > "$BUNDLE/config.plist" <<PLIST
 	<key>Information</key>
 	<dict>
 		<key>Name</key>
-		<string>$NAME</string>
+		<string>$(xmlq "$NAME")</string>
 		<key>UUID</key>
 		<string>$VM_UUID</string>
 		<key>IconCustom</key>

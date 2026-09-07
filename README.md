@@ -140,7 +140,10 @@ instead, and are not compared against).
 
 ### How long
 
-Measured on an M3 Max, tools compiled, without OBS/Pinta:
+Measured on an M3 Max, tools compiled, without OBS/Pinta. These are from
+before the local Hyprland build existed: a run that has to compile hyprtoolkit
+and hyprland itself adds roughly half an hour, and the first complete run with
+it took about two hours and a half end to end.
 
 | Phase | | Time |
 |---|---|---|
@@ -380,6 +383,47 @@ VM and repackage from the host:
 ```
 
 That strips identity and credentials and produces a distributable `.zip`.
+
+## Ollama, LM Studio, and the community package repo
+
+Neither is in the image, and until now neither was named anywhere here, which is
+why someone opened an issue asking for them to be packaged.
+
+**Ollama runs.** `ollama-bin` in the AUR declares
+`arch=('x86_64' 'aarch64')`, so `yay` builds and installs it inside the VM:
+
+```bash
+yay -S ollama-bin
+```
+
+**LM Studio has an arm64 build that nobody has packaged.** lmstudio.ai does
+publish a Linux arm64 installer — its download page offers `Linux (aarch64)`.
+The AUR package `lmstudio-bin` is not it: that PKGBUILD declares
+`arch=('x86_64')` and its only source is the x64 AppImage, so `yay -S
+lmstudio-bin` cannot work here. Installing LM Studio on this image means
+fetching the vendor's arm64 build by hand. Read off the PKGBUILD and the vendor
+download page on 2026-09-07; check both again before believing this page.
+
+**The community repo, in full.** The table above points at
+[omarchy-pkgs-aarch64](https://github.com/omarchy-mac/omarchy-pkgs-aarch64) and
+warns that it is unsigned, which is not much use without the stanza. This is the
+one that project publishes, appended to `/etc/pacman.conf`:
+
+```ini
+[omarchy-aarch64]
+SigLevel = Optional TrustAll
+Server = https://github.com/omarchy-mac/omarchy-pkgs-aarch64/releases/download/edge
+```
+
+```bash
+sudo pacman -Sy
+```
+
+`Optional TrustAll` is what it sounds like: pacman will install those packages
+without checking a signature, because there is none to check. It is the same
+level Omarchy's own repo uses. If that is not a trade you want, this image
+already builds the Omarchy packages from source, and anything else can be built
+from its PKGBUILD with `makepkg`.
 
 ## Things that were hard to find
 

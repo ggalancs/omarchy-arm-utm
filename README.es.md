@@ -290,6 +290,48 @@ instálalas en la VM y vuelve a empaquetar desde el anfitrión:
 
 Eso limpia identidad y credenciales y genera un `.zip` distribuible.
 
+## Ollama, LM Studio y el repositorio de la comunidad
+
+Ninguno de los dos viene en la imagen, y hasta ahora ninguno se nombraba aquí,
+que es justo por lo que alguien abrió una incidencia pidiendo que se empaquetaran.
+
+**Ollama funciona.** El paquete `ollama-bin` del AUR declara
+`arch=('x86_64' 'aarch64')`, así que `yay` lo compila e instala dentro de la VM:
+
+```bash
+yay -S ollama-bin
+```
+
+**LM Studio tiene compilación arm64, pero nadie la ha empaquetado.**
+lmstudio.ai sí publica un instalador arm64 para Linux: su página de descarga
+ofrece `Linux (aarch64)`. El paquete `lmstudio-bin` del AUR no es ése: su
+PKGBUILD declara `arch=('x86_64')` y su única fuente es el AppImage x64, así que
+`yay -S lmstudio-bin` no puede funcionar aquí. Instalar LM Studio en esta imagen
+significa bajar a mano la compilación arm64 del fabricante. Leído del PKGBUILD y
+de la página de descargas el 07-09-2026; comprueba las dos otra vez antes de
+creerte esta página.
+
+**El repositorio de la comunidad, entero.** La tabla de más arriba señala
+[omarchy-pkgs-aarch64](https://github.com/omarchy-mac/omarchy-pkgs-aarch64) y
+avisa de que va sin firmar, lo que no sirve de mucho sin la estrofa. Ésta es la
+que publica ese proyecto, añadida a `/etc/pacman.conf`:
+
+```ini
+[omarchy-aarch64]
+SigLevel = Optional TrustAll
+Server = https://github.com/omarchy-mac/omarchy-pkgs-aarch64/releases/download/edge
+```
+
+```bash
+sudo pacman -Sy
+```
+
+`Optional TrustAll` significa lo que parece: pacman instalará esos paquetes sin
+comprobar ninguna firma, porque no hay ninguna que comprobar. Es el mismo nivel
+que usa el repositorio propio de Omarchy. Si ese trato no te convence, esta
+imagen ya compila desde fuente los paquetes de Omarchy, y cualquier otro se
+puede construir con `makepkg` a partir de su PKGBUILD.
+
 ## Estructura
 
 ```

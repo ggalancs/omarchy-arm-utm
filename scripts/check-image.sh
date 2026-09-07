@@ -86,6 +86,30 @@ sleep 3
 send "cat /tmp/report.txt\r"
 expect { -re {END_CHECK} { } timeout { puts "TIMEOUT_REPORT" } }
 sleep 2
+# POWER IT OFF. Ending the script and letting expect reap the spawn is not
+# enough: QEMU does not exit when the pty closes, so expect blocks for ever
+# waiting for a child that will not die -- and the caller's `out=$(...)` blocks
+# with it. One run sat like that for four hours and fifty minutes with the
+# batch already finished and its verdict written. The other two harnesses have
+# always sent this; this one never did.
+# Ask nicely, then do not depend on the answer. THESE BATCHES SABOTAGE THE
+# IMAGE ON PURPOSE -- they kill the compositor, remove binaries, break units --
+# so the guest may be in no state to power itself off, and a harness that waits
+# for it to cooperate hangs exactly when the test worked. Sending poweroff and
+# trusting it was the first attempt at this and it left expect and QEMU alive
+# for twelve hours after a batch had already printed NEGATIVE_TEST_OK.
+#
+# expect's own exit closes the spawn and WAITS for it, so the process has to be
+# gone before then, killed by pid, or the wait never returns.
+send "poweroff -f\r"
+set timeout 60
+expect { eof { } timeout { puts "GUEST_DID_NOT_POWER_OFF" } }
+catch { exec kill -TERM [exp_pid] }
+sleep 3
+catch { exec kill -KILL [exp_pid] }
+catch { close }
+catch { wait -nowait }
+exit 0
 EXPEOF
 
 TR="${TRANSCRIPT:-/tmp/check-image-session.log}"; : > "$TR"
@@ -94,9 +118,58 @@ echo "  starting $(basename "$BUNDLE") ... (~4 min)"
 # it is the only thing that says where. It has been lost twice already by
 # writing it inside the temporary directory that gets deleted on exit.
 echo "  transcript: $TR"
+# A hard deadline that lives OUTSIDE expect and never speaks to the guest.
+#
+# Everything inside t.exp is reached by doing I/O with the guest first -- the
+# kill by pid added after the twelve-hour hang included. That is an assumption
+# the guest is free to break, and on 7 September it did: the Mac slept with the
+# lid closed mid-batch (caffeinate prevents idle sleep, NOT lid-close sleep),
+# the guest came back spinning at 390% CPU and reading nothing from its console,
+# and `send "poweroff -f"` blocked on a pty buffer nobody was draining. No
+# `timeout` covers a send. expect sat there for five hours and fifty minutes on
+# 0.12 s of CPU, with NEGATIVE_TEST_OK already written to the transcript.
+#
+# So the last resort knows only a pid and a clock. It kills QEMU FIRST, because
+# expect is blocked on it and killing the parent alone leaves a 400% orphan; and
+# it kills only a qemu that is a direct child of the expect started here, never
+# by name, so a VM the user is running is not in reach of this.
+HARD_LIMIT="${CHECK_HARD_LIMIT:-2400}"
 EFI="$TMP/efi.fd" DISK="$DISK" ISO="$TMP/check.iso" OLDUSER="$OLD" NEWUSER="$NEWU" TRANSCRIPT="$TR" \
 FW="$(brew --prefix qemu)/share/qemu/edk2-aarch64-code.fd" \
-  expect "$TMP/t.exp" >/dev/null 2>&1
+  expect "$TMP/t.exp" >/dev/null 2>&1 &
+EXP_PID=$!
+(
+  # Polled, not one flat sleep: a normal run finishes in a third of this, and a
+  # watchdog outliving what it guards is its own kind of surprise.
+  waited=0
+  while [ "$waited" -lt "$HARD_LIMIT" ]; do
+    kill -0 "$EXP_PID" 2>/dev/null || exit 0
+    sleep 10; waited=$((waited + 10))
+  done
+  kill -0 "$EXP_PID" 2>/dev/null || exit 0
+  echo "  HARNESS_HARD_LIMIT: ${HARD_LIMIT}s and expect has not returned; killing it" >&2
+  for _c in $(pgrep -P "$EXP_PID" 2>/dev/null); do
+    case "$(ps -o comm= -p "$_c" 2>/dev/null)" in
+      *qemu-system-aarch64*) kill -TERM "$_c" 2>/dev/null ;;
+    esac
+  done
+  sleep 3
+  for _c in $(pgrep -P "$EXP_PID" 2>/dev/null); do
+    case "$(ps -o comm= -p "$_c" 2>/dev/null)" in
+      *qemu-system-aarch64*) kill -KILL "$_c" 2>/dev/null ;;
+    esac
+  done
+  kill -TERM "$EXP_PID" 2>/dev/null; sleep 2; kill -KILL "$EXP_PID" 2>/dev/null
+) &
+WD_PID=$!
+# disown, or bash announces the watchdog's death at the end of every run by
+# printing its entire source line. Five batches produced five copies of
+# `... echo "HARNESS_HARD_LIMIT: ..."` in the log, which reads exactly like the
+# hard limit firing five times when it had never fired at all. A log that
+# describes an incident that did not happen is worse than a quiet one.
+disown "$WD_PID" 2>/dev/null || true
+wait "$EXP_PID"
+kill "$WD_PID" 2>/dev/null
 
 # The report is read from the TRANSCRIPT, not from expect's output. expect
 # delivers nothing reliable on stdout when stdout is not a terminal -- its
