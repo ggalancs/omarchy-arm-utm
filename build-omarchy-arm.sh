@@ -6426,6 +6426,30 @@ ph_package() {
   # were gone. They are kept until the phase has actually succeeded.
   rm -f "$W/dist/dist.qcow2" "$W/dist/slim.qcow2"
 
+  # And the intermediate VM, which until now was only ever MENTIONED -- and only
+  # on the failing branch, so a run that went well said nothing and left 12 GB
+  # registered in UTM. Four builds later that is UTM full of VMs nobody chose to
+  # keep, which is how this got noticed.
+  #
+  # Removed only after the distributable exists and its gate has passed: at that
+  # point the artifact is the product and this is scaffolding. KEEP_INTERMEDIATE=1
+  # for anyone who wants to re-run '--from sanitize' against the same build.
+  #
+  # Guarded rather than trusted: the path must be the bundle this run created,
+  # under UTM's own directory, and must actually look like a bundle. A variable
+  # in an rm is only acceptable with the shape of what it points at checked.
+  INTERMEDIATE="$DOCS/$VM_NAME.utm"
+  if [ -n "${KEEP_INTERMEDIATE:-}" ]; then
+    info "the intermediate VM '$VM_NAME' is kept in UTM (KEEP_INTERMEDIATE is set)"
+  elif [ "$DEST_DIR" != "$DOCS" ]; then
+    : # not ours to tidy: the bundle was built somewhere the caller chose
+  elif [ -f "$INTERMEDIATE/config.plist" ] && [ -d "$INTERMEDIATE/Data" ]; then
+    rm -rf "$INTERMEDIATE"
+    [ -e "$INTERMEDIATE" ] \
+      && warn "could not remove the intermediate VM: $INTERMEDIATE" \
+      || ok "intermediate VM '$VM_NAME' removed from UTM (KEEP_INTERMEDIATE=1 keeps it)"
+  fi
+
   # The VM the `utm` phase registered is an intermediate: it serves `verify`
   # and nothing else, because what ships is the sanitized bundle from dist/. It
   # stayed in UTM after every build, eleven gigabytes each, and carried a name

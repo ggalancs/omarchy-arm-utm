@@ -356,6 +356,22 @@ omarchy-arm-extras --all      # everything missing
 Spotify has no native ARM client, but the web app works — it needs Widevine,
 which ships inside Google Chrome arm64 (`omarchy-arm-extras chrome spotify-web`).
 
+### Where the VM is written, and what is cleaned up
+
+By default the builder writes its VM into UTM's own documents directory, which
+is how UTM finds it. Two environment variables change that:
+
+```bash
+DEST_DIR=/Volumes/External ./build-omarchy-arm.sh --yes   # build without touching UTM
+KEEP_INTERMEDIATE=1 ./build-omarchy-arm.sh --yes          # keep the build VM afterwards
+```
+
+The VM the build works in is scaffolding: once the distributable `.zip` exists
+and its checksum gate has passed, it is removed. It used to be left behind on
+every successful run and only mentioned on failing ones, so four builds left
+four 12 GB VMs registered in UTM. `KEEP_INTERMEDIATE=1` keeps it, which is what
+`--from sanitize` needs to re-run against the same build.
+
 ## Your own apps: `scripts/my-apps.sh`
 
 `omarchy-arm-extras` covers a fixed list. For anything else, copy

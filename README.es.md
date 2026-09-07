@@ -262,6 +262,23 @@ También aparece en el menú de aplicaciones como «Instalar apps que faltan (AR
 Spotify no tiene cliente nativo ARM, pero la web sí funciona: necesita Widevine,
 que viene dentro de Google Chrome arm64 (`omarchy-arm-extras chrome spotify-web`).
 
+### Dónde se escribe la VM, y qué se limpia
+
+Por defecto el constructor escribe su VM en el directorio de documentos de UTM,
+que es como UTM la encuentra. Dos variables de entorno lo cambian:
+
+```bash
+DEST_DIR=/Volumes/Externo ./build-omarchy-arm.sh --yes   # construir sin tocar UTM
+KEEP_INTERMEDIATE=1 ./build-omarchy-arm.sh --yes         # conservar la VM de trabajo
+```
+
+La VM en la que trabaja la construcción es andamio: en cuanto existe el `.zip`
+distribuible y su comprobación de checksum pasa, se borra. Antes se quedaba en
+cada ejecución correcta y solo se mencionaba en las que fallaban, así que cuatro
+construcciones dejaban cuatro VMs de 12 GB registradas en UTM.
+`KEEP_INTERMEDIATE=1` la conserva, que es lo que necesita `--from sanitize` para
+volver a ejecutarse sobre la misma construcción.
+
 ## Tus propias aplicaciones: `scripts/my-apps.sh`
 
 `omarchy-arm-extras` cubre una lista fija. Para cualquier otra cosa, copia
