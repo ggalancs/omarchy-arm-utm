@@ -384,6 +384,44 @@ VM and repackage from the host:
 
 That strips identity and credentials and produces a distributable `.zip`.
 
+## Ollama, LM Studio, and the community package repo
+
+Neither is in the image, and until now neither was named anywhere here, which is
+why someone opened an issue asking for them to be packaged.
+
+**Ollama runs.** `ollama-bin` in the AUR declares
+`arch=('x86_64' 'aarch64')`, so `yay` builds and installs it inside the VM:
+
+```bash
+yay -S ollama-bin
+```
+
+**LM Studio does not.** The AUR package is `lmstudio-bin`, and its PKGBUILD
+declares `arch=('x86_64')` only — there is no aarch64 Linux build to package.
+That is upstream's decision, not a gap in this image. Both facts read off the
+PKGBUILDs on 2026-09-07; check them again before believing this page.
+
+**The community repo, in full.** The table above points at
+[omarchy-pkgs-aarch64](https://github.com/omarchy-mac/omarchy-pkgs-aarch64) and
+warns that it is unsigned, which is not much use without the stanza. This is the
+one that project publishes, appended to `/etc/pacman.conf`:
+
+```ini
+[omarchy-aarch64]
+SigLevel = Optional TrustAll
+Server = https://github.com/omarchy-mac/omarchy-pkgs-aarch64/releases/download/edge
+```
+
+```bash
+sudo pacman -Sy
+```
+
+`Optional TrustAll` is what it sounds like: pacman will install those packages
+without checking a signature, because there is none to check. It is the same
+level Omarchy's own repo uses. If that is not a trade you want, this image
+already builds the Omarchy packages from source, and anything else can be built
+from its PKGBUILD with `makepkg`.
+
 ## Things that were hard to find
 
 - **The ESP is mounted after extracting the rootfs.** The ALARM tarball has
