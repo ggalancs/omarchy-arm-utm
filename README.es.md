@@ -320,18 +320,21 @@ yay -S ollama-bin
 ```
 
 **LM Studio tiene compilación arm64, pero nadie la ha empaquetado.**
-lmstudio.ai sí publica un instalador arm64 para Linux: su página de descarga
-ofrece `Linux (aarch64)`. El paquete `lmstudio-bin` del AUR no es ése: su
-PKGBUILD declara `arch=('x86_64')` y su única fuente es el AppImage x64, así que
+lmstudio.ai sí publica una:
+`https://installers.lmstudio.ai/linux/arm64/0.4.23-1/LM-Studio-0.4.23-1-arm64.AppImage`
+responde 200 hoy. El paquete `lmstudio-bin` del AUR no es ése: su PKGBUILD
+declara `arch=('x86_64')` y lo único que descarga es el AppImage x64, así que
 `yay -S lmstudio-bin` no puede funcionar aquí. Instalar LM Studio en esta imagen
 significa bajar a mano la compilación arm64 del fabricante. Leído del PKGBUILD y
-de la página de descargas el 07-09-2026; comprueba las dos otra vez antes de
-creerte esta página.
+del servidor de instaladores del fabricante el 07-09-2026; comprueba las dos
+otra vez antes de creerte esta página.
 
-**El repositorio de la comunidad, entero.** La tabla de más arriba señala
-[omarchy-pkgs-aarch64](https://github.com/omarchy-mac/omarchy-pkgs-aarch64) y
-avisa de que va sin firmar, lo que no sirve de mucho sin la estrofa. Ésta es la
-que publica ese proyecto, añadida a `/etc/pacman.conf`:
+**El repositorio de la comunidad, entero.**
+[omarchy-pkgs-aarch64](https://github.com/omarchy-mac/omarchy-pkgs-aarch64)
+compila para aarch64 lo que upstream solo publica para x86_64. Esta página y el
+README de dentro de la imagen lo mencionan; ninguno daba la estrofa que hace
+falta para añadirlo de verdad, que es casi todo el asunto. Ésta es la que
+publica ese proyecto, añadida a `/etc/pacman.conf`:
 
 ```ini
 [omarchy-aarch64]

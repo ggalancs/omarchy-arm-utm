@@ -413,17 +413,21 @@ yay -S ollama-bin
 ```
 
 **LM Studio has an arm64 build that nobody has packaged.** lmstudio.ai does
-publish a Linux arm64 installer — its download page offers `Linux (aarch64)`.
-The AUR package `lmstudio-bin` is not it: that PKGBUILD declares
-`arch=('x86_64')` and its only source is the x64 AppImage, so `yay -S
-lmstudio-bin` cannot work here. Installing LM Studio on this image means
-fetching the vendor's arm64 build by hand. Read off the PKGBUILD and the vendor
-download page on 2026-09-07; check both again before believing this page.
+publish one:
+`https://installers.lmstudio.ai/linux/arm64/0.4.23-1/LM-Studio-0.4.23-1-arm64.AppImage`
+answers 200 today. The AUR package `lmstudio-bin` is not it: that PKGBUILD
+declares `arch=('x86_64')` and the only thing it downloads is the x64 AppImage,
+so `yay -S lmstudio-bin` cannot work here. Installing LM Studio on this image
+means fetching the vendor's arm64 build by hand. Read off the PKGBUILD and the
+vendor's installer host on 2026-09-07; check both again before believing this
+page.
 
-**The community repo, in full.** The table above points at
-[omarchy-pkgs-aarch64](https://github.com/omarchy-mac/omarchy-pkgs-aarch64) and
-warns that it is unsigned, which is not much use without the stanza. This is the
-one that project publishes, appended to `/etc/pacman.conf`:
+**The community repo, in full.**
+[omarchy-pkgs-aarch64](https://github.com/omarchy-mac/omarchy-pkgs-aarch64)
+builds for aarch64 what upstream publishes only for x86_64. Both this page and
+the README inside the image mention it; neither gave the stanza you need to
+actually add it, which is most of the point. This is the one that project
+publishes, appended to `/etc/pacman.conf`:
 
 ```ini
 [omarchy-aarch64]
