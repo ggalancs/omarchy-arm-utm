@@ -6056,6 +6056,7 @@ ph_utm() {
     if confirm "A VM named '$VM_NAME' already exists in UTM. Delete and replace it?" no; then
       "$UTMCTL" delete "$VM_NAME" >/dev/null 2>&1 || true; sleep 2
     else
+      VM_NAME_BASE="$VM_NAME"
       VM_NAME="$VM_NAME $(date +%H%M)"
       info "it will be registered as '$VM_NAME'"
       # Written down, or it lives only in this process: a later `--from
@@ -6345,6 +6346,44 @@ ph_package() {
   [ -s "$W/dist/$DIST_ZIP" ] || die "$DIST_ZIP came out empty"
   [ -s "$W/dist/$DIST_ZIP.sha256" ] || die "$DIST_ZIP.sha256 was not written"
   ok "ready: $W/dist/$DIST_ZIP ($(du -h "$W/dist/$DIST_ZIP" | cut -f1))"
+
+  # The intermediate VM goes now, BEFORE the checksum gate below, because that
+  # gate calls die: the first version of this cleanup sat after it and therefore
+  # never ran on a fresh build, which is the only kind of build where the
+  # documentation names an older artifact. It is safe here -- '--only package'
+  # rebuilds the zip from dist.qcow2 and does not touch the VM.
+  #
+  # `utmctl delete`, not `rm -rf`. Removing the bundle directory leaves UTM's
+  # own registry holding a phantom entry for it, and the next build then sees a
+  # name collision, appends a timestamp and writes the compound name back into
+  # answers.env -- which is why this machine went from 'Omarchy ARM' to
+  # 'Omarchy ARM 1820' to 'Omarchy ARM 1820 2305' in three builds. Deleting by
+  # hand is what taught me that; the fix is to delete the way UTM understands.
+  #
+  # Guarded rather than trusted: the bundle must be the one this run created,
+  # under UTM's own directory, and must look like a bundle before anything goes.
+  INTERMEDIATE="$DOCS/$VM_NAME.utm"
+  if [ -n "${KEEP_INTERMEDIATE:-}" ]; then
+    info "the intermediate VM '$VM_NAME' is kept in UTM (KEEP_INTERMEDIATE is set)"
+  elif [ "$DEST_DIR" != "$DOCS" ]; then
+    : # not ours to tidy: the bundle was built somewhere the caller chose
+  elif [ -f "$INTERMEDIATE/config.plist" ] && [ -d "$INTERMEDIATE/Data" ]; then
+    "$UTMCTL" delete "$VM_NAME" >/dev/null 2>&1 || true
+    sleep 1
+    [ -e "$INTERMEDIATE" ] && rm -rf "$INTERMEDIATE"
+    if [ -e "$INTERMEDIATE" ]; then
+      warn "could not remove the intermediate VM: $INTERMEDIATE"
+    else
+      ok "intermediate VM '$VM_NAME' removed from UTM (KEEP_INTERMEDIATE=1 keeps it)"
+      # And put the name back, or the next build inherits the timestamped one
+      # and grows another suffix onto it.
+      if [ -n "${VM_NAME_BASE:-}" ] && [ -f "$W/answers.env" ]; then
+        sed -i '' "/^VM_NAME=/d" "$W/answers.env" 2>/dev/null || true
+        printf "VM_NAME='%s'\n" "$(shq "$VM_NAME_BASE")" >> "$W/answers.env"
+        info "the VM name goes back to '$VM_NAME_BASE' for the next build"
+      fi
+    fi
+  fi
   cat "$W/dist/$DIST_ZIP.sha256"
 
   # The checksum is published by hand in five places and drifts on every
@@ -6426,29 +6465,7 @@ ph_package() {
   # were gone. They are kept until the phase has actually succeeded.
   rm -f "$W/dist/dist.qcow2" "$W/dist/slim.qcow2"
 
-  # And the intermediate VM, which until now was only ever MENTIONED -- and only
-  # on the failing branch, so a run that went well said nothing and left 12 GB
-  # registered in UTM. Four builds later that is UTM full of VMs nobody chose to
-  # keep, which is how this got noticed.
-  #
-  # Removed only after the distributable exists and its gate has passed: at that
-  # point the artifact is the product and this is scaffolding. KEEP_INTERMEDIATE=1
-  # for anyone who wants to re-run '--from sanitize' against the same build.
-  #
-  # Guarded rather than trusted: the path must be the bundle this run created,
-  # under UTM's own directory, and must actually look like a bundle. A variable
-  # in an rm is only acceptable with the shape of what it points at checked.
-  INTERMEDIATE="$DOCS/$VM_NAME.utm"
-  if [ -n "${KEEP_INTERMEDIATE:-}" ]; then
-    info "the intermediate VM '$VM_NAME' is kept in UTM (KEEP_INTERMEDIATE is set)"
-  elif [ "$DEST_DIR" != "$DOCS" ]; then
-    : # not ours to tidy: the bundle was built somewhere the caller chose
-  elif [ -f "$INTERMEDIATE/config.plist" ] && [ -d "$INTERMEDIATE/Data" ]; then
-    rm -rf "$INTERMEDIATE"
-    [ -e "$INTERMEDIATE" ] \
-      && warn "could not remove the intermediate VM: $INTERMEDIATE" \
-      || ok "intermediate VM '$VM_NAME' removed from UTM (KEEP_INTERMEDIATE=1 keeps it)"
-  fi
+
 
   # The VM the `utm` phase registered is an intermediate: it serves `verify`
   # and nothing else, because what ships is the sanitized bundle from dist/. It
