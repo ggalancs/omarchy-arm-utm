@@ -285,7 +285,25 @@ repository, which publishes x86_64 only, so on ARM there is nothing to install.
 [omarchy-mac/omarchy-pkgs-aarch64](https://github.com/omarchy-mac/omarchy-pkgs-aarch64)
 rebuilds most of them for aarch64. It is a community repository: unofficial and
 unsigned, the same trust model as Omarchy's own. If you add it, packaging bugs
-belong to them, not here.
+belong to them, not here. This is the stanza that project publishes, appended to
+`/etc/pacman.conf`:
+
+```ini
+[omarchy-aarch64]
+SigLevel = Optional TrustAll
+Server = https://github.com/omarchy-mac/omarchy-pkgs-aarch64/releases/download/edge
+```
+
+then `sudo pacman -Sy`. `Optional TrustAll` means what it says: pacman installs
+those packages without checking a signature, because there is none to check.
+
+Two it does not carry, and both come up: **Ollama** installs with
+`yay -S ollama-bin`, whose PKGBUILD declares `arch=('x86_64' 'aarch64')`. The
+bare name `ollama` is an official Arch package built for x86_64 only, which is
+why Arch Linux ARM has none and the menu entry reports *target not found*.
+**LM Studio** has an arm64 Linux build from its vendor, but the AUR package
+`lmstudio-bin` is `arch=('x86_64')` and downloads the x64 AppImage, so it has to
+be fetched by hand.
 
 ### Verification
 
