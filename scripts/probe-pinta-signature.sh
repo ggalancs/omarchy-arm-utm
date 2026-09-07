@@ -18,9 +18,23 @@ set -uo pipefail
 say() { printf 'PROBE %s\n' "$*"; }
 
 echo "== 1. probe: can this image verify an Arch package signature? =="
-say "keyring package: $(pacman -Q archlinux-keyring 2>&1 | head -1)"
-say "keyring dir:     $([ -d /etc/pacman.d/gnupg ] && echo present || echo MISSING)"
-say "public keys:     $(pacman-key --list-keys 2>/dev/null | grep -c '^pub')"
+say "keyring package before: $(pacman -Q archlinux-keyring 2>&1 | head -1)"
+say "keyring dir:            $([ -d /etc/pacman.d/gnupg ] && echo present || echo MISSING)"
+say "public keys before:     $(pacman-key --list-keys 2>/dev/null | grep -c '^pub')"
+
+# Run through the same steps the installer now takes. The image was built
+# with `pacman-key --populate archlinuxarm` and nothing else, so the Arch
+# packager keys are absent and a bare verification fails for want of a key --
+# which would say nothing about whether the signature is good. Asking the
+# question without this step would have answered a different question.
+say "-- installing and populating the Arch keyring, as do_pinta does --"
+pacman -Sy --needed --noconfirm archlinux-keyring >/tmp/keyring.log 2>&1 \
+  && say "archlinux-keyring: $(pacman -Q archlinux-keyring 2>&1 | head -1)" \
+  || { say "archlinux-keyring FAILED to install"; tail -3 /tmp/keyring.log | sed 's/^/PROBE   /'; }
+pacman-key --populate archlinux >/tmp/populate.log 2>&1 \
+  && say "populate archlinux: ok" \
+  || { say "populate archlinux FAILED"; tail -3 /tmp/populate.log | sed 's/^/PROBE   /'; }
+say "public keys after:      $(pacman-key --list-keys 2>/dev/null | grep -c '^pub')"
 
 U=https://geo.mirror.pkgbuild.com/extra/os/x86_64/
 F=$(curl -fsSL --max-time 60 "$U" 2>/dev/null | grep -o 'pinta-[0-9][^"]*-any\.pkg\.tar\.zst' | sort -V | tail -1)

@@ -3656,6 +3656,23 @@ do_pinta() {
   # Anything that goes wrong here -- no keyring, a key that is not in it, a
   # tampered download -- falls through to precisely the refusal that was here
   # before, so this cannot end up more permissive than what it replaces.
+  # The keyring this needs is not the one the build set up. stage2 runs
+  # `pacman-key --populate archlinuxarm` and stops there, so the image holds the
+  # Arch Linux ARM developers' keys and not one of the Arch packagers' -- and an
+  # Arch packager is who signs this file. Without the two lines below the
+  # verification fails for want of a key rather than for anything wrong with the
+  # download, falls through to the gate, and Pinta quietly does not install:
+  # exactly the outcome this change exists to end, reached by a different road.
+  #
+  # Arch Linux ARM serves archlinux-keyring for aarch64, so this is a package
+  # from the image's own mirrors, not a third party. Adding it is additive: the
+  # ALARM keys stay where they are.
+  if ! pacman -Q archlinux-keyring >/dev/null 2>&1; then
+    info "installing archlinux-keyring (the Arch packager keys are not in this image)"
+    sudo pacman -S --needed --noconfirm archlinux-keyring >/dev/null 2>&1 \
+      || warn "archlinux-keyring did not install; the signature check below will fail closed"
+  fi
+  sudo pacman-key --populate archlinux >/dev/null 2>&1 || true
   if curl -fsSL --max-time 30 "$url$file.sig" -o "$WORK/$file.sig" 2>/dev/null \
      && sudo pacman-key --verify "$WORK/$file.sig" >/dev/null 2>&1; then
     ok "Arch packager signature verified"
