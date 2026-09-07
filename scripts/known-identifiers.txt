@@ -540,3 +540,5 @@ EXEMPT
 found
 region
 sig
+TRACKED
+say

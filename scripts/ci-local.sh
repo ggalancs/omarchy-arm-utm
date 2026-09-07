@@ -52,15 +52,32 @@ step() {
 # that iterates over it then reported ok having examined nothing -- ending in
 # "15 green, 0 red. Safe to ASK about a remote run". The listing has to fail
 # loudly instead.
-tracked_files() {
-  local out
-  out=$(git ls-files 2>/dev/null) || { echo "ci-local: this is not a git checkout" >&2; return 1; }
-  [ -n "$out" ] || { echo "ci-local: git ls-files returned nothing" >&2; return 1; }
-  printf '%s\n' "$out"
-}
+#
+# Once, and at TOP LEVEL, because that is the only place a failure here can
+# stop the run. The first version of this was a function that returned 1, and
+# it did not work: every use site is either `tracked_files | while` -- a
+# pipeline whose status is the while's, not the function's -- or an unquoted
+# $(...) in an argument list, and nobody reads either. Re-checked on a copy of
+# this tree with .git removed, that version printed "this is not a git
+# checkout" to stderr and then reported ok, step after step, over nothing at
+# all; the run only went red by accident, because two language steps fall back
+# to scanning the whole tree when handed no arguments and tripped over files
+# git does not track. A checker whose green means "I examined nothing" is the
+# defect this file exists to prevent.
+#
+# --cached --others --exclude-standard, not a bare `git ls-files`. A bare
+# listing shows only what is COMMITTED, so a file that has just been written
+# is invisible to every step here: this run reported green over a new script,
+# and the same script failed the language audit the moment it was committed
+# and the audit could finally see it. --others adds what is not yet tracked,
+# --exclude-standard keeps .gitignore honoured, so the release-upload scripts,
+# which are ignored on purpose, stay out.
+TRACKED=$(git ls-files --cached --others --exclude-standard 2>/dev/null) \
+  || { echo "ci-local: this is not a git checkout" >&2; exit 2; }
+[ -n "$TRACKED" ] || { echo "ci-local: git ls-files listed no files" >&2; exit 2; }
 shell_files() {
   local f
-  tracked_files | while IFS= read -r f; do
+  printf '%s\n' "$TRACKED" | while IFS= read -r f; do
     case "$f" in *.sh) printf '%s\n' "$f"; continue ;; esac
     [ -f "$f" ] || continue
     head -1 "$f" 2>/dev/null | grep -qE '^#!.*[/ ](bash|sh)$' && printf '%s\n' "$f"
@@ -68,7 +85,7 @@ shell_files() {
 }
 python_files() {
   local f
-  tracked_files | while IFS= read -r f; do
+  printf '%s\n' "$TRACKED" | while IFS= read -r f; do
     case "$f" in *.py) printf '%s\n' "$f"; continue ;; esac
     [ -f "$f" ] || continue
     head -1 "$f" 2>/dev/null | grep -qE '^#!.*python' && printf '%s\n' "$f"
@@ -108,7 +125,7 @@ shellcheck_errors() {
 # and rewriting a shipped artifact for style is a bad trade.
 #
 # Three codes are excluded, each for a stated reason rather than to reach green:
-#   SC2046  the unquoted $(git ls-files) below splits into words on purpose
+#   SC2046  the unquoted $TRACKED / $(shell_files) below split into words on purpose
 #   SC2024  a redirect after sudo, into a file the invoking user already owns
 #   SC2034  an unused index in a `for i in $(seq ...)` retry loop
 shellcheck_warnings() {
@@ -134,10 +151,10 @@ step "language self-test"                python3 scripts/i18n-audit.py selftest
 # classification logic and NOTHING ran them: no CI step, no test, and the build
 # invokes it without the flag. It needs no network and takes no time.
 step "satisfiability self-test"          python3 scripts/check-alarm-satisfiable.py --self-test
-step "no Spanish in comments"            python3 scripts/i18n-audit.py audit       $(git ls-files)
-step "no Spanish in strings"             python3 scripts/i18n-audit.py strings     $(git ls-files)
-step "no Spanish in identifiers"         python3 scripts/i18n-audit.py identifiers $(git ls-files)
-step "no Spanish in prose"               python3 scripts/i18n-audit.py prose       $(git ls-files)
+step "no Spanish in comments"            python3 scripts/i18n-audit.py audit       $TRACKED
+step "no Spanish in strings"             python3 scripts/i18n-audit.py strings     $TRACKED
+step "no Spanish in identifiers"         python3 scripts/i18n-audit.py identifiers $TRACKED
+step "no Spanish in prose"               python3 scripts/i18n-audit.py prose       $TRACKED
 step "unit tests"                        unit_tests
 step "published hash is coherent"        python3 scripts/check-published-hash.py
 step "documented flags exist"            python3 scripts/check-documented-flags.py
