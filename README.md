@@ -396,10 +396,13 @@ why someone opened an issue asking for them to be packaged.
 yay -S ollama-bin
 ```
 
-**LM Studio does not.** The AUR package is `lmstudio-bin`, and its PKGBUILD
-declares `arch=('x86_64')` only — there is no aarch64 Linux build to package.
-That is upstream's decision, not a gap in this image. Both facts read off the
-PKGBUILDs on 2026-09-07; check them again before believing this page.
+**LM Studio has an arm64 build that nobody has packaged.** lmstudio.ai does
+publish a Linux arm64 installer — its download page offers `Linux (aarch64)`.
+The AUR package `lmstudio-bin` is not it: that PKGBUILD declares
+`arch=('x86_64')` and its only source is the x64 AppImage, so `yay -S
+lmstudio-bin` cannot work here. Installing LM Studio on this image means
+fetching the vendor's arm64 build by hand. Read off the PKGBUILD and the vendor
+download page on 2026-09-07; check both again before believing this page.
 
 **The community repo, in full.** The table above points at
 [omarchy-pkgs-aarch64](https://github.com/omarchy-mac/omarchy-pkgs-aarch64) and
