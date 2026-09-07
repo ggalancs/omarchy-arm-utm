@@ -5196,9 +5196,34 @@ expect {
     eof                          { puts "\n!! EOF during the post-install check"; set VERIFY_BAD 1 }
 }
 
+# Ask it to power off, wait, and then do not depend on the answer.
+#
+# `expect eof` on its own is a trap with a very long fuse. expect's exit closes
+# the spawn and WAITS for it, and qemu-build.sh ends in `exec qemu-system-...`,
+# so this pid is QEMU itself: a guest that never reaches poweroff leaves this
+# script blocked for ever on a child that will not die -- with the build long
+# finished and the verdict already decided. check-image.sh hung exactly like
+# this for twelve hours, and fixing it there left the same shape standing here
+# in the harness that matters most.
 send "sync; umount -R /mnt 2>/dev/null; poweroff -f\r"
-expect eof
-puts "\n===== BUILD VM POWERED OFF ====="
+set timeout 600
+expect {
+    eof     { puts "\n===== BUILD VM POWERED OFF =====" }
+    timeout {
+        # Not merely a cleanup problem, which is why this marks the build bad
+        # instead of shipping quietly: the disk is this build's product, and if
+        # the guest would not power off 600 s after the sync then nobody can
+        # say what state the image on it is in.
+        puts "\n!! the guest did not power off 600 s after the sync"
+        puts "!! killing QEMU; THE DISK IMAGE MAY BE INCONSISTENT"
+        set VERIFY_BAD 1
+        catch { exec kill -TERM [exp_pid] }
+        sleep 3
+        catch { exec kill -KILL [exp_pid] }
+    }
+}
+catch { close }
+catch { wait -nowait }
 # AFTER the flush and the poweroff, so a failed probe still leaves a consistent
 # disk -- that is why this is a token and not an early exit.
 if {[info exists VERIFY_BAD]} { puts "TOK_VERIFY_BAD" }
@@ -5282,9 +5307,27 @@ expect {
     # "TOK_REPAI" so the token never matches afterwards.
     -re {\n} { exp_continue }
 }
+# Same trap as build.exp, same reason it is not just `expect eof`: this pid is
+# QEMU (qemu-build.sh execs it), and expect's exit waits for it. A guest that
+# cannot power itself off would hang the caller for ever with the repair
+# already done.
 set timeout 300
 send "sync; poweroff -f\r"
-expect eof
+expect {
+    eof     { }
+    timeout {
+        puts "\n!! the guest did not power off 300 s after the sync"
+        puts "!! killing QEMU; THE DISK IMAGE MAY BE INCONSISTENT"
+        catch { exec kill -TERM [exp_pid] }
+        sleep 3
+        catch { exec kill -KILL [exp_pid] }
+        catch { close }
+        catch { wait -nowait }
+        exit 22
+    }
+}
+catch { close }
+catch { wait -nowait }
 exit 0
 __PAYLOAD_SCRIPTS_REPAIR_EXP__
 chmod +x "$W/scripts/repair.exp"

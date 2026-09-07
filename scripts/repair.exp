@@ -72,7 +72,25 @@ expect {
     # "TOK_REPAI" so the token never matches afterwards.
     -re {\n} { exp_continue }
 }
+# Same trap as build.exp, same reason it is not just `expect eof`: this pid is
+# QEMU (qemu-build.sh execs it), and expect's exit waits for it. A guest that
+# cannot power itself off would hang the caller for ever with the repair
+# already done.
 set timeout 300
 send "sync; poweroff -f\r"
-expect eof
+expect {
+    eof     { }
+    timeout {
+        puts "\n!! the guest did not power off 300 s after the sync"
+        puts "!! killing QEMU; THE DISK IMAGE MAY BE INCONSISTENT"
+        catch { exec kill -TERM [exp_pid] }
+        sleep 3
+        catch { exec kill -KILL [exp_pid] }
+        catch { close }
+        catch { wait -nowait }
+        exit 22
+    }
+}
+catch { close }
+catch { wait -nowait }
 exit 0
