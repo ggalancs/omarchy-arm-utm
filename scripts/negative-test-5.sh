@@ -69,6 +69,26 @@ printf '[Desktop Entry]\nName=Broken\nExec=a-binary-that-is-not-installed\nType=
 printf '[Desktop Entry]\nName=NoExec\nType=Application\n' > "$SESSDIR/zz-no-exec.desktop" \
   && { echo "   + a session with no Exec="; EXPECTED+=("has no Exec="); }
 
+# --- an application the shipped README calls "already installed"
+#
+# The check this drives red is the one whose ABSENCE let dist/README.md ship a
+# claim about Pinta that the image did not honour for four days. Removing the
+# package is what makes `pacman -Q pinta` fail, which is exactly what the check
+# asks.
+#
+# Only counted as a sabotage if the removal actually happened. On an image built
+# before Pinta was repaired the package is not there to remove, and a sabotage
+# that did not apply must never be reported as one that did: that is how a blind
+# check gets a clean bill of health.
+if pacman -Q pinta >/dev/null 2>&1; then
+  pacman -Rdd --noconfirm pinta >/dev/null 2>&1
+  pacman -Q pinta >/dev/null 2>&1 \
+    || { echo "   + pinta removed"
+         EXPECTED+=("pinta is not installed, and the distributed README says it is"); }
+else
+  echo "   . pinta was not installed to begin with; nothing to remove"
+fi
+
 # --- the record that says whether anything failed to build
 REG=/usr/local/share/omarchy-arm/build-failures.txt
 [ -f "$REG" ] && mv "$REG" "$REG.saved" 2>/dev/null \
