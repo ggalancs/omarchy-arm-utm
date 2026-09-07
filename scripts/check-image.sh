@@ -162,6 +162,12 @@ EXP_PID=$!
   kill -TERM "$EXP_PID" 2>/dev/null; sleep 2; kill -KILL "$EXP_PID" 2>/dev/null
 ) &
 WD_PID=$!
+# disown, or bash announces the watchdog's death at the end of every run by
+# printing its entire source line. Five batches produced five copies of
+# `... echo "HARNESS_HARD_LIMIT: ..."` in the log, which reads exactly like the
+# hard limit firing five times when it had never fired at all. A log that
+# describes an incident that did not happen is worse than a quiet one.
+disown "$WD_PID" 2>/dev/null || true
 wait "$EXP_PID"
 kill "$WD_PID" 2>/dev/null
 
