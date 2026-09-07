@@ -569,3 +569,8 @@ pat_for
 sed_all
 expr
 _sab
+block_of
+blk
+calls
+REAL_AUR
+aur
