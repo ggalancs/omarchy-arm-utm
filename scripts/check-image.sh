@@ -92,8 +92,24 @@ sleep 2
 # with it. One run sat like that for four hours and fifty minutes with the
 # batch already finished and its verdict written. The other two harnesses have
 # always sent this; this one never did.
+# Ask nicely, then do not depend on the answer. THESE BATCHES SABOTAGE THE
+# IMAGE ON PURPOSE -- they kill the compositor, remove binaries, break units --
+# so the guest may be in no state to power itself off, and a harness that waits
+# for it to cooperate hangs exactly when the test worked. Sending poweroff and
+# trusting it was the first attempt at this and it left expect and QEMU alive
+# for twelve hours after a batch had already printed NEGATIVE_TEST_OK.
+#
+# expect's own exit closes the spawn and WAITS for it, so the process has to be
+# gone before then, killed by pid, or the wait never returns.
 send "poweroff -f\r"
-expect { eof { } timeout { puts "TIMEOUT_POWEROFF" } }
+set timeout 60
+expect { eof { } timeout { puts "GUEST_DID_NOT_POWER_OFF" } }
+catch { exec kill -TERM [exp_pid] }
+sleep 3
+catch { exec kill -KILL [exp_pid] }
+catch { close }
+catch { wait -nowait }
+exit 0
 EXPEOF
 
 TR="${TRANSCRIPT:-/tmp/check-image-session.log}"; : > "$TR"
