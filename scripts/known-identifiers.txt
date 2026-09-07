@@ -536,3 +536,7 @@ UTM_CPUS
 mon_send
 spacedir
 tracked_files
+EXEMPT
+found
+region
+sig

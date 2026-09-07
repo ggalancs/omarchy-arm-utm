@@ -3629,19 +3629,41 @@ do_pinta() {
   title "Pinta"
   info "Microsoft does publish .NET for linux-arm64; Arch only packages it for x86_64."
   info "The runtime is installed from the official tarball, then Pinta's package, which is arch=any."
-  # The gate FIRST. It refuses whenever ALLOW_UNVERIFIED is unset, which is
-  # every default run -- and it used to sit below the .NET build, so the image
-  # paid for the whole runtime and then was told no. The build log proves it:
-  # sanitize later removes dotnet-sdk-bin and the targeting packs, which can
-  # only have come from a dotnet build that happened, for a Pinta that never
-  # installed. A refusal that is known in advance must cost nothing.
-  unverified_gate pinta || return 1
-  aur_build dotnet-runtime-bin dotnet-runtime-bin || { fail "without the .NET runtime there is no way to continue"; return 1; }
+  # The package and its signature FIRST, before the .NET runtime. Whichever way
+  # the verdict goes, this reaches it in seconds; the other order reaches it
+  # after forty minutes of compiling a runtime for something that may be
+  # refused -- which is what used to happen, and the build log proves it:
+  # sanitize is left removing dotnet-sdk-bin and the targeting packs for a
+  # Pinta that never installed.
   local url=https://geo.mirror.pkgbuild.com/extra/os/x86_64/
   local file; file=$(curl -fsSL --max-time 30 "$url" | grep -o 'pinta-[0-9][^"]*-any\.pkg\.tar\.zst' | sort -V | tail -1)
   [ -n "$file" ] || { fail "could not find the Pinta package"; return 1; }
   info "$file  ${c_dim}(the path says x86_64 but the package is arch=any)${c_off}"
   mkdir -p "$WORK"; curl -fL --progress-bar "$url$file" -o "$WORK/$file" || return 1
+  # This went straight to `unverified_gate pinta`, whose refusal reads "upstream
+  # publishes no signature or checksum for this artifact". That was asserted and
+  # never checked, and it is false: the mirror serves a detached .sig beside
+  # every package, 566 bytes for this one. So a refusal written for artifacts
+  # that CANNOT be verified was turned on one that can, Pinta failed to install
+  # on every default run, and the README inside the distributed zip went on
+  # listing it as "Already installed".
+  #
+  # pacman-key --verify checks the detached signature against the pacman
+  # keyring, and Arch Linux ARM ships archlinux-keyring for aarch64, which is
+  # what holds the Arch packager keys. The signature is passed alone, with the
+  # package beside it: that is the form every pacman version accepts.
+  #
+  # Anything that goes wrong here -- no keyring, a key that is not in it, a
+  # tampered download -- falls through to precisely the refusal that was here
+  # before, so this cannot end up more permissive than what it replaces.
+  if curl -fsSL --max-time 30 "$url$file.sig" -o "$WORK/$file.sig" 2>/dev/null \
+     && sudo pacman-key --verify "$WORK/$file.sig" >/dev/null 2>&1; then
+    ok "Arch packager signature verified"
+  else
+    fail "$file: the signature does not verify against the pacman keyring"
+    unverified_gate pinta || return 1
+  fi
+  aur_build dotnet-runtime-bin dotnet-runtime-bin || { fail "without the .NET runtime there is no way to continue"; return 1; }
   sudo pacman -U --noconfirm "$WORK/$file" >/dev/null 2>&1 && ok "$(pacman -Q pinta)" || { fail "pacman -U failed"; return 1; }
   warn "outside the update manager: every new version has to be repeated by hand"
 }
