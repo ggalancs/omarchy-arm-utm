@@ -6365,10 +6365,10 @@ ph_package() {
   INTERMEDIATE="$DOCS/$VM_NAME.utm"
   if [ -n "${KEEP_INTERMEDIATE:-}" ]; then
     info "the intermediate VM '$VM_NAME' is kept in UTM (KEEP_INTERMEDIATE is set)"
-  elif [ "$DEST_DIR" != "$DOCS" ]; then
+  elif [ "${DEST_DIR:-$DOCS}" != "$DOCS" ]; then
     : # not ours to tidy: the bundle was built somewhere the caller chose
   elif [ -f "$INTERMEDIATE/config.plist" ] && [ -d "$INTERMEDIATE/Data" ]; then
-    "$UTMCTL" delete "$VM_NAME" >/dev/null 2>&1 || true
+    "${UTMCTL:-/Applications/UTM.app/Contents/MacOS/utmctl}" delete "$VM_NAME" >/dev/null 2>&1 || true
     sleep 1
     [ -e "$INTERMEDIATE" ] && rm -rf "$INTERMEDIATE"
     if [ -e "$INTERMEDIATE" ]; then
