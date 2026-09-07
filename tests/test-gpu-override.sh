@@ -118,6 +118,38 @@ echo 'LIBGL_ALWAYS_SOFTWARE=0' > "$U/99-gl.conf"
 grep -q "99-gl.conf" < <(warn_override) && echo "  ok  the note names the file that wins" \
                                         || { echo "  !! warn_override does not name the winner"; fails=$((fails+1)); }
 
+# ---- uwsm, which is not environment.d and beats all of it ------------------
+#
+# The session is started by `uwsm start`, and uwsm sources uwsm/env.d/* into the
+# systemd user manager ON TOP of whatever environment.d produced. The build
+# writes ~/.config/uwsm/env.d/20-vm-graphics containing
+# `export LIBGL_ALWAYS_SOFTWARE=1`, so that file decides the whole session --
+# and the tool did not know the path existed. `--on` commented out the systemd
+# file, found nothing else setting the variable, announced hardware GL, and the
+# next login came back software-rendered: issue #7's symptom, by the one route
+# nothing looked at.
+UWSM_ENVD="$TMP/user/uwsm/env.d"; mkdir -p "$UWSM_ENVD"
+rm -f "$U"/*.conf "$E"/*.conf "$L"/*.conf
+
+printf 'export LIBGL_ALWAYS_SOFTWARE=1\n' > "$UWSM_ENVD/20-vm-graphics"
+t "a uwsm fragment is read at all" software "$UWSM_ENVD/20-vm-graphics"
+
+# It is read LAST: a systemd file turning it off does not save you.
+printf 'LIBGL_ALWAYS_SOFTWARE=0\n' > "$E/90-vm-graphics.conf"
+t "uwsm wins over a systemd file that unsets it" software "$UWSM_ENVD/20-vm-graphics"
+
+# And commenting it out there is what actually turns it off.
+printf '#export LIBGL_ALWAYS_SOFTWARE=1\n' > "$UWSM_ENVD/20-vm-graphics"
+t "a commented uwsm line stops deciding" hardware "$E/90-vm-graphics.conf"
+
+# `export` is shell syntax. systemd's environment.d rejects it outright, so the
+# same line in an environment.d file must still count for nothing -- the two
+# kinds of file do not accept the same syntax, and one pattern for both got one
+# of them wrong until this assertion said so.
+rm -f "$UWSM_ENVD"/*
+printf 'export LIBGL_ALWAYS_SOFTWARE=1\n' > "$E/90-vm-graphics.conf"
+t "export in an environment.d file still sets nothing" hardware ""
+
 echo
 [ "$fails" -eq 0 ] && echo "  gpu override resolution: green" || echo "  $fails failure(s)"
 exit "$fails"

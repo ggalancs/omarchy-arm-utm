@@ -562,3 +562,9 @@ KEYS
 N_KEYS
 EXPECTED_KEYS
 hit
+SLIM
+UWSM_ENVD
+uwsm_files
+pat_for
+sed_all
+expr

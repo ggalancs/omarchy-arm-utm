@@ -2345,6 +2345,15 @@ if [ -f "$HOME/.omarchy-arm-prov/omarchy-arm-share" ]; then
     else
       warn "OBS or Pinta did not install; they can be added later with:"
       warn "  omarchy-arm-extras pinta obs"
+      # And write it down. The failure record is assembled two hundred lines
+      # above this, before either of these is attempted, so a failure here
+      # reached the log and nothing else -- which is how an image shipped with
+      # an empty record while the README inside its own zip listed both as
+      # installed. Appended per package, and only for the one actually missing.
+      for _p in pinta obs-studio; do
+        pacman -Q "$_p" >/dev/null 2>&1 \
+          || echo "$_p" | sudo tee -a /usr/local/share/omarchy-arm/build-failures.txt >/dev/null
+      done
     fi
   else
     echo "  OBS and Pinta skipped (BUILD_FREE_APPS=no)"
@@ -2646,9 +2655,27 @@ log "7c/10 slimming: what was only needed to build"
 # Building the tools leaves whole toolchains behind (the .NET SDK alone is
 # 425 MiB) plus Rust and Go in the home directory. None of it is needed to use
 # the image, and it accounts for ~2 GB of the zip.
-for p in dotnet-sdk-bin dotnet-targeting-pack-bin aspnet-targeting-pack-bin; do
-  pacman -Q "$p" >/dev/null 2>&1 && { pacman -Rns --noconfirm "$p" >/dev/null 2>&1 && echo "  removed $p"; }
+# ONE transaction, and let pacman work out the order. Removed one at a time in
+# the order written here, `dotnet-targeting-pack-bin` came before
+# `aspnet-targeting-pack-bin`, which requires it -- so pacman refused, the `&&`
+# swallowed the refusal, no line was printed, and the package shipped. It is in
+# the image that was packaged: `pacman -Q` on it returns
+# dotnet-targeting-pack-bin 10.0.11.sdk400-1. About 51 MiB of .NET reference
+# assemblies that exist only to compile against.
+SLIM=()
+for p in dotnet-sdk-bin aspnet-targeting-pack-bin dotnet-targeting-pack-bin; do
+  pacman -Q "$p" >/dev/null 2>&1 && SLIM+=("$p")
 done
+if [ "${#SLIM[@]}" -gt 0 ]; then
+  if pacman -Rns --noconfirm "${SLIM[@]}" >/dev/null 2>&1; then
+    echo "  removed ${SLIM[*]}"
+  else
+    # Not silent this time. A refusal here is why the last image shipped 51 MiB
+    # it did not need, and the invariant further down now fails on it.
+    echo "  !! could not remove ${SLIM[*]}"
+    pacman -Rns --noconfirm "${SLIM[@]}" 2>&1 | tail -3 | sed 's/^/     /'
+  fi
+fi
 # Omarchy 4 retires these four: quickshell is the bar, the menu, the OSD and
 # the notification daemon. mako additionally steals
 # org.freedesktop.Notifications through D-Bus activation and leaves
@@ -3110,6 +3137,15 @@ fi
 # ---- the orphan sweep so it can actually catch that sweep removing something.
 for _p in hyprland hyprtoolkit hyprland-guiutils hyprpaper quickshell sddm; do
   pacman -Q "$_p" >/dev/null 2>&1 && ok_ "$_p installed" || bad "$_p is not installed"
+done
+
+# ---- nothing that exists only to build with
+# The slimming step above used to fail silently, so this asks the question again
+# at the end, where a red line stops the image instead of scrolling past.
+for _p in dotnet-sdk-bin aspnet-targeting-pack-bin dotnet-targeting-pack-bin; do
+  pacman -Q "$_p" >/dev/null 2>&1 \
+    && bad "$_p is still installed: it exists only to compile against" \
+    || ok_ "$_p is gone"
 done
 
 # ---- packages compiled during the build rather than installed
@@ -3622,7 +3658,7 @@ o.bind("SUPER + SHIFT + M", "Spotify", o.launch("google-chrome-stable --app=http
 LUA
     ok "SUPER+SHIFT+M rebound (log out and back in to apply)"
   fi
-  info "${c_dim}Terminal alternative, already installed: spotify-player${c_off}"
+  info "${c_dim}Terminal alternative, from the AUR: yay -S spotify-player${c_off}"
 }
 
 do_pinta() {
@@ -3678,6 +3714,15 @@ do_pinta() {
     ok "Arch packager signature verified"
   else
     fail "$file: the signature does not verify against the pacman keyring"
+    # The failing signature must NOT stay beside the package. `pacman -U` picks
+    # up a detached <package>.sig sitting next to what it is installing, and
+    # LocalFileSigLevel is Optional, which forgives a MISSING signature and not
+    # a present untrusted one: it aborts with "invalid or corrupted package".
+    # So leaving the file here disables the documented escape hatch -- someone
+    # who runs ALLOW_UNVERIFIED=yes waits out the whole .NET runtime build and
+    # is then told "pacman -U failed", blaming the installer for a file this
+    # function left behind.
+    rm -f "$WORK/$file.sig"
     unverified_gate pinta || return 1
   fi
   aur_build dotnet-runtime-bin dotnet-runtime-bin || { fail "without the .NET runtime there is no way to continue"; return 1; }
@@ -4489,6 +4534,26 @@ CONF=/etc/environment.d/90-vm-graphics.conf
 # generator(7)); across different basenames the LAST one lexically wins.
 ENVDIRS=("${XDG_CONFIG_HOME:-$HOME/.config}/environment.d" /etc/environment.d /run/environment.d /usr/lib/environment.d)
 
+# And then uwsm, which is not systemd's environment.d at all and beats all of it.
+#
+# The session is started by `uwsm start`, and uwsm sources uwsm/env, uwsm/env.d/*
+# and their per-desktop variants INTO the systemd user manager, on top of
+# whatever environment.d already produced. The build writes
+# ~/.config/uwsm/env.d/20-vm-graphics with `export LIBGL_ALWAYS_SOFTWARE=1` in
+# it, so that file has the last word for the whole graphical session -- and this
+# tool could not see it. `--on` commented out the systemd file, found nothing
+# else setting the variable, announced hardware GL, and changed nothing: uwsm
+# put it straight back at the next login. That is issue #7's symptom exactly,
+# reached by the one path the tool was blind to.
+#
+# These are shell fragments, not *.conf, and they are read last, so they are
+# appended after everything above.
+UWSM_ENVD="${XDG_CONFIG_HOME:-$HOME/.config}/uwsm/env.d"
+uwsm_files() {
+  [ -d "$UWSM_ENVD" ] || return 0
+  find "$UWSM_ENVD" -maxdepth 1 -type f 2>/dev/null | sort
+}
+
 # Every *.conf that will actually be read, in the order systemd reads them.
 # Deliberately without an associative array: it must stay runnable on bash 3.2 so
 # it can be tested on the machine that builds the image, not only inside it.
@@ -4504,18 +4569,35 @@ env_files() {
       [ -f "$d/$b" ] && { printf '%s\n' "$d/$b"; break; }
     done
   done
+  # Last, because they are applied last.
+  uwsm_files
 }
 
 # The file that has the last word on LIBGL_ALWAYS_SOFTWARE, and what it says.
 # Empty output means nothing sets it anywhere.
+# The two file kinds do not accept the same syntax, and reading them with one
+# pattern gets one of them wrong.
+#
+# systemd's environment.d REJECTS a line beginning with `export`: it is not a
+# shell, and such a line sets nothing. This project's own test pins that -- and
+# broke the moment a single permissive pattern was used for everything, which is
+# how this comment came to exist. uwsm's fragments are sourced BY a shell, where
+# `export` is the normal form and is exactly what the build writes.
+pat_for() {
+  case "$1" in
+    "$UWSM_ENVD"/*) printf '%s' '^[[:space:]]*(export[[:space:]]+)?LIBGL_ALWAYS_SOFTWARE[[:space:]]*=' ;;
+    *)              printf '%s' '^[[:space:]]*LIBGL_ALWAYS_SOFTWARE=' ;;
+  esac
+}
+
 decider() {
   local f last=""
   while read -r f; do
-    grep -qE '^[[:space:]]*LIBGL_ALWAYS_SOFTWARE=' "$f" 2>/dev/null && last=$f
+    grep -qE "$(pat_for "$f")" "$f" 2>/dev/null && last=$f
   done < <(env_files)
   [ -n "$last" ] || return 1
   printf '%s\t%s\n' "$last" \
-    "$(grep -E '^[[:space:]]*LIBGL_ALWAYS_SOFTWARE=' "$last" | tail -1 | cut -d= -f2- | tr -d '\"'"'"' ')"
+    "$(grep -E "$(pat_for "$last")" "$last" | tail -1 | cut -d= -f2- | tr -d '\"'"'"' ')"
 }
 
 state() {
@@ -4539,6 +4621,24 @@ warn_override() {
   echo "  NOTE: $CONF is not what decides this."
   echo "        $f is read later and wins. Edit that one,"
   echo "        or remove its LIBGL_ALWAYS_SOFTWARE line."
+}
+
+# Applied to the systemd file AND to the uwsm fragments. Whichever of the two
+# this tool leaves alone is the one that decides, and until today it always left
+# uwsm alone: --on edited $CONF, saw nothing else setting the variable because it
+# was not looking there, and reported success over a session that came back
+# software-rendered.
+sed_all() {
+  local expr=$1; shift
+  local f
+  for f in "$@"; do
+    [ -f "$f" ] || continue
+    if [ -w "$f" ]; then
+      sed -i -E "$expr" "$f" || return 1
+    else
+      sudo sed -i -E "$expr" "$f" || return 1
+    fi
+  done
 }
 
 case "${1:-}" in
@@ -4568,7 +4668,8 @@ case "${1:-}" in
     # Against `LIBGL_ALWAYS_SOFTWARE="1"`, which this project's own test asserts
     # must count as software rendering, the sed matched nothing, exited 0, and
     # the line below announced hardware GL was enabled.
-    sudo sed -i -E 's/^([[:space:]]*)(LIBGL_ALWAYS_SOFTWARE[[:space:]]*=[[:space:]]*"?(1|true|yes)"?)/\1#\2/' "$CONF" || exit 1
+    sed_all 's/^([[:space:]]*)((export[[:space:]]+)?LIBGL_ALWAYS_SOFTWARE[[:space:]]*=[[:space:]]*"?(1|true|yes)"?)/\1#\2/' \
+            "$CONF" $(uwsm_files) || exit 1
     # Checked, not assumed, the same way --off is.
     if [ "$(state)" = software ]; then
       echo "!! nothing changed: $CONF still selects software rendering." >&2
@@ -4586,7 +4687,8 @@ case "${1:-}" in
     ;;
 
   --off)
-    sudo sed -i 's/^#*LIBGL_ALWAYS_SOFTWARE=1/LIBGL_ALWAYS_SOFTWARE=1/' "$CONF" || exit 1
+    sed_all 's/^([[:space:]]*)#+[[:space:]]*((export[[:space:]]+)?LIBGL_ALWAYS_SOFTWARE[[:space:]]*=)/\1\2/' \
+            "$CONF" $(uwsm_files) || exit 1
     grep -q '^LIBGL_ALWAYS_SOFTWARE=1' "$CONF" \
       || printf 'LIBGL_ALWAYS_SOFTWARE=1\n' | sudo tee -a "$CONF" >/dev/null
     echo "Software rendering restored. Log out and back in for it to apply."
@@ -5228,11 +5330,23 @@ send "mount -o subvol=@ /dev/vda2 /mnt 2>/dev/null || mount /dev/vda2 /mnt; moun
 # (The run would still have died two phases later at verify, on the same
 # condition; what was lost is the cheap early signal, and the utm phase runs
 # for nothing in between.)
-expect {
-    -ex "TOK_VERIFY_0"          {}
-    -re {TOK_VERIFY_[1-9][0-9]*} { puts "\n!! the post-install check reported a problem (Hyprland missing?)"; set VERIFY_BAD 1 }
-    timeout                      { puts "\n!! the post-install check timed out"; set VERIFY_BAD 1 }
-    eof                          { puts "\n!! EOF during the post-install check"; set VERIFY_BAD 1 }
+# Wrapped, because there are two ways this can lose the verdict and only one of
+# them is an `eof` arm. If the guest dies DURING this expect, eof fires and the
+# arm runs. If it died earlier, the spawn is already closed and `expect` itself
+# raises "spawn id expN not open" -- no arm runs at all, and the script dies
+# here. Both were measured with expect 5.45.4 rather than reasoned about; the
+# second one is what a minimal reproduction actually produced.
+if {[catch {
+    expect {
+        -ex "TOK_VERIFY_0"          {}
+        -re {TOK_VERIFY_[1-9][0-9]*} { puts "\n!! the post-install check reported a problem (Hyprland missing?)"; set VERIFY_BAD 1 }
+        timeout                      { puts "\n!! the post-install check timed out"; set VERIFY_BAD 1 }
+        eof                          { puts "\n!! EOF during the post-install check"
+                                       set VERIFY_BAD 1; set SPAWN_GONE 1 }
+    }
+} _err]} {
+    puts "\n!! the post-install check could not run: $_err"
+    set VERIFY_BAD 1; set SPAWN_GONE 1
 }
 
 # Ask it to power off, wait, and then do not depend on the answer.
@@ -5244,6 +5358,22 @@ expect {
 # finished and the verdict already decided. check-image.sh hung exactly like
 # this for twelve hours, and fixing it there left the same shape standing here
 # in the harness that matters most.
+# Nothing below may be allowed to prevent the verdict from being printed.
+#
+# The eof arm above sets VERIFY_BAD and fell straight into this send. After EOF
+# the spawn is gone, `send` on a closed spawn raises an uncaught Tcl error, and
+# the script died right here -- before line 212, where TOK_VERIFY_BAD is
+# printed. The caller reads tokens and not exit codes, so it saw TOK_BUILD_0,
+# found no TOK_VERIFY_BAD, and reported "disk built" for a build whose guest had
+# vanished before anything checked it. Reproduced with expect 5.45.4.
+#
+# So: skip the shutdown when the guest is already gone, and wrap what remains in
+# catch, because any other way the spawn can close early would cost the verdict
+# in exactly the same way.
+if {[info exists SPAWN_GONE]} {
+    puts "\n!! the guest is already gone; there is nothing to power off"
+} else {
+  catch {
 send "sync; umount -R /mnt 2>/dev/null; poweroff -f\r"
 set timeout 600
 expect {
@@ -5263,8 +5393,11 @@ expect {
 }
 catch { close }
 catch { wait -nowait }
+  }
+}
 # AFTER the flush and the poweroff, so a failed probe still leaves a consistent
-# disk -- that is why this is a token and not an early exit.
+# disk -- that is why this is a token and not an early exit. Reached on every
+# path now, including the one where the guest died before it could be asked.
 if {[info exists VERIFY_BAD]} { puts "TOK_VERIFY_BAD" }
 exit 0
 __PAYLOAD_SCRIPTS_BUILD_EXP__
@@ -6575,7 +6708,8 @@ It is in the application menu too, as **"Install missing apps (ARM)"**.
 
 **About Spotify**: there is no native ARM client, but the web app works — it
 needs Widevine, which ships inside Google Chrome arm64. Install `chrome`, then
-`spotify-web`. In the terminal you already have `spotify-player`.
+`spotify-web`. There is no terminal client in the image: `spotify-player` is in
+the AUR and can be built with `yay -S spotify-player`.
 
 **`omarchy-update` works**, but the day Omarchy introduces a new package of its
 own, it will skip it with a warning rather than install it.
@@ -6594,9 +6728,11 @@ belong to them, not here.
 ### Verification
 
 1Password is installed only if its GPG signature verifies: it is a password
-manager, and an unverified one is worse than none. Obsidian and Pinta are
-fetched over TLS from their vendor, who publishes no signature or checksum,
-so the installer stops and says so. TLS proves who served the bytes, not who
+manager, and an unverified one is worse than none. Pinta comes from an Arch
+mirror, which publishes a detached signature beside every package, and it is
+checked with `pacman-key --verify` against the Arch packager keys. Obsidian is
+fetched over TLS from its vendor, who publishes no signature or checksum, so
+the installer stops and says so. TLS proves who served the bytes, not who
 built them. To accept that:
 
 ```bash

@@ -702,6 +702,15 @@ if [ -f "$HOME/.omarchy-arm-prov/omarchy-arm-share" ]; then
     else
       warn "OBS or Pinta did not install; they can be added later with:"
       warn "  omarchy-arm-extras pinta obs"
+      # And write it down. The failure record is assembled two hundred lines
+      # above this, before either of these is attempted, so a failure here
+      # reached the log and nothing else -- which is how an image shipped with
+      # an empty record while the README inside its own zip listed both as
+      # installed. Appended per package, and only for the one actually missing.
+      for _p in pinta obs-studio; do
+        pacman -Q "$_p" >/dev/null 2>&1 \
+          || echo "$_p" | sudo tee -a /usr/local/share/omarchy-arm/build-failures.txt >/dev/null
+      done
     fi
   else
     echo "  OBS and Pinta skipped (BUILD_FREE_APPS=no)"

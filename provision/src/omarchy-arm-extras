@@ -297,7 +297,7 @@ o.bind("SUPER + SHIFT + M", "Spotify", o.launch("google-chrome-stable --app=http
 LUA
     ok "SUPER+SHIFT+M rebound (log out and back in to apply)"
   fi
-  info "${c_dim}Terminal alternative, already installed: spotify-player${c_off}"
+  info "${c_dim}Terminal alternative, from the AUR: yay -S spotify-player${c_off}"
 }
 
 do_pinta() {
@@ -353,6 +353,15 @@ do_pinta() {
     ok "Arch packager signature verified"
   else
     fail "$file: the signature does not verify against the pacman keyring"
+    # The failing signature must NOT stay beside the package. `pacman -U` picks
+    # up a detached <package>.sig sitting next to what it is installing, and
+    # LocalFileSigLevel is Optional, which forgives a MISSING signature and not
+    # a present untrusted one: it aborts with "invalid or corrupted package".
+    # So leaving the file here disables the documented escape hatch -- someone
+    # who runs ALLOW_UNVERIFIED=yes waits out the whole .NET runtime build and
+    # is then told "pacman -U failed", blaming the installer for a file this
+    # function left behind.
+    rm -f "$WORK/$file.sig"
     unverified_gate pinta || return 1
   fi
   aur_build dotnet-runtime-bin dotnet-runtime-bin || { fail "without the .NET runtime there is no way to continue"; return 1; }
