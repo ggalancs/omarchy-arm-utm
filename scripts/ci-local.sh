@@ -75,6 +75,25 @@ step() {
 TRACKED=$(git ls-files --cached --others --exclude-standard 2>/dev/null) \
   || { echo "ci-local: this is not a git checkout" >&2; exit 2; }
 [ -n "$TRACKED" ] || { echo "ci-local: git ls-files listed no files" >&2; exit 2; }
+
+# Scripts .gitignore keeps out of the repository, which still run and still
+# break. That directory holds two things: comment drafts, which must NOT be
+# committed, and the scripts that move a 3.6 GB artifact to a public archive,
+# which must not go unchecked. Until today no step here had ever read them --
+# `git ls-files` cannot see an ignored file, so they were invisible to every
+# syntax check, every linter and every language audit, and the one place that
+# happened to look at them did so by accident, on a copy with no .git.
+#
+# Named explicitly rather than by globbing the ignored set: the point is to
+# check scripts, not to quietly start auditing whatever anyone leaves lying
+# around.
+if [ -d publicar ]; then
+  for _f in publicar/*.sh; do
+    [ -f "$_f" ] || continue
+    TRACKED="$TRACKED
+$_f"
+  done
+fi
 shell_files() {
   local f
   printf '%s\n' "$TRACKED" | while IFS= read -r f; do
