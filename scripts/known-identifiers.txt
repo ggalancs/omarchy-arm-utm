@@ -542,3 +542,7 @@ region
 sig
 TRACKED
 say
+HARD_LIMIT
+EXP_PID
+waited
+WD_PID

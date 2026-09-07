@@ -45,4 +45,13 @@ else
   say "RESULT: SIGNATURE_DOES_NOT_VERIFY"
   sed 's/^/PROBE   /' /tmp/verify.txt | head -10
 fi
+# While a VM is booted for this anyway, take the inventory with it. Every claim
+# the distributed README makes about what is inside the image -- the version
+# numbers it prints for OBS Studio and for Pinta, and the eighteen packages it
+# says were compiled for ARM -- can only be checked against a list like this
+# one, and having no such list is why a line calling Pinta already installed
+# survived in a document that ships inside the zip.
+echo "== 2. inventory: every package, for checking the documentation against =="
+pacman -Q 2>/dev/null | sed 's/^/PKG /'
+echo "PKG_COUNT $(pacman -Q 2>/dev/null | wc -l)"
 echo "END_CHECK"
