@@ -496,7 +496,10 @@ for b in /usr/local/bin/ttfx /usr/local/bin/omarchy-arm-vdagent; do
     *ELF*) strip --strip-unneeded "$b" 2>/dev/null || true ;;
   esac
 done
-if strings /usr/local/bin/ttfx 2>/dev/null | grep -q "$OLD"; then
+# Same trap as the sweep below: `strings | grep -q` under pipefail returns 141
+# on a match, so this could only ever take the else branch and print a true
+# sentence for a false reason.
+if [ -f /usr/local/bin/ttfx ] && LC_ALL=C grep -qa "$OLD" /usr/local/bin/ttfx; then
   echo "  ttfx: STILL mentions '$OLD' after the strip"
 else
   echo "  ttfx: no trace of the build account"
@@ -844,14 +847,29 @@ if [ "$OLD" != "$NEW" ]; then
     #
     # Only files that are actually ELF are read: /usr/bin holds ~450 shell
     # wrappers and symlinks, and `strings` on each of them is minutes wasted.
+    # `grep -qa` on the file, NOT `strings | grep -q`.
+    #
+    # This file runs under `set -uo pipefail`, and `grep -q` exits at the first
+    # match. That kills `strings` with SIGPIPE, the pipeline returns 141, and
+    # `&& DIRTY=...` never fires. The check could only ever print its green
+    # line: structurally incapable of reporting a hit, in the sweep that exists
+    # to keep the builder's home directory out of a public image. Measured
+    # rather than reasoned: `yes /home/builder/x | grep -q /home/builder && D=1`
+    # gives rc=141 and an empty D with pipefail, rc=0 and D=1 without it.
+    #
+    # It found nothing for as long as it existed, and the image it last passed
+    # ships four /usr/bin executables with /home/builder in their .rodata.
+    #
+    # /usr/lib as well: nothing in this project has ever looked there, and OBS
+    # puts its plugins in it.
     DIRTY=""
-    for b in /usr/local/bin/* /usr/bin/*; do
+    for b in /usr/local/bin/* /usr/bin/* /usr/lib/*.so*; do
       [ -f "$b" ] || continue
       [ -L "$b" ] && continue
-      head -c 4 "$b" 2>/dev/null | grep -q 'ELF' || continue
-      strings "$b" 2>/dev/null | grep -q "/home/$OLD" && DIRTY="$DIRTY $b"
+      head -c 4 "$b" 2>/dev/null | grep -qa 'ELF' || continue
+      LC_ALL=C grep -qa "/home/$OLD" "$b" && DIRTY="$DIRTY $b"
     done
-    [ -z "$DIRTY" ] && ok_ "no compiled binary in /usr/bin or /usr/local/bin mentions the build account" \
+    [ -z "$DIRTY" ] && ok_ "no compiled binary in /usr/bin, /usr/local/bin or /usr/lib mentions the build account" \
                      || bad "binaries carrying the build path inside:$DIRTY (see RUSTFLAGS/CARGO_HOME in stage3)"
   fi
 fi

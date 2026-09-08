@@ -390,7 +390,19 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
   # 3600 s per attempt, and there are two attempts. stage2 uses 5400 for
   # hyprland, which is a far bigger compile than anything in this list.
   local _t=0 _bg
-  ( cd "$dir" && timeout 3600 makepkg -s --noconfirm --needed --noprogressbar --nocheck ) >"$dir/build.log" 2>&1 &
+  # The same remapping ttfx gets, for every tool that happens to be Rust.
+  #
+  # Rust writes the source path into panic messages in .rodata, where strip does
+  # not reach, and makepkg builds under $HOME -- so the image handed to
+  # strangers named whoever built it. ttfx was given --remap-path-prefix when
+  # that was discovered and the other tools were not, and the sweep that would
+  # have caught them could not report a hit (see sanitize.sh). Four /usr/bin
+  # executables shipped with /home/builder inside.
+  #
+  # Harmless for a PKGBUILD that is not Rust: RUSTFLAGS is simply unused.
+  ( cd "$dir" \
+    && RUSTFLAGS="--remap-path-prefix=$HOME=. ${RUSTFLAGS:-}" \
+       timeout 3600 makepkg -s --noconfirm --needed --noprogressbar --nocheck ) >"$dir/build.log" 2>&1 &
   _bg=$!
   while kill -0 "$_bg" 2>/dev/null; do
     sleep 60; _t=$((_t+60))

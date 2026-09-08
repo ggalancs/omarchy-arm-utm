@@ -193,8 +193,16 @@ fi
 # Orphans: if they ship, the user's very first update prompts about them.
 H=$(pacman -Qtdq 2>/dev/null | wc -l)
 [ "$H" -eq 0 ] && ok_ "no orphan packages" || { bad "$H orphans"; pacman -Qtdq 2>/dev/null | sed "s/^/         /"; }
-S=""; for b in /usr/local/bin/*; do [ -f "$b" ] || continue
-  strings "$b" 2>/dev/null | grep -q "/home/$OLD" && S="$S $(basename "$b")"; done
+# /usr/bin and /usr/lib too, and with grep on the file rather than
+# `strings | grep -q`, which returns 141 under pipefail the moment it matches
+# and can therefore only ever report success. Both faults were in sanitize's
+# twin, and this copy inherited the narrow directory list.
+S=""; for b in /usr/local/bin/* /usr/bin/* /usr/lib/*.so*; do
+  [ -f "$b" ] || continue
+  [ -L "$b" ] && continue
+  head -c 4 "$b" 2>/dev/null | grep -qa 'ELF' || continue
+  LC_ALL=C grep -qa "/home/$OLD" "$b" && S="$S $(basename "$b")"
+done
 [ -z "$S" ] && ok_ "no binary mentions the build account" || bad "binaries carrying the build path:$S"
 P=$(find "/home/$NEW" /etc /usr/local /opt -xdev -mindepth 1 -regextype posix-extended \
      -regex ".*/([^/]*[^[:alnum:]])?$OLD([^[:alnum:]][^/]*)?" 2>/dev/null | wc -l)
