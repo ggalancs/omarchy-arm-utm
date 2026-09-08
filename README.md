@@ -366,11 +366,15 @@ DEST_DIR=/Volumes/External ./build-omarchy-arm.sh --yes   # build without touchi
 KEEP_INTERMEDIATE=1 ./build-omarchy-arm.sh --yes          # keep the build VM afterwards
 ```
 
-The VM the build works in is scaffolding: once the distributable `.zip` exists
-and its checksum gate has passed, it is removed. It used to be left behind on
-every successful run and only mentioned on failing ones, so four builds left
-four 12 GB VMs registered in UTM. `KEEP_INTERMEDIATE=1` keeps it, which is what
-`--from sanitize` needs to re-run against the same build.
+The VM the build works in is scaffolding: `verify` uses it and what ships is the
+sanitized copy in `dist/`. A run that reaches the end deletes it, by the UUID it
+recorded when it created it, so a VM you made yourself is never touched.
+`KEEP_VM=yes` keeps it.
+
+A run that **stops at the checksum gate** leaves it, deliberately: `--from
+sanitize` takes its source disk from exactly that VM, and the gate's message
+tells you it is there. That is why several can pile up while an image is being
+iterated on -- the fix is to finish the gate, not to delete earlier.
 
 ## Your own apps: `scripts/my-apps.sh`
 

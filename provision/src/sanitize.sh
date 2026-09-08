@@ -410,6 +410,25 @@ for _round in 1 2 3 4; do
 done
 echo "  orphans left:       $(pacman -Qtdq 2>/dev/null | wc -l)"
 
+# The logs, again, and the git reflogs.
+#
+# Step 7 wipes /var/log at the top, and everything after it that touches pacman
+# writes the log straight back: the orphan sweep, the .NET slimming, every
+# `pacman -Rns` above. The shipped image therefore carried a /var/log/pacman.log
+# describing its own sanitisation, in a step whose own heading says the logs are
+# gone. Wiped here instead, after the last transaction.
+#
+# And /usr/share/omarchy/.git/logs, which nothing in this project has ever
+# touched. Reflogs record who did each operation, so the clone made during the
+# build leaves an identity in a file that ships to strangers. They are local
+# bookkeeping: `omarchy-update` pulls perfectly well without them.
+log "9b/10 logs written after the wipe, and the git reflogs"
+rm -rf /var/log/journal/* /var/log/omarchy* /var/log/pacman.log
+find /var/log -type f -name "*.log" -delete 2>/dev/null || true
+rm -rf /usr/share/omarchy/.git/logs
+echo "  /var/log cleared again ($(find /var/log -type f | wc -l | tr -d ' ') files left)"
+echo "  omarchy git reflogs: $([ -d /usr/share/omarchy/.git/logs ] && echo STILL THERE || echo gone)"
+
 log "10/10 freeing unused space (so it compresses better)"
 sync
 fstrim -av 2>&1 | head -3 || true
@@ -656,6 +675,12 @@ fi
 for _p in hyprland hyprtoolkit hyprland-guiutils hyprpaper quickshell sddm; do
   pacman -Q "$_p" >/dev/null 2>&1 && ok_ "$_p installed" || bad "$_p is not installed"
 done
+
+# ---- logs and reflogs, which are written after the step that clears them
+[ ! -s /var/log/pacman.log ] && ok_ "no pacman log in the image" \
+  || bad "/var/log/pacman.log is back: $(wc -l < /var/log/pacman.log) lines describing this build"
+[ ! -d /usr/share/omarchy/.git/logs ] && ok_ "no git reflog under /usr/share/omarchy" \
+  || bad "/usr/share/omarchy/.git/logs ships, and reflogs name whoever ran the clone"
 
 # ---- nothing that exists only to build with
 # The slimming step above used to fail silently, so this asks the question again

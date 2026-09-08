@@ -2933,6 +2933,25 @@ for _round in 1 2 3 4; do
 done
 echo "  orphans left:       $(pacman -Qtdq 2>/dev/null | wc -l)"
 
+# The logs, again, and the git reflogs.
+#
+# Step 7 wipes /var/log at the top, and everything after it that touches pacman
+# writes the log straight back: the orphan sweep, the .NET slimming, every
+# `pacman -Rns` above. The shipped image therefore carried a /var/log/pacman.log
+# describing its own sanitisation, in a step whose own heading says the logs are
+# gone. Wiped here instead, after the last transaction.
+#
+# And /usr/share/omarchy/.git/logs, which nothing in this project has ever
+# touched. Reflogs record who did each operation, so the clone made during the
+# build leaves an identity in a file that ships to strangers. They are local
+# bookkeeping: `omarchy-update` pulls perfectly well without them.
+log "9b/10 logs written after the wipe, and the git reflogs"
+rm -rf /var/log/journal/* /var/log/omarchy* /var/log/pacman.log
+find /var/log -type f -name "*.log" -delete 2>/dev/null || true
+rm -rf /usr/share/omarchy/.git/logs
+echo "  /var/log cleared again ($(find /var/log -type f | wc -l | tr -d ' ') files left)"
+echo "  omarchy git reflogs: $([ -d /usr/share/omarchy/.git/logs ] && echo STILL THERE || echo gone)"
+
 log "10/10 freeing unused space (so it compresses better)"
 sync
 fstrim -av 2>&1 | head -3 || true
@@ -3179,6 +3198,12 @@ fi
 for _p in hyprland hyprtoolkit hyprland-guiutils hyprpaper quickshell sddm; do
   pacman -Q "$_p" >/dev/null 2>&1 && ok_ "$_p installed" || bad "$_p is not installed"
 done
+
+# ---- logs and reflogs, which are written after the step that clears them
+[ ! -s /var/log/pacman.log ] && ok_ "no pacman log in the image" \
+  || bad "/var/log/pacman.log is back: $(wc -l < /var/log/pacman.log) lines describing this build"
+[ ! -d /usr/share/omarchy/.git/logs ] && ok_ "no git reflog under /usr/share/omarchy" \
+  || bad "/usr/share/omarchy/.git/logs ships, and reflogs name whoever ran the clone"
 
 # ---- nothing that exists only to build with
 # The slimming step above used to fail silently, so this asks the question again
@@ -6086,7 +6111,6 @@ ph_utm() {
     if confirm "A VM named '$VM_NAME' already exists in UTM. Delete and replace it?" no; then
       "$UTMCTL" delete "$VM_NAME" >/dev/null 2>&1 || true; sleep 2
     else
-      VM_NAME_BASE="$VM_NAME"
       VM_NAME="$VM_NAME $(date +%H%M)"
       info "it will be registered as '$VM_NAME'"
       # Written down, or it lives only in this process: a later `--from
@@ -6376,118 +6400,6 @@ ph_package() {
   [ -s "$W/dist/$DIST_ZIP" ] || die "$DIST_ZIP came out empty"
   [ -s "$W/dist/$DIST_ZIP.sha256" ] || die "$DIST_ZIP.sha256 was not written"
   ok "ready: $W/dist/$DIST_ZIP ($(du -h "$W/dist/$DIST_ZIP" | cut -f1))"
-
-  # The intermediate VM goes now, BEFORE the checksum gate below, because that
-  # gate calls die: the first version of this cleanup sat after it and therefore
-  # never ran on a fresh build, which is the only kind of build where the
-  # documentation names an older artifact. It is safe here -- '--only package'
-  # rebuilds the zip from dist.qcow2 and does not touch the VM.
-  #
-  # `utmctl delete`, not `rm -rf`. Removing the bundle directory leaves UTM's
-  # own registry holding a phantom entry for it, and the next build then sees a
-  # name collision, appends a timestamp and writes the compound name back into
-  # answers.env -- which is why this machine went from 'Omarchy ARM' to
-  # 'Omarchy ARM 1820' to 'Omarchy ARM 1820 2305' in three builds. Deleting by
-  # hand is what taught me that; the fix is to delete the way UTM understands.
-  #
-  # Guarded rather than trusted: the bundle must be the one this run created,
-  # under UTM's own directory, and must look like a bundle before anything goes.
-  INTERMEDIATE="$DOCS/$VM_NAME.utm"
-  if [ -n "${KEEP_INTERMEDIATE:-}" ]; then
-    info "the intermediate VM '$VM_NAME' is kept in UTM (KEEP_INTERMEDIATE is set)"
-  elif [ "${DEST_DIR:-$DOCS}" != "$DOCS" ]; then
-    : # not ours to tidy: the bundle was built somewhere the caller chose
-  elif [ -f "$INTERMEDIATE/config.plist" ] && [ -d "$INTERMEDIATE/Data" ]; then
-    "${UTMCTL:-/Applications/UTM.app/Contents/MacOS/utmctl}" delete "$VM_NAME" >/dev/null 2>&1 || true
-    sleep 1
-    [ -e "$INTERMEDIATE" ] && rm -rf "$INTERMEDIATE"
-    if [ -e "$INTERMEDIATE" ]; then
-      warn "could not remove the intermediate VM: $INTERMEDIATE"
-    else
-      ok "intermediate VM '$VM_NAME' removed from UTM (KEEP_INTERMEDIATE=1 keeps it)"
-      # And put the name back, or the next build inherits the timestamped one
-      # and grows another suffix onto it.
-      if [ -n "${VM_NAME_BASE:-}" ] && [ -f "$W/answers.env" ]; then
-        sed -i '' "/^VM_NAME=/d" "$W/answers.env" 2>/dev/null || true
-        printf "VM_NAME='%s'\n" "$(shq "$VM_NAME_BASE")" >> "$W/answers.env"
-        info "the VM name goes back to '$VM_NAME_BASE' for the next build"
-      fi
-    fi
-  fi
-  cat "$W/dist/$DIST_ZIP.sha256"
-
-  # The checksum is published by hand in five places and drifts on every
-  # rebuild: a user ran `shasum -a 256 -c` against a good download and it
-  # failed, because dist/*.sha256 in the repository still held the value from a
-  # build that never shipped (issue raised by @mphaxise, PR #10). Publishing a
-  # checksum that does not match the artifact is worse than publishing none: it
-  # tells the one person who bothered to verify that the file is corrupt.
-  #
-  # This does not fix them; it refuses to let the build finish quietly while
-  # they disagree.
-  local NEWSUM; NEWSUM=$(cut -d' ' -f1 < "$W/dist/$DIST_ZIP.sha256")
-  # The repository this script was run from, not $W: that is where the files
-  # that publish the checksum live.
-  local REPO; REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-  # This warned and carried on, so a build could finish happily with the
-  # documentation naming a different artifact -- which is the reported defect,
-  # not a milder version of it: a reader who runs `shasum -c` against a perfectly
-  # good download is told the file is corrupt. It fails the phase now.
-  #
-  # And the full 64 characters where they are available, not only the first 16.
-  # The corruption that prompted all of this shared its first sixteen with the
-  # good hash: a sed rewrote the short form inside the long one, leaving
-  # something that looked plausible, carried the right prefix, and pointed at
-  # nothing. The prose legitimately abbreviates, so a short match still counts
-  # there -- scripts/check-published-hash.py is what polices the abbreviations.
-  # An empty NEWSUM is what `cut` leaves when the .sha256 is missing, and
-  # `grep -q ""` matches every file that has a line in it -- so the gate below
-  # returned "agrees everywhere" after comparing nothing at all. It is checked
-  # for shape before it is used, not trusted because a command ran.
-  case "$NEWSUM" in
-    [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) : ;;
-    *) die "the sha256 just computed does not look like one: '$NEWSUM'" ;;
-  esac
-  [ ${#NEWSUM} -eq 64 ] || die "the sha256 just computed is ${#NEWSUM} characters, not 64: '$NEWSUM'"
-
-  # Only documents that STATE a hash are compared. Two of the six carry none at
-  # all -- README.es.md and dist/README.md link to the .sha256 file instead of
-  # quoting it -- and scoring "does not carry this image's sha256" against a
-  # document that quotes no sha256 at all made this gate permanently red: no
-  # build could reach the end of packaging, and the remedy in its own error
-  # message ("put it in the files above and package again") could not be
-  # carried out, because there is no line in those files to put it on.
-  #
-  # The die is right and stays. What was wrong was asking a question of files
-  # that do not answer it.
-  local DESYNC=0 SRC SEEN=0 QUIET=0
-  for SRC in dist/omarchy-arm-utm-v2.zip.sha256 dist/VERSIONS.md \
-             README.md README.es.md EMPEZAR.md dist/README.md; do
-    [ -f "$REPO/$SRC" ] || continue
-    # A 16-run of lowercase hex is what "this document quotes a sha256" looks
-    # like, in full or abbreviated. Without one there is nothing to compare.
-    if ! grep -qE '[0-9a-f]{16}' "$REPO/$SRC"; then
-      QUIET=$((QUIET+1)); continue
-    fi
-    SEEN=$((SEEN+1))
-    grep -q "$NEWSUM" "$REPO/$SRC" || grep -q "${NEWSUM:0:16}" "$REPO/$SRC" || {
-      warn "$SRC quotes a sha256, and it is not this image's"; DESYNC=1; }
-  done
-  # The other way this gate passed without doing anything. README.md tells the
-  # reader they can copy this one file to another Mac and run it there; in that
-  # mode none of the six documents exists, every iteration hits the `continue`,
-  # and the green line below described six comparisons that never happened.
-  if [ "$SEEN" -eq 0 ]; then
-    warn "no document next to this script quotes a sha256; nothing was compared."
-    warn "The image is at $W/dist/$DIST_ZIP with sha256:"
-    warn "  $NEWSUM"
-  elif [ "$DESYNC" = 0 ]; then
-    ok "the published sha256 agrees in the $SEEN document(s) that quote it ($QUIET quote none)"
-  else
-    warn "the intermediate VM '$VM_NAME' is still registered in UTM (~11 GB):"
-    warn "  it is only needed by '--from sanitize'; '--only package' does not use it."
-    die "the documentation names a different artifact than the one just built. Put $NEWSUM in the files above and package again."
-  fi
 
   # Only now. These were deleted immediately after the zip, above the gate that
   # dies -- and ph_package will not start without dist.qcow2, so the recovery

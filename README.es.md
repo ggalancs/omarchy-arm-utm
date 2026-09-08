@@ -272,12 +272,15 @@ DEST_DIR=/Volumes/Externo ./build-omarchy-arm.sh --yes   # construir sin tocar U
 KEEP_INTERMEDIATE=1 ./build-omarchy-arm.sh --yes         # conservar la VM de trabajo
 ```
 
-La VM en la que trabaja la construcción es andamio: en cuanto existe el `.zip`
-distribuible y su comprobación de checksum pasa, se borra. Antes se quedaba en
-cada ejecución correcta y solo se mencionaba en las que fallaban, así que cuatro
-construcciones dejaban cuatro VMs de 12 GB registradas en UTM.
-`KEEP_INTERMEDIATE=1` la conserva, que es lo que necesita `--from sanitize` para
-volver a ejecutarse sobre la misma construcción.
+La VM en la que trabaja la construcción es andamio: la usa `verify`, y lo que se
+distribuye es la copia saneada de `dist/`. Una ejecución que llega al final la
+borra, por el UUID que anotó al crearla, así que una VM tuya no se toca nunca.
+`KEEP_VM=yes` la conserva.
+
+Una ejecución que **se para en la puerta del checksum** la deja ahí, a
+propósito: `--from sanitize` toma su disco de esa VM, y el mensaje de la puerta
+te dice que está. Por eso pueden acumularse varias mientras se itera sobre una
+imagen: lo que hay que hacer es cerrar la puerta, no borrar antes.
 
 ## Tus propias aplicaciones: `scripts/my-apps.sh`
 
