@@ -128,6 +128,10 @@ def is_code(line):
 # file reports the evidence as the defect.
 EXEMPT_NAMES = ('i18n-audit.py', 'english-exceptions.txt', 'known-identifiers.txt',
                 'ARTICULO.md', 'articulo.html', 'README.es.md', 'EMPEZAR.md',
+                # dist/LEEME.md is the Spanish landing page on archive.org, the
+                # same case as README.es.md: written in Spanish on purpose, for
+                # readers who arrive in Spanish.
+                'LEEME.md',
                 'guia.html', 'test-audit-surfaces.sh',
                 # Same case again: it carries the Spanish words that identify a
                 # sentence about dangling symlinks, so that the command count in

@@ -141,8 +141,10 @@ que la primera). Para arreglar una VM que ya tengas, sin volver a descargar,
 ejecuta dentro [`fixes/18-avisos-que-no-se-apagan.sh`](fixes/18-avisos-que-no-se-apagan.sh),
 y para el portapapeles [`fixes/19-portapapeles.sh`](fixes/19-portapapeles.sh).
 
-**Y ejecuta [`fixes/20-seguridad-y-servicios.sh`](fixes/20-seguridad-y-servicios.sh)
-tengas la imagen que tengas.** Auditar esta construcción contra los propios
+**Ejecuta [`fixes/20-seguridad-y-servicios.sh`](fixes/20-seguridad-y-servicios.sh)
+si el `sha256` de tu copia no empieza por `a9b54d5d7cac8827`.** La imagen publicada
+con ese checksum lleva las cinco comprobadas por invariantes que detienen la
+construcción si reaparecen; todas las anteriores no. Auditar esta construcción contra los propios
 scripts `install/` de Omarchy el 04-09-2026 sacó cinco diferencias, dos de ellas
 de seguridad: la cuenta quedaba en el grupo `docker` —que Omarchy se niega a
 conceder, porque equivale a root sin contraseña— y nunca se activaba el

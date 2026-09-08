@@ -173,10 +173,13 @@ image no longer carries and what was proven about it:
   documentation, and the .NET SDK only needed to *build* Pinta and OBS. The Rust
   and Go toolchains stay, so `yay` still works.
 
-## Every image so far: run this one
+## Images published before `a9b54d5d7cac8827…`: run this one
 
-**2026-09-04.** Both files above ship five differences from Omarchy 4, and two
-of them are about security. Auditing the build against Omarchy's own
+**2026-09-04.** The releases before the current one ship five differences from
+Omarchy 4, and two of them are about security. The image whose `sha256` begins
+`a9b54d5d7cac8827` is not among them: it has all five verified by invariants that
+fail the build if they regress, and the run that produced it reported them
+green. Auditing the build against Omarchy's own
 `install/` scripts turned them up:
 
 - **The account is in the `docker` group.** Omarchy 4 refuses to grant it and

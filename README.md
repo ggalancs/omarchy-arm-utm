@@ -219,8 +219,10 @@ have, run [`fixes/18-avisos-que-no-se-apagan.sh`](fixes/18-avisos-que-no-se-apag
 inside it — no need to re-download. For the clipboard, run
 [`fixes/19-portapapeles.sh`](fixes/19-portapapeles.sh) the same way.
 
-**And run [`fixes/20-seguridad-y-servicios.sh`](fixes/20-seguridad-y-servicios.sh)
-whichever image you have.** Auditing this build against Omarchy's own `install/`
+**Run [`fixes/20-seguridad-y-servicios.sh`](fixes/20-seguridad-y-servicios.sh)
+if your copy's `sha256` is not `a9b54d5d7cac8827…`.** The image published under
+that checksum has these five verified by invariants that stop the build if they
+regress, so it needs nothing. Every image before it does. Auditing this build against Omarchy's own `install/`
 scripts on 2026-09-04 turned up five differences, two of them about security:
 the account was left in the `docker` group — which Omarchy refuses to grant,
 because it is equivalent to passwordless root — and no firewall was ever
