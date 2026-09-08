@@ -2095,8 +2095,23 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
   # executables shipped with /home/builder inside.
   #
   # Harmless for a PKGBUILD that is not Rust: RUSTFLAGS is simply unused.
+  # Every cache out of $HOME too, not just the source directory.
+  #
+  # Moving the build out of $HOME is necessary and not sufficient: cargo embeds
+  # the paths of the DEPENDENCIES it compiled, and those live under CARGO_HOME,
+  # which defaults to ~/.cargo. This project already knew that -- ttfx is built
+  # with CARGO_HOME in /tmp and the comment above it says exactly why -- and the
+  # eighteen tools built through makepkg were never given the same treatment.
+  # Go and Zig cache the same way, and herdr is Zig.
+  #
+  # RUSTFLAGS is kept as a third line of defence, though makepkg.conf defines it
+  # and is sourced after the environment, so it may well never arrive.
   ( cd "$dir" \
-    && RUSTFLAGS="--remap-path-prefix=$HOME=. ${RUSTFLAGS:-}" \
+    && CARGO_HOME=/var/tmp/omabuild/.cargo \
+       GOPATH=/var/tmp/omabuild/.go \
+       GOCACHE=/var/tmp/omabuild/.gocache \
+       XDG_CACHE_HOME=/var/tmp/omabuild/.cache \
+       RUSTFLAGS="--remap-path-prefix=$HOME=. ${RUSTFLAGS:-}" \
        timeout 3600 makepkg -s --noconfirm --needed --noprogressbar --nocheck ) >"$dir/build.log" 2>&1 &
   _bg=$!
   while kill -0 "$_bg" 2>/dev/null; do

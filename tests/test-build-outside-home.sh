@@ -38,6 +38,20 @@ for f in "${FILES[@]}"; do
   fi
 done
 
+# The caches as well. Moving the source out of $HOME is necessary and not
+# sufficient: cargo embeds the paths of the dependencies it compiled, and those
+# live under CARGO_HOME, which defaults to ~/.cargo. Go and Zig cache the same
+# way. ttfx has had CARGO_HOME outside $HOME since the day this was discovered;
+# the eighteen tools built through makepkg had none of it.
+for _v in CARGO_HOME GOPATH GOCACHE XDG_CACHE_HOME; do
+  if grep -qE "^[^#]*$_v=/(var/)?tmp" provision/src/stage3.sh; then
+    echo "  ok  $_v is set outside \$HOME for the tool builds"
+  else
+    echo "  !! $_v is not pointed outside \$HOME: the caches leak the build path"
+    fail=1
+  fi
+done
+
 # And the two that do compile must say where they compile, so this is not
 # passing because the assignment was merely spelled differently.
 for want in 'local dir="/var/tmp/omabuild/$pkg"' 'HYPR_WORK'; do
