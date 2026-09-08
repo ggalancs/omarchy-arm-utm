@@ -1,6 +1,12 @@
 #!/bin/bash
 # Boots an already installed disk with a virtio GPU and grabs the screen
 # through QEMU's monitor. Saves registering the bundle in UTM just to look.
+#
+# -snapshot, because a tool that takes a picture has no business writing. Without
+# it this boots the disk read-write, and pointing it at a packaged bundle would
+# change the bytes of the artifact and therefore its published sha256 -- an image
+# invalidated by the act of photographing it. Caught before it was ever run
+# against dist/, which is the only reason there is nothing to undo.
 set -e
 # The root is derived from the script's own location, so the repo can be
 # cloned anywhere without editing anything.
@@ -23,7 +29,7 @@ dd if=/dev/zero of="$VARS" bs=1m count=64 status=none
 
 qemu-system-aarch64 \
   -accel hvf -cpu host -smp 8 -m 8192 \
-  -M virt,highmem=on,gic-version=3 \
+  -M virt,highmem=on,gic-version=3 -snapshot \
   -drive if=pflash,format=raw,unit=0,readonly=on,file="$FW" \
   -drive if=pflash,format=raw,unit=1,file="$VARS" \
   -drive if=none,id=hd,file="$DISK_IMG",format=qcow2,cache=writeback,discard=unmap \
