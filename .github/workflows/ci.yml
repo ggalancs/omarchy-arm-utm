@@ -127,6 +127,11 @@ jobs:
       - name: Unit tests
         run: |
           set -euo pipefail
+          # expect, so that tests/test-expect-inactivity.sh actually runs. It
+          # exits 77 ("skipped") without it, and this step runs under `set -e`,
+          # so a skip would abort the whole job -- while a skip that did not
+          # abort would be worse: a check nobody notices stopped running.
+          sudo apt-get update -qq && sudo apt-get install -y -qq expect
           for t in tests/*.sh; do echo "::group::$t"; bash "$t"; echo "::endgroup::"; done
 
       # A published sha256 was corrupted by an update that ran a 16-character

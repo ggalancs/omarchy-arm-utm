@@ -113,7 +113,31 @@ python_files() {
 
 shell_syntax()  { local f r=0; while IFS= read -r f; do bash -n "$f" || r=1; done < <(shell_files); return $r; }
 python_syntax() { local f r=0; while IFS= read -r f; do python3 -m py_compile "$f" || r=1; done < <(python_files); return $r; }
-unit_tests()    { local t r=0; for t in tests/*.sh; do [ -e "$t" ] || continue; bash "$t" || r=1; done; return $r; }
+# 77 is "skipped", the same convention `step` already honours when the linter is
+# missing. Collapsing every non-zero into a failure reported
+# test-expect-inactivity.sh as broken on any machine without `expect` -- which is
+# every minimal container, and possibly the runner. And a skipped test that
+# reads as a pass is worse: this prints what was skipped and why, because a
+# check that did not run is not a check that passed.
+#
+# NOTE: no comment line here may begin with the word shellcheck, because that is
+# how a directive is spelled and the parser rejects what follows. Ubuntu's
+# Ubuntu reports it as SC1073; the linter on this Mac does not, which is the
+# whole argument for scripts/ci-container.sh.
+unit_tests() {
+  local t rc r=0 skipped=""
+  for t in tests/*.sh; do
+    [ -e "$t" ] || continue
+    rc=0; bash "$t" || rc=$?
+    case "$rc" in
+      0)  ;;
+      77) skipped="$skipped $t" ;;
+      *)  r=1 ;;
+    esac
+  done
+  [ -n "$skipped" ] && echo "  SKIPPED (exit 77, a dependency is missing):$skipped"
+  return $r
+}
 shellcheck_errors() {
   # return 1, not 0. `step` prints "ok" for a 0 and only shows the captured
   # output when a step FAILS -- so on a machine without the linter this said
