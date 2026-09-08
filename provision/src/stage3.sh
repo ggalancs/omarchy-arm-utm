@@ -330,7 +330,18 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
   # On disk, not in /tmp: /tmp is tmpfs (RAM/2 = 4 GB with the build VM's
   # 8 GB) and a single large Rust project gets close to that limit.
   # ~/.cache is wiped by sanitization, so it leaves no trace in the image.
-  local dir="$HOME/.cache/omabuild/$pkg"
+  # NOT under $HOME. The build path survives inside compiled binaries -- Rust
+  # writes it into panic strings in .rodata, and it is not only Rust: the four
+  # that shipped with /home/builder in them were herdr (Zig), tensaku,
+  # hyprland-preview-share-picker and tzupdate. stage2 already builds outside
+  # $HOME for exactly this reason and says so; stage3 did not, and the sweep
+  # that should have caught it could not fail.
+  #
+  # /var/tmp, not /tmp: /tmp is a tmpfs out of the same 8 GB of RAM this guest
+  # has, and the comment further down records it filling up and killing a build.
+  # Setting RUSTFLAGS was not enough on its own -- makepkg.conf defines RUSTFLAGS
+  # and is sourced after the environment -- and it only ever covered Rust.
+  local dir="/var/tmp/omabuild/$pkg"
   pacman -Q "$pkg" >/dev/null 2>&1 && return 0
   rm -rf "$dir"; mkdir -p "$dir"
   case "$src" in
@@ -363,7 +374,7 @@ build_omarchy_tool() {                 # build_omarchy_tool <aur|omapkgs> <pkg>
   # fail at the first step on missing makedepends. -i is not used because the
   # install happens afterwards, subpackage by subpackage.
   # When it fails, the log is the only thing that explains why, and until now
-  # it was lost to the `rm -rf "$HOME/.cache/omabuild"` two lines below: the
+  # it was lost to the `rm -rf /var/tmp/omabuild` two lines below: the
   # build said "failed to build: X" and there was no way to learn anything
   # more.
   # The speed limit is lifted by DisableDownloadTimeout in /etc/pacman.conf
@@ -483,7 +494,7 @@ for spec in \
 done
 echo "  built: ${TOOLS_OK[*]:-none}"
 [ ${#TOOLS_KO[@]} -gt 0 ] && warn "failed to build: ${TOOLS_KO[*]}"
-rm -rf "$HOME/.cache/omabuild"
+rm -rf /var/tmp/omabuild "$HOME/.cache/omabuild"
 
 fi
 

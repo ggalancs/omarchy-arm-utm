@@ -216,8 +216,11 @@ image no longer carries and what was proven about it:
   for a package-owned `/usr/lib/modules/<ver>/vmlinuz`; `linux-aarch64` puts the
   image in `/boot/Image` and ships none, so the check can never pass).
 - **45% smaller** — 675 MB of firmware for hardware a VM cannot have, 458 MB of
-  documentation, and the .NET SDK only needed to *build* Pinta and OBS. The Rust
-  and Go toolchains stay, so `yay` still works.
+  documentation, and the .NET SDK only needed to *build* Pinta and OBS. Go stays;
+  Rust does not -- the orphan sweep removes it once nothing depends on it, and a
+  `pacman -Q` on the shipped image finds `go` and no `rust`. `yay` still works,
+  and pulls whatever toolchain an AUR package needs when you build one. (This
+  said "the Rust and Go toolchains stay" for two releases.)
 
 ## Images published before `a9b54d5d7cac8827…`: run this one
 
