@@ -11,7 +11,7 @@
 | "Update System" notification | gone | repeats on every boot |
 | "Reboot?" after each update | gone | repeats forever |
 | `sshd` | disabled | enabled, with a trivial password |
-| `sha256` | `a9b54d5d7cac8827f8f77bb9c941559e85fc0291820f97484dd92a07d2a90050` | `9d6afb16843bd868c9503dbfdaaa5f1ff7634b23f9a972b344ec27ca0a795fb4` |
+| `sha256` | `f27bca445ce27d57fb7206301010b1cef83dac32794890b4b0e9dd5033af3ed9` | `9d6afb16843bd868c9503dbfdaaa5f1ff7634b23f9a972b344ec27ca0a795fb4` |
 
 The plain name belongs to the first release and keeps it, so links and checksums
 published back in August still resolve to the exact bytes they were written
@@ -33,7 +33,7 @@ open *.utm
 
 User `omarchy`, password `omarchy` (also root). **Change it with `passwd`.**
 
-Arch Linux ARM aarch64 · Hyprland 0.56.1 · the Omarchy 4 desktop · 445
+Arch Linux ARM aarch64 · Hyprland 0.56.2 · the Omarchy 4 desktop · 456
 `omarchy-*` commands · 18 packages built for ARM · OBS Studio and Pinta.
 
 ## What changed on 2026-09-08
@@ -222,11 +222,11 @@ image no longer carries and what was proven about it:
   and pulls whatever toolchain an AUR package needs when you build one. (This
   said "the Rust and Go toolchains stay" for two releases.)
 
-## Images published before `a9b54d5d7cac8827…`: run this one
+## Images published before `f27bca445ce27d57…`: run this one
 
 **2026-09-04.** The releases before the current one ship five differences from
 Omarchy 4, and two of them are about security. The image whose `sha256` begins
-`a9b54d5d7cac8827` is not among them: it has all five verified by invariants that
+`f27bca445ce27d57` is not among them: it has all five verified by invariants that
 fail the build if they regress, and the run that produced it reported them
 green. Auditing the build against Omarchy's own
 `install/` scripts turned them up:

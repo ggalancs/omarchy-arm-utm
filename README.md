@@ -84,7 +84,7 @@ The image this produces is on the Internet Archive, sanitised and ready to
 import — no build, no Homebrew, no waiting:
 
 **https://archive.org/details/omarchy-arm-utm** — download **`omarchy-arm-utm-v2.zip`** · 3.6 GB ·
-`sha256 a9b54d5d7cac8827…`
+`sha256 f27bca445ce27d57…`
 
 The plain `omarchy-arm-utm.zip` next to it is the first release (6.5 GB). It
 keeps the plain name so links and checksums published with it still resolve to
@@ -168,10 +168,10 @@ Every phase is resumable: `--from build`, `--only package`, `--list`.
 
 - **Arch Linux ARM** aarch64, `linux-aarch64` kernel, btrfs with `@` / `@home`
   subvolumes, zstd compression, 1 GiB ESP, systemd-boot
-- **Hyprland 0.56.1** with the full Omarchy 4 stack: quickshell (bar, menu, OSD
+- **Hyprland 0.56.2** with the full Omarchy 4 stack: quickshell (bar, menu, OSD
   *and* notification daemon), hyprlock, hypridle, hyprsunset, uwsm,
   xdg-desktop-portal-hyprland, SDDM with autologin and the Omarchy theme
-- Dotfiles, themes and the **445 `omarchy-*` commands**, in `/usr/bin` as
+- Dotfiles, themes and the **456 `omarchy-*` commands**, in `/usr/bin` as
   upstream's package does
 - **18 packages built for aarch64** that upstream does not ship for ARM.
   Nine are Omarchy's own: `herdr`, `tensaku`, `omacalc`, `omacut`,
@@ -223,7 +223,7 @@ inside it — no need to re-download. For the clipboard, run
 [`fixes/19-portapapeles.sh`](fixes/19-portapapeles.sh) the same way.
 
 **Run [`fixes/20-seguridad-y-servicios.sh`](fixes/20-seguridad-y-servicios.sh)
-if your copy's `sha256` is not `a9b54d5d7cac8827…`.** The image published under
+if your copy's `sha256` is not `f27bca445ce27d57…`.** The image published under
 that checksum has these five verified by invariants that stop the build if they
 regress, so it needs nothing. Every image before it does. Auditing this build against Omarchy's own `install/`
 scripts on 2026-09-04 turned up five differences, two of them about security:

@@ -85,10 +85,10 @@ de ARM que necesitan precedencia en el `PATH`.
 
 - **Arch Linux ARM** aarch64, kernel `linux-aarch64` 7.2, btrfs con subvolúmenes
   `@` y `@home`, compresión zstd, ESP de 1 GiB, systemd-boot
-- **Hyprland 0.56.1** con el stack de Omarchy 4: quickshell —que es a la vez
+- **Hyprland 0.56.2** con el stack de Omarchy 4: quickshell —que es a la vez
   barra, menú, OSD y demonio de notificaciones—, hyprlock, hypridle, hyprsunset,
   uwsm, xdg-desktop-portal-hyprland, SDDM con autologin y tema Omarchy
-- **Dotfiles, temas y los 445 comandos `omarchy-*`**, en `/usr/bin` como hace
+- **Dotfiles, temas y los 456 comandos `omarchy-*`**, en `/usr/bin` como hace
   el paquete de upstream
 - **18 paquetes construidos para aarch64** que no se publican
   para ARM: `tensaku`, `omacalc`, `omacut`, `omawrite`, `aether`, `cliamp`,
@@ -142,7 +142,7 @@ ejecuta dentro [`fixes/18-avisos-que-no-se-apagan.sh`](fixes/18-avisos-que-no-se
 y para el portapapeles [`fixes/19-portapapeles.sh`](fixes/19-portapapeles.sh).
 
 **Ejecuta [`fixes/20-seguridad-y-servicios.sh`](fixes/20-seguridad-y-servicios.sh)
-si el `sha256` de tu copia no empieza por `a9b54d5d7cac8827`.** La imagen publicada
+si el `sha256` de tu copia no empieza por `f27bca445ce27d57`.** La imagen publicada
 con ese checksum lleva las cinco comprobadas por invariantes que detienen la
 construcción si reaparecen; todas las anteriores no. Auditar esta construcción contra los propios
 scripts `install/` de Omarchy el 04-09-2026 sacó cinco diferencias, dos de ellas

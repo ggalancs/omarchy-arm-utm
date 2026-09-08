@@ -6468,6 +6468,45 @@ ph_package() {
   [ -s "$W/dist/$DIST_ZIP.sha256" ] || die "$DIST_ZIP.sha256 was not written"
   ok "ready: $W/dist/$DIST_ZIP ($(du -h "$W/dist/$DIST_ZIP" | cut -f1))"
 
+  # Only documents that STATE a hash are compared. Two of the six carry none at
+  # all -- README.es.md and dist/README.md link to the .sha256 file instead of
+  # quoting it -- and scoring "does not carry this image's sha256" against a
+  # document that quotes no sha256 at all made this gate permanently red: no
+  # build could reach the end of packaging, and the remedy in its own error
+  # message ("put it in the files above and package again") could not be
+  # carried out, because there is no line in those files to put it on.
+  #
+  # The die is right and stays. What was wrong was asking a question of files
+  # that do not answer it.
+  local DESYNC=0 SRC SEEN=0 QUIET=0
+  for SRC in dist/omarchy-arm-utm-v2.zip.sha256 dist/VERSIONS.md \
+             README.md README.es.md EMPEZAR.md dist/README.md; do
+    [ -f "$REPO/$SRC" ] || continue
+    # A 16-run of lowercase hex is what "this document quotes a sha256" looks
+    # like, in full or abbreviated. Without one there is nothing to compare.
+    if ! grep -qE '[0-9a-f]{16}' "$REPO/$SRC"; then
+      QUIET=$((QUIET+1)); continue
+    fi
+    SEEN=$((SEEN+1))
+    grep -q "$NEWSUM" "$REPO/$SRC" || grep -q "${NEWSUM:0:16}" "$REPO/$SRC" || {
+      warn "$SRC quotes a sha256, and it is not this image's"; DESYNC=1; }
+  done
+  # The other way this gate passed without doing anything. README.md tells the
+  # reader they can copy this one file to another Mac and run it there; in that
+  # mode none of the six documents exists, every iteration hits the `continue`,
+  # and the green line below described six comparisons that never happened.
+  if [ "$SEEN" -eq 0 ]; then
+    warn "no document next to this script quotes a sha256; nothing was compared."
+    warn "The image is at $W/dist/$DIST_ZIP with sha256:"
+    warn "  $NEWSUM"
+  elif [ "$DESYNC" = 0 ]; then
+    ok "the published sha256 agrees in the $SEEN document(s) that quote it ($QUIET quote none)"
+  else
+    warn "the intermediate VM '$VM_NAME' is still registered in UTM (~11 GB):"
+    warn "  it is only needed by '--from sanitize'; '--only package' does not use it."
+    die "the documentation names a different artifact than the one just built. Put $NEWSUM in the files above and package again."
+  fi
+
   # Only now. These were deleted immediately after the zip, above the gate that
   # dies -- and ph_package will not start without dist.qcow2, so the recovery
   # its own error message asks for ("package again") was impossible: the inputs
