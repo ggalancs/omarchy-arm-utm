@@ -43,14 +43,25 @@ done
 # live under CARGO_HOME, which defaults to ~/.cargo. Go and Zig cache the same
 # way. ttfx has had CARGO_HOME outside $HOME since the day this was discovered;
 # the eighteen tools built through makepkg had none of it.
-for _v in CARGO_HOME GOPATH GOCACHE XDG_CACHE_HOME; do
-  if grep -qE "^[^#]*$_v=/(var/)?tmp" provision/src/stage3.sh; then
-    echo "  ok  $_v is set outside \$HOME for the tool builds"
-  else
-    echo "  !! $_v is not pointed outside \$HOME: the caches leak the build path"
-    fail=1
-  fi
-done
+# In the makepkg invocation, not anywhere in the file. ttfx is built with
+# CARGO_HOME=/tmp/cargo-ttfx on its own line, so a file-wide grep is satisfied
+# by ttfx alone and says nothing about the eighteen tools -- which is exactly
+# what the first version of this check did: pointing the tool builds' CARGO_HOME
+# back at $HOME left it green.
+MAKEPKG_ENV=$(awk '/\( cd "\$dir" \\/{f=1} f{print} f && /makepkg -s/{exit}' provision/src/stage3.sh)
+if [ -z "$MAKEPKG_ENV" ]; then
+  echo "  !! cannot find the makepkg invocation in stage3.sh"
+  fail=1
+else
+  for _v in CARGO_HOME GOPATH GOCACHE XDG_CACHE_HOME; do
+    if printf '%s\n' "$MAKEPKG_ENV" | grep -qE "$_v=/(var/)?tmp"; then
+      echo "  ok  $_v points outside \$HOME in the makepkg invocation"
+    else
+      echo "  !! $_v is not set outside \$HOME where makepkg runs: the caches leak the build path"
+      fail=1
+    fi
+  done
+fi
 
 # And the two that do compile must say where they compile, so this is not
 # passing because the assignment was merely spelled differently.
