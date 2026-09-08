@@ -469,10 +469,18 @@ en vez de depender de la versión que empaqueten los repositorios.
 
 Después se arrancó la **imagen ya empaquetada** —no la VM intermedia— en modo
 solo lectura (`qemu -snapshot`) y se comprobó desde fuera: usuario genérico y la
-cuenta de construcción borrada, 445 comandos `omarchy-*`, Hyprland y quickshell
-vivos, `spice-vdagentd` con `-X` y el agente del portapapeles activo, `sshd`
-deshabilitado, cero claves SSH de host y ninguna ruta de compilación dentro de
-los binarios.
+cuenta de construcción borrada, Hyprland y quickshell vivos, `spice-vdagentd`
+con `-X` y el agente del portapapeles activo, `sshd` deshabilitado y cero claves
+SSH de host.
+
+**Un punto de esa lista no se comprobó de verdad, y esto es la corrección.**
+«Ninguna ruta de compilación dentro de los binarios» lo escribió un barrido
+incapaz de fallar: `strings "$b" | grep -q "/home/$OLD"` bajo `set -o pipefail`
+devuelve 141 en cuanto acierta, así que la rama que anota el hallazgo no se
+ejecutaba nunca. Imprimía su línea verde en todas las imágenes, pasara lo que
+pasara. El barrido está arreglado —lee el fichero directamente y cubre también
+`/usr/bin` y `/usr/lib`—, y la afirmación volverá a hacerse solo cuando la haya
+sostenido una ejecución que sí pueda fallar.
 
 El portapapeles compartido se comprobó después con datos reales y en los dos
 sentidos, sobre una VM arrancada en UTM: una cadena única copiada en el Mac se

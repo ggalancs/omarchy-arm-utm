@@ -538,9 +538,16 @@ rather than relying on whatever the repos happen to ship.
 
 The *packaged* image — not the intermediate VM — was then booted read-only
 (`qemu -snapshot`) and checked from outside: generic user with the build account
-gone, 445 `omarchy-*` commands, Hyprland and quickshell up, `spice-vdagentd`
-running with `-X` and the clipboard agent alive, `sshd` disabled, no SSH host
-keys, no build-time paths inside the compiled binaries.
+gone, Hyprland and quickshell up, `spice-vdagentd` running with `-X` and the
+clipboard agent alive, `sshd` disabled, no SSH host keys.
+
+**One item on that list was not actually checked, and this is the correction.**
+"No build-time paths inside the compiled binaries" was produced by a sweep that
+could not fail: `strings "$b" | grep -q "/home/$OLD"` under `set -o pipefail`
+returns 141 the moment it matches, so the branch that records a hit never ran.
+It printed its green line on every image regardless. The sweep is fixed, it now
+reads the file directly and covers `/usr/bin` and `/usr/lib` as well, and the
+claim will be made again only when a run that can fail has passed.
 
 The shared clipboard was then checked with real data, in both directions, on a
 VM booted in UTM: a unique token copied on the Mac read back identically inside

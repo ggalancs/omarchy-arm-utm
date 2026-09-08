@@ -1080,7 +1080,31 @@ else
     # hyprtoolkit 0.5.4-5.1 sorts above extra's 0.5.4-5 and below a future -6.
     # hyprland 0.56.2-0.1 sorts above extra's 0.56.1-3 and below any 0.56.2-N,
     # so the distribution's own rebuild will replace ours the moment it lands.
+    # WHICH of the two, decided by the index rather than by this file.
+    #
+    # On 2026-09-08 Arch Linux ARM published hyprtoolkit 0.5.4-6, rebuilt against
+    # the aquamarine it actually ships, and hyprland stayed on the old soname. So
+    # half the breakage repaired itself -- and the guard below stopped the build,
+    # correctly, because our 0.5.4-5.1 no longer sorts above extra's version. The
+    # comment on that guard had said all along what should happen next: "the
+    # distribution's own rebuild will replace ours the moment it lands."
+    #
+    # Compiling only what is still unmet is that, made automatic. Nothing is
+    # removed: the recipe, the pins and the whole local path stay exactly where
+    # they are, for whichever package needs them next time.
+    HYPR_LOCAL=""
+    while read -r p d; do
+      [ -n "$p" ] || continue
+      case " $HYPR_LOCAL " in *" $p "*) ;; *) HYPR_LOCAL="$HYPR_LOCAL $p" ;; esac
+    done <<< "$HYPR_PAIRS"
+    HYPR_LOCAL="${HYPR_LOCAL# }"
+    [ -n "$HYPR_LOCAL" ] || { warn "nothing is unmet, yet the local path was entered"; exit 1; }
+    echo "  building locally: $HYPR_LOCAL"
+    echo "  taking from the repository: $(for _q in hyprtoolkit hyprland; do
+           case " $HYPR_LOCAL " in *" $_q "*) ;; *) printf '%s ' "$_q" ;; esac; done)"
+
     for _spec in "hyprtoolkit $HYPR_TK_VER" "hyprland $HYPR_HL_VER"; do
+      case " $HYPR_LOCAL " in *" ${_spec%% *} "*) ;; *) continue ;; esac
       _p=${_spec%% *}; _v=${_spec#* }
       # `|| _e=""` is what makes the next line reachable. Under `set -e` plus
       # pipefail a pacman that cannot find the package takes the whole stage
@@ -1223,28 +1247,45 @@ else
     # THE ORDER. hyprtoolkit first and published immediately, because makepkg
     # resolves hyprland's `depends` (which include hyprland-guiutils, which needs
     # hyprtoolkit) before it ever looks at makedepends.
-    hypr_build hyprtoolkit "$HYPR_TK_TAG" "$HYPR_TK_SHA" 's/^pkgrel=5$/pkgrel=5.1/' "$HYPR_TK_VER" --ignorearch
-    hypr_publish
-    hypr_build hyprland    "$HYPR_HL_TAG" "$HYPR_HL_SHA" 's/^pkgrel=2$/pkgrel=0.1/' "$HYPR_HL_VER"
-    hypr_publish
+    case " $HYPR_LOCAL " in *" hyprtoolkit "*)
+      hypr_build hyprtoolkit "$HYPR_TK_TAG" "$HYPR_TK_SHA" 's/^pkgrel=5$/pkgrel=5.1/' "$HYPR_TK_VER" --ignorearch
+      hypr_publish ;;
+    *) echo "  hyprtoolkit: taking extra's $(pacman -Si extra/hyprtoolkit 2>/dev/null | awk '/^Version/{print $3; exit}'), which is no longer unmet" ;;
+    esac
+    case " $HYPR_LOCAL " in *" hyprland "*)
+      hypr_build hyprland    "$HYPR_HL_TAG" "$HYPR_HL_SHA" 's/^pkgrel=2$/pkgrel=0.1/' "$HYPR_HL_VER"
+      hypr_publish ;;
+    *) echo "  hyprland: taking extra's $(pacman -Si extra/hyprland 2>/dev/null | awk '/^Version/{print $3; exit}'), which is no longer unmet" ;;
+    esac
 
     # ---- the assertions that must hold before install_list is allowed to run
     HYPR_DRY2=$(pacman -Sp --noconfirm --print-format '%r/%n' --needed "${HYPR_CORE[@]}" 2>&1) && HYPR_RC2=0 || HYPR_RC2=$?
     [ "$HYPR_RC2" -eq 0 ] || { warn "the core list still does not resolve after the local build:"; printf '%s\n' "$HYPR_DRY2" | tail -20; exit 1; }
-    if printf '%s\n' "$HYPR_DRY2" | grep -qE '^(extra|core)/(hyprland|hyprtoolkit)$'; then
-      warn "pacman still intends to install the repository's broken hyprland or hyprtoolkit:"
-      printf '%s\n' "$HYPR_DRY2" | grep -E '/(hyprland|hyprtoolkit)$' | sed 's/^/      /'
-      exit 1
-    fi
-    printf '%s\n' "$HYPR_DRY2" | grep -q '^omarchy-arm-local/hyprland$' \
-      || { warn "pacman does not intend to take hyprland from the local repository"; exit 1; }
-    echo "  pacman will take hyprland and hyprtoolkit from the local build"
+    # Only the ones we actually built. Taking hyprtoolkit from `extra` is now the
+    # CORRECT outcome -- 0.5.4-6 is rebuilt against the aquamarine that ships --
+    # and a blanket refusal of `extra/hyprtoolkit` would reject the repair.
+    for _p in $HYPR_LOCAL; do
+      if printf '%s\n' "$HYPR_DRY2" | grep -qE "^(extra|core)/$_p\$"; then
+        warn "pacman still intends to install the repository's broken $_p:"
+        printf '%s\n' "$HYPR_DRY2" | grep -E "/$_p\$" | sed 's/^/      /'
+        exit 1
+      fi
+      printf '%s\n' "$HYPR_DRY2" | grep -q "^omarchy-arm-local/$_p\$" \
+        || { warn "pacman does not intend to take $_p from the local repository"; exit 1; }
+    done
+    echo "  pacman will take$(for _p in $HYPR_LOCAL; do printf ' %s' "$_p"; done) from the local build"
 
     HYPR_WHEN=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    HYPR_WHY='extra/hyprland-0.56.1-3 and extra/hyprtoolkit-0.5.4-5 require libaquamarine.so=13-64; extra/aquamarine-0.15.0-2 provides libaquamarine.so=14-64'
+    # The reason, read off the index at build time rather than frozen in a
+    # string: it named both packages, and one of them has since been repaired.
+    HYPR_WHY="unmet at build time: $(printf '%s\n' "$HYPR_PAIRS" | tr '\n' ';' | sed 's/;$//')"
     for _spec in "hyprtoolkit $HYPR_TK_VER $HYPR_TK_TAG $HYPR_TK_SHA $HYPR_TK_SRC" \
                  "hyprland $HYPR_HL_VER $HYPR_HL_TAG $HYPR_HL_SHA $HYPR_HL_SRC"; do
       set -- $_spec
+      # Recorded only if it was built here. A package taken from the repository
+      # has no local file to look for, and demanding one would fail the build
+      # over the very thing that got fixed upstream.
+      case " $HYPR_LOCAL " in *" $1 "*) ;; *) continue ;; esac
       # Each built file must actually be where PKGDEST was told to put it: this
       # is the loud detector for an environment variable lost across `su -`.
       ls "$HYPR_LOCALREPO/$1-"*.pkg.tar.* >/dev/null 2>&1 \

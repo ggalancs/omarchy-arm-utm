@@ -27,7 +27,16 @@ line() { grep -n "$2" "$1" | head -1 | cut -d: -f1; }
 #    Build hyprland first and it dies in dependency resolution, before compiling
 #    a single file. hyprtoolkit must be built AND PUBLISHED first.
 tk=$(line "$S2" 'hypr_build hyprtoolkit')
-pub=$(grep -n 'hypr_publish$' "$S2" | head -1 | cut -d: -f1)
+# `hypr_publish` no longer ends its line: each build is now inside a `case` arm,
+# because only the packages still unmet in the index are compiled -- Arch Linux
+# ARM repaired hyprtoolkit on 2026-09-08 and hyprland is still broken. The
+# ordering this file exists to protect is unchanged and still checked: whenever
+# both are built, hyprtoolkit is built and published before hyprland.
+# The CALL, not the definition. `hypr_publish` used to end its line only at the
+# call sites, so a bare grep found them; now the calls read `hypr_publish ;;`
+# inside a case arm and the first bare match is the function definition four
+# hundred lines earlier -- which made this compare the wrong three numbers.
+pub=$(awk -v t="$tk" 'NR>t && /hypr_publish[[:space:]]*;;/ {print NR; exit}' "$S2")
 hl=$(line "$S2" 'hypr_build hyprland')
 if [ -z "$tk" ] || [ -z "$pub" ] || [ -z "$hl" ]; then
   bad "$S2: cannot find the two builds and the publish between them"
