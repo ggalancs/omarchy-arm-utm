@@ -186,10 +186,13 @@ Every phase is resumable: `--from build`, `--only package`, `--list`.
 - **`omarchy-update` works**, with a post-update hook that keeps the Omarchy
   checkout in sync and snapper snapshots before each update
 
-Of the 148 packages in `omarchy-base.packages`, **121 exist in Arch Linux ARM**
-by name (123 once you substitute `nvim`→`neovim` and
-`ttf-jetbrains-mono-nerd-basic`→`ttf-jetbrains-mono-nerd`). 17 of the rest are
-built from source; the build prints the list every run.
+When this was measured, `omarchy-base.packages` had 148 entries and **121
+existed in Arch Linux ARM** by name (123 once you substitute `nvim`→`neovim` and
+`ttf-jetbrains-mono-nerd-basic`→`ttf-jetbrains-mono-nerd`), with 17 of the rest
+built from source. Upstream's list has moved since — it has 152 entries today —
+so treat those as an illustration of the shape of the problem and not as a
+count. **The build prints the real list on every run**, and the eighteen figure
+above comes from the tool contract, which is checked rather than remembered.
 
 ## Known issue in the published image
 
