@@ -598,3 +598,5 @@ REMOTE_SHA1
 LOCAL_SHA1
 attempt
 PAT
+gate_body
+globals

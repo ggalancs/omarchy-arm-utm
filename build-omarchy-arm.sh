@@ -6486,6 +6486,50 @@ ph_package() {
   #
   # The die is right and stays. What was wrong was asking a question of files
   # that do not answer it.
+  # The checksum is published by hand in five places and drifts on every
+  # rebuild: a user ran `shasum -a 256 -c` against a good download and it
+  # failed, because dist/*.sha256 in the repository still held the value from a
+  # build that never shipped (issue raised by @mphaxise, PR #10). Publishing a
+  # checksum that does not match the artifact is worse than publishing none: it
+  # tells the one person who bothered to verify that the file is corrupt.
+  #
+  # This does not fix them; it refuses to let the build finish quietly while
+  # they disagree.
+  local NEWSUM; NEWSUM=$(cut -d' ' -f1 < "$W/dist/$DIST_ZIP.sha256")
+  # The repository this script was run from, not $W: that is where the files
+  # that publish the checksum live.
+  local REPO; REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+  # This warned and carried on, so a build could finish happily with the
+  # documentation naming a different artifact -- which is the reported defect,
+  # not a milder version of it: a reader who runs `shasum -c` against a perfectly
+  # good download is told the file is corrupt. It fails the phase now.
+  #
+  # And the full 64 characters where they are available, not only the first 16.
+  # The corruption that prompted all of this shared its first sixteen with the
+  # good hash: a sed rewrote the short form inside the long one, leaving
+  # something that looked plausible, carried the right prefix, and pointed at
+  # nothing. The prose legitimately abbreviates, so a short match still counts
+  # there -- scripts/check-published-hash.py is what polices the abbreviations.
+  # An empty NEWSUM is what `cut` leaves when the .sha256 is missing, and
+  # `grep -q ""` matches every file that has a line in it -- so the gate below
+  # returned "agrees everywhere" after comparing nothing at all. It is checked
+  # for shape before it is used, not trusted because a command ran.
+  case "$NEWSUM" in
+    [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) : ;;
+    *) die "the sha256 just computed does not look like one: '$NEWSUM'" ;;
+  esac
+  [ ${#NEWSUM} -eq 64 ] || die "the sha256 just computed is ${#NEWSUM} characters, not 64: '$NEWSUM'"
+
+  # Only documents that STATE a hash are compared. Two of the six carry none at
+  # all -- README.es.md and dist/README.md link to the .sha256 file instead of
+  # quoting it -- and scoring "does not carry this image's sha256" against a
+  # document that quotes no sha256 at all made this gate permanently red: no
+  # build could reach the end of packaging, and the remedy in its own error
+  # message ("put it in the files above and package again") could not be
+  # carried out, because there is no line in those files to put it on.
+  #
+  # The die is right and stays. What was wrong was asking a question of files
+  # that do not answer it.
   local DESYNC=0 SRC SEEN=0 QUIET=0
   for SRC in dist/omarchy-arm-utm-v2.zip.sha256 dist/VERSIONS.md \
              README.md README.es.md EMPEZAR.md dist/README.md; do

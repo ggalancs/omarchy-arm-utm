@@ -39,6 +39,35 @@ grep -q 'no document next to this script quotes a sha256' "$F" \
   && echo "  ok  it says so when it compared nothing" \
   || { echo "  !! the gate cannot report an empty comparison"; fail=1; }
 
+# Everything it needs must be defined where it runs.
+#
+# Existence is not enough, and this test learned that the hard way: it was green
+# while the gate died on `REPO: unbound variable`, and then on `NEWSUM: unbound
+# variable`, because removing an unrelated block had taken those definitions
+# with it. A gate that cannot run is exactly as useful as a gate that is not
+# there, and this file exists to notice the second case.
+# Inside ph_package OR at the top level: DIST_ZIP is a global default on line 77
+# and is perfectly available. Requiring all three to be function-local flagged
+# correct code, which is the failure this whole file is against.
+gate_body=$(awk '/^ph_package\(\)/{f=1} f{print} f && /^}/{exit}' "$F")
+globals=$(grep -E '^: "\$\{[A-Z_]+:=|^[A-Z_]+=' "$F")
+for _v in NEWSUM REPO DIST_ZIP; do
+  if printf '%s\n' "$gate_body" | grep -qE "(local $_v|$_v=)"; then
+    echo "  ok  \$$_v is defined inside ph_package"
+  elif printf '%s\n' "$globals" | grep -qE "^: \"\\\$\{$_v:=|^$_v="; then
+    echo "  ok  \$$_v is a top-level default"
+  else
+    echo "  !! \$$_v is used by the gate and defined nowhere it can see"
+    fail=1
+  fi
+done
+
+# And the sanity checks on the freshly computed hash, which are the reason a
+# corrupted sha256 was caught once already.
+grep -q 'the sha256 just computed is' "$F" \
+  && echo "  ok  the computed sha256 is checked for length" \
+  || { echo "  !! nothing checks that the computed sha256 is 64 characters"; fail=1; }
+
 # And the documents it reads must be the ones that publish the hash.
 for d in dist/omarchy-arm-utm-v2.zip.sha256 dist/VERSIONS.md README.md EMPEZAR.md; do
   grep -q "$d" "$F" || { echo "  !! the gate does not read $d"; fail=1; }
