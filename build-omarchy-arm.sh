@@ -175,7 +175,15 @@ detect_from_host() {
   # the layout hardcoded at the top.
   if ! from_env VM_KEYMAP || ! from_env VM_XKB; then
     kb=$(defaults read ~/Library/Preferences/com.apple.HIToolbox.plist AppleSelectedInputSources 2>/dev/null \
-         | sed -n 's/.*"KeyboardLayout Name" = "\([^"]*\)".*/\1/p' | head -1)
+         | sed -n 's/.*"KeyboardLayout Name" = "\{0,1\}\([^";]*\)"\{0,1\};.*/\1/p' | head -1)
+    # The value is quoted only when it needs to be. `defaults read` prints
+    # `= "Spanish - ISO";` but `= German;` -- old-style plist quoting, applied
+    # per value. A pattern requiring the quotes matched nothing for every
+    # single-word layout (German, French, Italian, Portuguese...), and the
+    # fallback below selects the Spanish layout, so those builds shipped it
+    # without saying so. That is issue #1 of this repository, reached
+    # by a second route. Reported by Lawiak in issue #15; reproduced here by
+    # writing a plist with a single-word name and reading it back.
     local km="" xk=""
     case "$kb" in
       Spanish*)  km=es; xk=es ;;
