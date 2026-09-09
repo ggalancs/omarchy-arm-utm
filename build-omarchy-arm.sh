@@ -2683,11 +2683,27 @@ chown -h "$NEW:$NEW" "/home/$NEW/.local/share/omarchy"
 
 log "3/10 SDDM: autologin as the generic user"
 # The session name is READ, not assumed. stage2 deliberately falls back to
-# hyprland-uwsm when omarchy.desktop is absent, and this file sorts AFTER the
-# one stage2 wrote, so hardcoding "omarchy" here can name a session that does
-# not exist. SDDM then accepts the password and returns to the greeter -- which
-# is the symptom reported in issue #2, and the diagnosis given there (a Spanish
-# keyboard layout) cannot explain it, because the greeter has always been us.
+# hyprland-uwsm when omarchy.desktop is absent, so hardcoding "omarchy" here
+# names a session that may not exist, and the two files then disagree.
+#
+# The ordering claim that used to sit here was backwards, and it matters enough
+# to record. It said this file "sorts AFTER the one stage2 wrote". It does not:
+# stage2 writes /etc/sddm.conf.d/autologin.conf, this writes 20-autologin.conf,
+# and 2 sorts before a. SDDM reads the directory alphabetically
+# (QDir::LocaleAware) and each file's setValue overwrites the last, so stage2's
+# file is the one that decides -- the hardcoded value here was being overridden,
+# not winning.
+#
+# Which means this cannot have been the cause of issue #2 either. Reading the
+# name is still right: two files disagreeing about the session is a trap
+# whichever of them wins, and the guest-check assertion below refuses an image
+# whose autologin names a session nobody installed. But the report on #2 --
+# a password accepted, a black screen, and the greeter again -- has no
+# confirmed cause in this repository. The keyboard layout offered there cannot
+# produce it either: a wrong password was rejected immediately in the same
+# report, so the credentials were accepted -- and the Spanish and US layouts
+# place every letter of "omarchy" in the same position anyway, both being
+# QWERTY, so switching between them changes nothing anyone types.
 SESSION_NAME=omarchy
 if [ ! -f /usr/local/share/wayland-sessions/omarchy.desktop ] \
    && [ ! -f /usr/share/wayland-sessions/omarchy.desktop ]; then
