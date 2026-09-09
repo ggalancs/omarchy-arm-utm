@@ -11,7 +11,7 @@
 | "Update System" notification | gone | repeats on every boot |
 | "Reboot?" after each update | gone | repeats forever |
 | `sshd` | disabled | enabled, with a trivial password |
-| `sha256` | `f27bca445ce27d57fb7206301010b1cef83dac32794890b4b0e9dd5033af3ed9` | `9d6afb16843bd868c9503dbfdaaa5f1ff7634b23f9a972b344ec27ca0a795fb4` |
+| `sha256` | `d712b243a6f05bf4f81f40bbe53df83ea46b08e2f92ed5704786e88d9733cd8e` | `9d6afb16843bd868c9503dbfdaaa5f1ff7634b23f9a972b344ec27ca0a795fb4` |
 
 The plain name belongs to the first release and keeps it, so links and checksums
 published back in August still resolve to the exact bytes they were written
@@ -35,6 +35,27 @@ User `omarchy`, password `omarchy` (also root). **Change it with `passwd`.**
 
 Arch Linux ARM aarch64 · Hyprland 0.56.2 · the Omarchy 4 desktop · 456
 `omarchy-*` commands · 18 packages built for ARM · OBS Studio and Pinta.
+
+## What changed on 2026-09-09
+
+**hyprtoolkit comes from Arch Linux ARM again.** It republished 0.5.4-6 on
+8 September at 13:41 CEST, rebuilt against the aquamarine it actually ships, so
+only `hyprland` is still compiled here. Which packages get compiled is read from
+the repository index at build time rather than written into the build script, so
+the next repair applies itself. `hyprland` has not been rebuilt since
+2026-08-01, five weeks before aquamarine moved, so there is no visible horizon
+for that half.
+
+**`mise-bin` moved from 2026.9.2 to 2026.9.3** between one build and the next.
+Everything not in Arch Linux ARM is fetched at its current version on every
+build rather than pinned, which is why this is a version bump and not a repair.
+
+**A keyboard fix for people who build their own image.** `defaults read` quotes
+a layout name only when it needs to -- `"Spanish - ISO"` but `German` -- and the
+host detection required the quotes, so every single-word layout matched nothing
+and the build fell back to the Spanish layout without saying so. Published
+images were never affected: the sanitising step forces a neutral `us` layout and
+asserts it. Reported in issue #15.
 
 ## What changed on 2026-09-08
 
@@ -222,11 +243,11 @@ image no longer carries and what was proven about it:
   and pulls whatever toolchain an AUR package needs when you build one. (This
   said "the Rust and Go toolchains stay" for two releases.)
 
-## Images published before `f27bca445ce27d57…`: run this one
+## Images published before `d712b243a6f05bf4…`: run this one
 
 **2026-09-04.** The releases before the current one ship five differences from
 Omarchy 4, and two of them are about security. The image whose `sha256` begins
-`f27bca445ce27d57` is not among them: it has all five verified by invariants that
+`d712b243a6f05bf4` is not among them: it has all five verified by invariants that
 fail the build if they regress, and the run that produced it reported them
 green. Auditing the build against Omarchy's own
 `install/` scripts turned them up:

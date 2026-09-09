@@ -84,7 +84,7 @@ The image this produces is on the Internet Archive, sanitised and ready to
 import — no build, no Homebrew, no waiting:
 
 **https://archive.org/details/omarchy-arm-utm** — download **`omarchy-arm-utm-v2.zip`** · 3.6 GB ·
-`sha256 f27bca445ce27d57…`
+`sha256 d712b243a6f05bf4…`
 
 The plain `omarchy-arm-utm.zip` next to it is the first release (6.5 GB). It
 keeps the plain name so links and checksums published with it still resolve to
@@ -223,7 +223,7 @@ inside it — no need to re-download. For the clipboard, run
 [`fixes/19-portapapeles.sh`](fixes/19-portapapeles.sh) the same way.
 
 **Run [`fixes/20-seguridad-y-servicios.sh`](fixes/20-seguridad-y-servicios.sh)
-if your copy's `sha256` is not `f27bca445ce27d57…`.** The image published under
+if your copy's `sha256` is not `d712b243a6f05bf4…`.** The image published under
 that checksum has these five verified by invariants that stop the build if they
 regress, so it needs nothing. Every image before it does. Auditing this build against Omarchy's own `install/`
 scripts on 2026-09-04 turned up five differences, two of them about security:
