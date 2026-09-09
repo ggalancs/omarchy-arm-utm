@@ -29,8 +29,15 @@ else
 fi
 
 # Files that run with pipefail and search binaries or files for a string.
+# The publishing scripts too. They run with pipefail, and one of them refused a
+# good 3.7 GB image because `unzip -l | grep -q` lost the race under load. They
+# were outside this list, which is how the same trap survived in a third place
+# after being fixed in two.
 FILES=(provision/src/sanitize.sh scripts/guest-check.sh provision/src/stage3.sh
        build-omarchy-arm.sh)
+for pubscript in publicar/*.sh; do
+  [ -e "$pubscript" ] && FILES+=("$pubscript")
+done
 found=0
 for f in "${FILES[@]}"; do
   [ -r "$f" ] || { echo "  !! cannot read $f"; fail=1; continue; }
@@ -67,7 +74,7 @@ for f in provision/src/sanitize.sh scripts/guest-check.sh; do
   fi
 done
 
-EXPECTED=4
+EXPECTED=7
 if [ "$found" -ne "$EXPECTED" ]; then
   echo "  !! examined $found files, expected $EXPECTED -- this test is grading an empty list"
   fail=1

@@ -600,3 +600,5 @@ attempt
 PAT
 gate_body
 globals
+ZIPLIST
+pubscript
