@@ -627,3 +627,7 @@ total
 list
 _case
 _warn
+REPORT
+FILTER
+user
+hostname

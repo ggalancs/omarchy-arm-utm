@@ -184,6 +184,26 @@ kill "$WD_PID" 2>/dev/null
 # progress lines. The caller then looked for NEGATIVE_TEST_OK, did not find it,
 # and reported a failure for a batch that had passed: the always-red twin of a
 # check that cannot fail.
-sed 's/\x1b\[[0-9;?=]*[a-zA-Z]//g' "$TR" | grep -av '^]3008' \
-  | sed -n '/^== identity ==/,/^VERDICT_/p; /^== 1\./,/^END_CHECK/p'
+# Anchored at the start of the line, this printed NOTHING for a run that passed
+# every one of its 54 checks. The shell's OSC prompt marker (\e]3008;start=...)
+# lands on the same physical line as the first heading, so the line does not
+# BEGIN with `== identity ==` and the range never opens. The exit status below
+# was still right; the evidence was simply gone -- the same hazard the comments
+# above describe, approached from the other side.
+#
+# So: strip CR, remove the marker wherever it sits on the line, and match the
+# heading anywhere in it rather than only at column one.
+REPORT=$(sed -e 's/\x1b\[[0-9;?=]*[a-zA-Z]//g' -e 's/\r//g' "$TR" \
+         | sed -e 's/\x1b\]3008;[^\x1b]*//g' -e 's/^]3008;[^ ]*//' \
+         | grep -av '^]3008' \
+         | sed -n '/== identity ==/,/^VERDICT_/p; /== 1\./,/^END_CHECK/p')
+if [ -n "$REPORT" ]; then
+  printf '%s\n' "$REPORT"
+else
+  # An empty report is not a clean report. Say which it is, instead of leaving
+  # three progress lines that read like a run which never happened.
+  echo "  !! the transcript produced no report: $TR"
+  echo "     the verdict below still comes from the transcript, but nothing"
+  echo "     above describes how it got there. Read that file directly."
+fi
 grep -q "VERDICT_CLEAN" "$TR" 2>/dev/null
