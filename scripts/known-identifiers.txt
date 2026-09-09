@@ -602,3 +602,14 @@ gate_body
 globals
 ZIPLIST
 pubscript
+ZIPLIST
+pubscript
+PUBFOUND
+SAFE
+before
+seg
+word
+line
+_head
+parts
+cmd

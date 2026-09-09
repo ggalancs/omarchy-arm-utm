@@ -35,8 +35,10 @@ fi
 # after being fixed in two.
 FILES=(provision/src/sanitize.sh scripts/guest-check.sh provision/src/stage3.sh
        build-omarchy-arm.sh)
+PUBFOUND=0
 for pubscript in publicar/*.sh; do
-  [ -e "$pubscript" ] && FILES+=("$pubscript")
+  [ -e "$pubscript" ] || continue
+  FILES+=("$pubscript"); PUBFOUND=$((PUBFOUND + 1))
 done
 found=0
 for f in "${FILES[@]}"; do
@@ -52,6 +54,62 @@ for f in "${FILES[@]}"; do
   # The trap needs a producer that keeps writing: `strings` over a binary, `cat`
   # or `find` over something large, `yes`. Those are banned before `grep -q`,
   # and the first of them is the one that made a security sweep blind.
+  # Two directions, because one was not enough.
+  #
+  # The list below names producers that keep writing. It is the direction that
+  # was written first, and it missed `unzip -l` over a 3.7 GB archive -- which
+  # is precisely the call that refused a good image. A blacklist only catches
+  # the commands somebody already thought of, and the one that bit was the one
+  # nobody had.
+  #
+  # So every OTHER producer feeding a `grep -q` is checked against a list of
+  # commands whose output demonstrably fits in the pipe buffer, and anything
+  # unrecognised is reported. That fails closed: a new tool in this position has
+  # to be looked at and filed under one list or the other, instead of passing in
+  # silence because nobody predicted it.
+  SAFE='printf|echo|head|getent|pgrep|id|uname|hostname|grep|sed|cut|tr|awk|pacman|utmctl|UTMCTL|true|test'
+  # Every `| grep -q` on the line, not just the first.
+  #
+  # Hand-slicing the line with ${line%%|*grep*} took the text up to the FIRST
+  # pipe, so on a line carrying three of these it judged one and invented a
+  # producer for the others -- it reported `send` for an expect line whose three
+  # pipes are `id -nG`, `pgrep` and a grep over a small config, all fine. awk
+  # splits on the pipes properly: for each field whose NEXT field is a `grep -q`,
+  # that field is the producer. Then the last `&&`/`||`/`;` segment of it, since
+  # `[ -n "$VU" ] && utmctl list` is a test and then the command that matters.
+  while IFS= read -r word; do
+    [ -n "$word" ] || continue
+    printf '%s\n' "$word" | grep -qxE "$SAFE" && continue
+    printf '%s\n' "$word" | grep -qxE 'strings|cat|find|yes|journalctl|dmesg' && continue
+    echo "  !! $f: unrecognised producer [$word] feeding a 'grep -q'"
+    echo "       decide whether its output fits in the pipe buffer, then file it"
+    echo "       under SAFE or under the banned list in this test."
+    fail=1
+  done <<< "$(grep -vE '^[[:space:]]*#' "$f" | awk -F'|' '
+    {
+      for (i = 1; i < NF; i++) {
+        if ($(i+1) !~ /^[[:space:]]*(LC_ALL=[A-Za-z._-]+[[:space:]]+)?grep[[:space:]]+-[a-zA-Z]*q/) continue
+        seg = $i
+        n = split(seg, parts, /&&|\|\||;/)
+        seg = parts[n]
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", seg)
+        # Peel keywords, brackets and an assignment prefix. The assignment peel cuts
+    # at the "=" and no further: taking VAR=<non-space> as one unit swallowed the
+    # command inside a substitution -- `G=$(id -nG | ...` yielded "-nG", a flag
+    # reported as an unknown producer. The "$" and "\\" then let the loop step
+    # through the `\$(` and leave `id`.
+        while (match(seg, /^(if|elif|while|until|then|else|do|not)[[:space:]]+/) ||
+               match(seg, /^[!\[({$\\[:space:]]+/) ||
+               match(seg, /^[A-Za-z_][A-Za-z0-9_]*=/))
+          seg = substr(seg, RSTART + RLENGTH)
+        split(seg, w, /[[:space:]]+/)
+        cmd = w[1]
+        gsub(/.*\//, "", cmd)
+        gsub(/["\x27$(){}\\]/, "", cmd)
+        if (cmd != "") print cmd
+      }
+    }')"
+
   hits=$(grep -nE '\b(strings|cat|find|yes|journalctl|dmesg)\b[^|]*\|[[:space:]]*(LC_ALL=[A-Za-z._-]+[[:space:]]+)?grep[[:space:]]+-[a-zA-Z]*q' "$f" \
          | grep -vE '^[[:space:]]*[0-9]+:[[:space:]]*#' || true)
   if [ -n "$hits" ]; then
@@ -74,7 +132,21 @@ for f in provision/src/sanitize.sh scripts/guest-check.sh; do
   fi
 done
 
-EXPECTED=7
+# Four tracked files are the floor, and the floor is what this guard is for: it
+# catches a glob or a rename that leaves the loop grading an empty list.
+#
+# The publishing scripts are counted on top of it rather than folded into a
+# fixed number. They live in a directory .gitignore excludes, so a clean
+# checkout has none of them and a hardcoded 7 would fail on the runner while
+# being right here -- a test that passes on one machine only is the thing this
+# file exists to prevent. How many were found is printed either way, so "the
+# directory was not there" reads differently from "the directory was clean".
+EXPECTED=$(( 4 + PUBFOUND ))
+if [ "$PUBFOUND" -eq 0 ]; then
+  echo "  .   no publishing scripts in this tree (not tracked by git); 4 files examined"
+else
+  echo "  ok  $PUBFOUND publishing script(s) examined alongside the 4 tracked files"
+fi
 if [ "$found" -ne "$EXPECTED" ]; then
   echo "  !! examined $found files, expected $EXPECTED -- this test is grading an empty list"
   fail=1
