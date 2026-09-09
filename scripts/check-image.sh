@@ -193,8 +193,13 @@ kill "$WD_PID" 2>/dev/null
 #
 # So: strip CR, remove the marker wherever it sits on the line, and match the
 # heading anywhere in it rather than only at column one.
+# The marker is NOT cut off the line. Doing that portably is the trap:
+# s/\x1b\]3008;[^\x1b]*//g deletes the marker under BSD sed and the WHOLE
+# LINE, heading included, under GNU sed -- GNU reads the \x1b inside the
+# bracket expression and BSD does not. Green on this Mac, red on the runner,
+# over the one line the range has to open on. It stays where it is: one
+# untidy line in a log, and nothing else.
 REPORT=$(sed -e 's/\x1b\[[0-9;?=]*[a-zA-Z]//g' -e 's/\r//g' "$TR" \
-         | sed -e 's/\x1b\]3008;[^\x1b]*//g' -e 's/^]3008;[^ ]*//' \
          | grep -av '^]3008' \
          | sed -n '/== identity ==/,/^VERDICT_/p; /== 1\./,/^END_CHECK/p')
 if [ -n "$REPORT" ]; then

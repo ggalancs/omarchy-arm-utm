@@ -631,3 +631,5 @@ REPORT
 FILTER
 user
 hostname
+failed
+_n

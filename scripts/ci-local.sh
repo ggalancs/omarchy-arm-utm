@@ -38,7 +38,23 @@ step() {
     sed 's/^/          /' /tmp/ci-local.out | head -5
   else
     printf '  FAIL  %s\n' "$name"; fail=$((fail+1))
-    sed 's/^/          /' /tmp/ci-local.out | head -15
+    # `head -15` hid the reason. The unit-test step runs twenty test scripts
+    # and prints every line each of them emits; the one that failed was well
+    # past line fifteen, so a red step showed fifteen lines of PASSING output
+    # and stopped. Twice that was read here as "the failure is invisible".
+    #
+    # Short output goes out whole. Long output gets the lines that announce a
+    # problem, wherever they sit, then the tail -- and the total, so a cut is
+    # never silent.
+    local _n; _n=$(wc -l < /tmp/ci-local.out)
+    if [ "$_n" -le 40 ]; then
+      sed 's/^/          /' /tmp/ci-local.out
+    else
+      grep -aE '(^|[^a-zA-Z])(!!|FAILED:|FAIL |bad |not ok|Traceback|error:|Error:)' /tmp/ci-local.out \
+        | head -20 | sed 's/^/          /'
+      printf '          ... %s lines in total, last 15:\n' "$_n"
+      tail -15 /tmp/ci-local.out | sed 's/^/          /'
+    fi
   fi
 }
 
@@ -125,17 +141,22 @@ python_syntax() { local f r=0; while IFS= read -r f; do python3 -m py_compile "$
 # Ubuntu reports it as SC1073; the linter on this Mac does not, which is the
 # whole argument for scripts/ci-container.sh.
 unit_tests() {
-  local t rc r=0 skipped=""
+  local t rc r=0 skipped="" failed=""
   for t in tests/*.sh; do
     [ -e "$t" ] || continue
     rc=0; bash "$t" || rc=$?
     case "$rc" in
       0)  ;;
       77) skipped="$skipped $t" ;;
-      *)  r=1 ;;
+      # Name it. This used to set r=1 and say nothing, so a red step showed
+      # the output of every test that had PASSED and left the reader to work
+      # out which one had not. On a machine where a single test failed, that
+      # reader was guessing.
+      *)  failed="$failed $t(rc=$rc)"; r=1 ;;
     esac
   done
   [ -n "$skipped" ] && echo "  SKIPPED (exit 77, a dependency is missing):$skipped"
+  [ -n "$failed" ]  && echo "  FAILED:$failed"
   return $r
 }
 shellcheck_errors() {
