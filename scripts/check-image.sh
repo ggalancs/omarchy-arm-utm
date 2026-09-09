@@ -50,7 +50,18 @@ PLIST
   case "$_m" in ''|*[!0-9]*) ;; *) [ "$_m" -ge 512 ] && VM_MEM=$_m ;; esac
   case "$_c" in ''|*[!0-9]*) ;; *) [ "$_c" -ge 1 ]   && VM_SMP=$_c ;; esac
 fi
-echo "  booting as the bundle declares: ${VM_MEM} MiB, ${VM_SMP} vCPU"
+# CHECK_MEM/CHECK_SMP override the declared values, which is how the floor gets
+# measured. The number in config.plist is a modest default somebody chose so the
+# builder's own machine is not stamped into a stranger's image -- it is not a
+# minimum, and nothing had ever established one. Probing takes running this at
+# smaller sizes and seeing where the desktop stops coming up.
+[ -n "${CHECK_MEM:-}" ] && VM_MEM=$CHECK_MEM
+[ -n "${CHECK_SMP:-}" ] && VM_SMP=$CHECK_SMP
+if [ -n "${CHECK_MEM:-}${CHECK_SMP:-}" ]; then
+  echo "  booting OVERRIDDEN: ${VM_MEM} MiB, ${VM_SMP} vCPU (bundle declares other values)"
+else
+  echo "  booting as the bundle declares: ${VM_MEM} MiB, ${VM_SMP} vCPU"
+fi
 
 TMP=$(mktemp -d); [ -n "${KEEP_TMP:-}" ] || trap 'rm -rf "$TMP"' EXIT
 echo "  tmp: $TMP"
@@ -226,6 +237,13 @@ kill "$WD_PID" 2>/dev/null
 #
 # So: strip CR, remove the marker wherever it sits on the line, and match the
 # heading anywhere in it rather than only at column one.
+#
+# The range opens on the first heading, whichever it is. It opened on
+# "== identity ==" alone, and the moment guest-check grew a "== machine =="
+# section above it -- the guest's own account of the RAM and CPUs it was given
+# -- those two lines fell outside the report and never reached this log. One
+# alternation rather than two ranges, because two would overlap and print the
+# body twice.
 # The marker is NOT cut off the line. Doing that portably is the trap:
 # s/\x1b\]3008;[^\x1b]*//g deletes the marker under BSD sed and the WHOLE
 # LINE, heading included, under GNU sed -- GNU reads the \x1b inside the
@@ -234,7 +252,7 @@ kill "$WD_PID" 2>/dev/null
 # untidy line in a log, and nothing else.
 REPORT=$(sed -e 's/\x1b\[[0-9;?=]*[a-zA-Z]//g' -e 's/\r//g' "$TR" \
          | grep -av '^]3008' \
-         | sed -n '/== identity ==/,/^VERDICT_/p; /== 1\./,/^END_CHECK/p')
+         | sed -En '/== (machine|identity) ==/,/^VERDICT_/p; /== 1\./,/^END_CHECK/p')
 if [ -n "$REPORT" ]; then
   printf '%s\n' "$REPORT"
 else

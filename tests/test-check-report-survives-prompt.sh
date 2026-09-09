@@ -14,7 +14,15 @@ fail=0
 # A transcript shaped like the real one: CSI sequence, CR, OSC marker and the
 # heading all on one line, CRLF endings throughout.
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
-printf '\033[?2004l\r\033]3008;start=abc;user=root;hostname=omarchy== identity ==\r\r\n' > "$TMP/tr.log"
+# The FIRST heading is the one glued to the marker, and it is "== machine =="
+# now that guest-check reports the RAM and CPUs the guest was actually given.
+# A range opening only on "== identity ==" drops those two lines, which are the
+# whole point of having them: they are the guest's own account of the machine,
+# instead of the harness vouching for what it passed to QEMU.
+printf '\033[?2004l\r\033]3008;start=abc;user=root;hostname=omarchy== machine ==\r\r\n' > "$TMP/tr.log"
+printf '  ram    1457 MiB\r\r\n'              >> "$TMP/tr.log"
+printf '  cpus   4\r\r\n'                     >> "$TMP/tr.log"
+printf '== identity ==\r\r\n'                 >> "$TMP/tr.log"
 printf '  ok     user omarchy exists\r\r\n'   >> "$TMP/tr.log"
 printf '== desktop ==\r\r\n'                  >> "$TMP/tr.log"
 printf '  ok     Hyprland up\r\r\n'           >> "$TMP/tr.log"
@@ -33,12 +41,25 @@ TR="$TMP/tr.log"
 # extracted block ends with the printf that emits it.
 eval "$FILTER" >/dev/null 2>&1
 
-if printf '%s\n' "${REPORT:-}" | grep -q 'user omarchy exists' &&
-   printf '%s\n' "${REPORT:-}" | grep -q 'Hyprland up'; then
-  echo "  ok  the report survives the prompt marker on the heading line"
-else
-  echo "  !! the report was dropped: the range did not open"
+# Three separate verdicts, because one compound test reports the wrong reason.
+# Two overlapping ranges print the body twice, and that failed here with "the
+# range did not open" -- which is the opposite of what had happened.
+_n_body=$(printf '%s\n' "${REPORT:-}" | grep -c 'user omarchy exists')
+if [ "$_n_body" -eq 0 ]; then
+  echo "  !! the report was dropped: the range never opened"
   echo "     got: [${REPORT:-}]"
+  fail=1
+elif [ "$_n_body" -gt 1 ]; then
+  echo "  !! the report is printed $_n_body times: the ranges overlap"
+  fail=1
+else
+  echo "  ok  the report survives the prompt marker, exactly once"
+fi
+if printf '%s\n' "${REPORT:-}" | grep -q '1457 MiB' &&
+   printf '%s\n' "${REPORT:-}" | grep -q 'Hyprland up'; then
+  echo "  ok  it carries the machine the guest reported, and the checks"
+else
+  echo "  !! the machine section or the checks are missing from the report"
   fail=1
 fi
 

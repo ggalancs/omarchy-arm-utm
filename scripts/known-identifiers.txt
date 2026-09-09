@@ -642,3 +642,6 @@ _declared
 _m
 _c
 sysd
+CHECK_MEM
+CHECK_SMP
+_n_body

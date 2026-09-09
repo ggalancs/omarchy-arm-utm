@@ -13,6 +13,14 @@ failures=0
 bad()  { echo "  FAIL   $*"; failures=$((failures+1)); }
 ok_()  { echo "  ok     $*"; }
 
+# The machine this ran on, from inside it. The transcript used to say nothing
+# about the hardware, so "it came up on 2048 MiB" rested on the caller's own
+# echo of what it had passed to QEMU -- the harness vouching for itself. Read
+# from /proc, it is the guest's own account of what it was given.
+echo "== machine =="
+echo "  ram    $(awk '/^MemTotal:/{printf "%d MiB", int($2/1024)}' /proc/meminfo)"
+echo "  cpus   $(nproc 2>/dev/null || grep -c ^processor /proc/cpuinfo)"
+
 echo "== identity =="
 getent passwd "$NEW" >/dev/null && ok_ "user $NEW exists" || bad "no $NEW user"
 getent passwd "$OLD" >/dev/null && bad "build account '$OLD' is still there" \
