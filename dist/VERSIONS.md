@@ -57,6 +57,17 @@ and the build fell back to the Spanish layout without saying so. Published
 images were never affected: the sanitising step forces a neutral `us` layout and
 asserts it. Reported in issue #15.
 
+**The login message names a package this image did not compile.** `/etc/motd`
+greets you with "Hyprland and hyprtoolkit in this image were COMPILED during the
+build". That sentence was a fixed string, and it is the one thing the change
+above did not carry with it: this image compiled `hyprland` alone. The record it
+sends you to, `/usr/local/share/omarchy-arm/built-from-source.txt`, lists what
+was actually built, and `omarchy-arm-hypr-local` reports the same -- so the file
+and the sentence disagree, and the file is the one that is right. The build
+script now reads the names out of that record instead of naming them in the
+sentence, so an image built from it says what it compiled. This one predates
+that.
+
 ## What changed on 2026-09-08
 
 **Pinta is in the image.** It was refused on every build since 3 September by a

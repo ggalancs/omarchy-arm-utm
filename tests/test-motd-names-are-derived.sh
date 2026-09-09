@@ -35,6 +35,23 @@ for f in provision/src/sanitize.sh build-omarchy-arm.sh; do
   fi
 done
 
+# The same habit in the tool the motd sends the reader to. Its live-session
+# warning named /usr/bin/Hyprland and /usr/lib/libhyprtoolkit.so.5 whatever the
+# run was actually handing back, so on an image that compiled only one of them
+# it described replacing a file it was not going to touch.
+HL=provision/src/omarchy-arm-hypr-local
+warn_block=$(sed -n '/underneath a live session/,+3p' "$HL")
+if [ -z "$warn_block" ]; then
+  echo "  !! $HL: cannot find the live-session warning"
+  fail=1
+elif printf '%s\n' "$warn_block" | grep -qiE 'libhyprtoolkit|bin/Hyprland'; then
+  echo "  !! $HL: the live-session warning names a file literally:"
+  printf '%s\n' "$warn_block" | grep -inE 'libhyprtoolkit|bin/Hyprland' | sed 's/^/       /'
+  fail=1
+else
+  echo "  ok  $HL: the live-session warning names what is being replaced"
+fi
+
 # The list builder itself, run here rather than trusted: one name takes the
 # singular, several take commas and a final "and".
 build_list() {

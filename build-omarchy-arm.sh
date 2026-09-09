@@ -5327,10 +5327,13 @@ if [ "${#HANDBACK[@]}" -eq 0 ] || [ -z "${HANDBACK[0]:-}" ]; then
 fi
 if pgrep -x Hyprland >/dev/null 2>&1 && [ "$FORCE" != 1 ]; then
   echo "  ${c_warn}Hyprland is running.${c_off}"
-  echo "  Replacing /usr/bin/Hyprland and /usr/lib/libhyprtoolkit.so.5 underneath a"
-  echo "  live session, with hyprpaper and the dialogs linked against the old"
-  echo "  library, is a logout rather than an upgrade. Log out to a TTY and run"
-  echo "  it there, or pass --force if you know what you are doing."
+  # Name what is actually being handed back. This said "/usr/bin/Hyprland and
+  # /usr/lib/libhyprtoolkit.so.5" whatever HANDBACK held -- the same fixed-string
+  # habit that had the motd announcing a hyprtoolkit build that never happened.
+  echo "  Replacing ${HANDBACK[*]} underneath a live session, with hyprpaper and"
+  echo "  the dialogs linked against the libraries being swapped, is a logout"
+  echo "  rather than an upgrade. Log out to a TTY and run it there, or pass"
+  echo "  --force if you know what you are doing."
   exit 1
 fi
 echo "  Syncing first: without it this can target a version the mirror no"
