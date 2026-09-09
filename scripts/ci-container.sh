@@ -31,8 +31,22 @@ docker run --rm --platform linux/amd64 \
     # The linter comes from upstream, not from apt: the runners carry a newer
     # one and
     # the codes it reports differ between versions.
-    curl -fsSL https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.linux.x86_64.tar.xz \
-      | tar -xJ -C /tmp
+    # Downloaded to a file and checked before extracting. Piping curl straight
+    # into tar turns a failed download into "xz: File format not recognized",
+    # which reads like a corrupt release rather than a network that did not
+    # answer -- and it did not answer here, while a 3.9 GB download was running
+    # alongside it.
+    for attempt in 1 2 3; do
+      if curl -fsSL --retry 3 --max-time 120 -o /tmp/sc.tar.xz \
+           https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.linux.x86_64.tar.xz \
+         && [ -s /tmp/sc.tar.xz ] && tar -tJf /tmp/sc.tar.xz >/dev/null 2>&1; then
+        break
+      fi
+      echo "    shellcheck download failed (attempt $attempt)"; sleep 5
+    done
+    [ -s /tmp/sc.tar.xz ] && tar -tJf /tmp/sc.tar.xz >/dev/null 2>&1 \
+      || { echo "could not fetch shellcheck; the run would be missing two steps"; exit 3; }
+    tar -xJf /tmp/sc.tar.xz -C /tmp
     install -m755 /tmp/shellcheck-stable/shellcheck /usr/local/bin/shellcheck
     cp -a /src/. /work/
     git config --global --add safe.directory /work
