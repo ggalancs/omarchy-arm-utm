@@ -39,4 +39,28 @@ PY
     fail=1
   fi
 done
+# Detection is half of it. A layout the case list does not map -- Swedish,
+# Dvorak, anything -- leaves the keymap at whatever was hardcoded at the top,
+# and that used to happen without a word: the same silence, one step further
+# along. The build must say so instead.
+if grep -qE 'is not one this script maps' build-omarchy-arm.sh &&
+   grep -qE 'could not read the host layout' build-omarchy-arm.sh; then
+  echo "  ok  an unmapped layout, and an unreadable one, are announced"
+else
+  echo "  !! the fallback is silent: an unmapped layout ships the hardcoded"
+  echo "     keymap without telling anyone, which is the reported defect"
+  fail=1
+fi
+
+# And the announcement has to be reachable: it belongs after the case that sets
+# km, inside the same branch. Above it, km is always empty and it fires always.
+_case=$(grep -n 'Italian\*)' build-omarchy-arm.sh | head -1 | cut -d: -f1)
+_warn=$(grep -n 'is not one this script maps' build-omarchy-arm.sh | head -1 | cut -d: -f1)
+if [ -n "$_case" ] && [ -n "$_warn" ] && [ "$_warn" -gt "$_case" ]; then
+  echo "  ok  the announcement sits after the layout mapping, not before it"
+else
+  echo "  !! the announcement is not after the case that sets the keymap"
+  fail=1
+fi
+
 exit $fail

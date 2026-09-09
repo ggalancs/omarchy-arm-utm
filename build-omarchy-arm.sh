@@ -196,6 +196,19 @@ detect_from_host() {
     esac
     [[ -n $km ]] && ! from_env VM_KEYMAP && VM_KEYMAP="$km"
     [[ -n $xk ]] && ! from_env VM_XKB    && VM_XKB="$xk"
+    # Say so when the layout is not one of the seven above, or when nothing
+    # could be read at all. Without this the build keeps whatever VM_KEYMAP was
+    # hardcoded at the top and never mentions it -- the same silence the
+    # quoting bug produced, one step further along: an image shipping a layout
+    # its builder never chose.
+    if [[ -z $km ]] && ! from_env VM_KEYMAP; then
+      if [[ -n $kb ]]; then
+        echo "  keyboard: host layout '$kb' is not one this script maps;" >&2
+      else
+        echo "  keyboard: could not read the host layout;" >&2
+      fi
+      echo "            using VM_KEYMAP=$VM_KEYMAP VM_XKB=$VM_XKB. Set them to override." >&2
+    fi
   fi
   ncpu=$(sysctl -n hw.perflevel0.logicalcpu 2>/dev/null || sysctl -n hw.ncpu)
   ram=$(( $(sysctl -n hw.memsize) / 1024 / 1024 ))
