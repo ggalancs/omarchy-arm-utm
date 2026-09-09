@@ -645,3 +645,11 @@ sysd
 CHECK_MEM
 CHECK_SMP
 _n_body
+MODES
+EXPR
+from
+to
+got
+mode
+flag
+HOME

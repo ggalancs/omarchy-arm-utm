@@ -5084,9 +5084,18 @@ apply() {
   # run on one of them. This runs on the guest, but a script that cannot be
   # tested on the machine that writes it does not get shipped.
   tmp=$(mktemp) || { echo "  cannot create a temporary file" >&2; return 1; }
-  sed -e "s/mode = \"[0-9]*x[0-9]*@[0-9]*\"/mode = \"$mode\"/" \
-      -e "s/\(position = \"0x0\", scale = \)[0-9]*/\1$scale/" \
-      -e "s/hl.env(\"GDK_SCALE\", \"[0-9]*\")/hl.env(\"GDK_SCALE\", \"$gdk\")/" \
+  # `[0-9]*x[0-9]*@[0-9]*` did not match the word "preferred", so once the mode
+  # was that -- by --auto, by fixes/03, or by hand -- no later --retina or
+  # --default could change it back: the pattern found nothing and the user was
+  # told the mode had been applied.
+  #
+  # `-E`, not an escaped alternation. `\|` is a GNU extension that BSD sed does
+  # not implement, and the first version of this fix used it: correct in the
+  # guest, and silently a no-op anywhere else. ERE is understood by both, and
+  # tested here in all nine directions between the three modes.
+  sed -E -e "s/mode = \"(preferred|[0-9]+x[0-9]+@[0-9]+)\"/mode = \"$mode\"/" \
+      -e "s/(position = \"0x0\", scale = )[0-9]+/\1$scale/" \
+      -e "s/hl\.env\(\"GDK_SCALE\", \"[0-9]+\"\)/hl.env(\"GDK_SCALE\", \"$gdk\")/" \
       "$MON" > "$tmp" || { rm -f "$tmp"; echo "  could not rewrite $MON" >&2; return 1; }
   # sed exits 0 when it matches NOTHING, so this reported success over a file
   # it had not touched. monitors.lua legitimately comes in other shapes -- the
@@ -5146,6 +5155,26 @@ case "${1:-}" in
     echo "  enable Retina Mode in UTM's Display settings if you have not"
     ;;
   --default)  apply 1920x1200@60 1 1 || exit 1 ;;
+    --auto)
+      # Hands the mode back to the guest, so the desktop follows the UTM window
+      # instead of staying at the size this image ships. That is what removes the
+      # black bars when the window is dragged to a monitor of a different shape:
+      # 1920x1200 is 16:10, and on a 16:9 panel a fixed mode can only be
+      # letterboxed. It also restores a 1:1 pointer mapping, since an absolute
+      # SPICE pointer drifts when the guest and the window disagree on size.
+      #
+      # The cost is real and measured, which is why this is an option and not the
+      # default: with "preferred" the session comes up at 1280x800@75. Measured
+      # inside UTM on 2026-09-09 by reloading a published image with the mode set
+      # this way. That is the same 1280x800 the comment in stage3.sh has always
+      # named, so the reason the mode was pinned has not expired.
+      #
+      # UTM's own "Resize display to window" has to be on for the following part
+      # to work; the bundle ships DynamicResolution enabled.
+      apply preferred 1 1 || exit 1
+      echo "  the desktop now follows the UTM window; it starts at 1280x800"
+      echo "  and resizes as the window changes. --default pins it back."
+      ;;
   --status)   show ;;
   -h|--help)  usage ;;
   *)          usage; exit 1 ;;
@@ -6777,6 +6806,7 @@ pixels in each direction, sharp:
 ```bash
 omarchy-arm-display --retina    # 3840x2400 at scale 2
 omarchy-arm-display --default   # back to 1920x1200
+omarchy-arm-display --auto      # follow the UTM window (starts at 1280x800)
 omarchy-arm-display --status
 ```
 
@@ -6998,6 +7028,7 @@ Ships at 1920x1200, and it is one command either way:
 omarchy-arm-display --status    # what is in effect
 omarchy-arm-display --retina    # 3840x2400 at scale 2
 omarchy-arm-display --default   # back to 1920x1200
+omarchy-arm-display --auto      # follow the UTM window (starts at 1280x800)
 ```
 
 That was measured on the packaged image under UTM 4.7.5: the mode applies with
@@ -7007,6 +7038,13 @@ framebuffer down again.
 
 Retina is four times the pixels, so on software rendering it costs; pair it
 with `omarchy-arm-gpu --on` where the host supports that.
+
+**Black bars on a 16:9 monitor.** The shipped mode is 1920x1200, which is 16:10
+like the Mac panels this image targets. Dragged to a 16:9 display it can only be
+letterboxed, and an absolute pointer drifts when the guest and the window
+disagree on size. `omarchy-arm-display --auto` hands the mode back so the
+desktop follows the window; the cost is that the session then starts at
+1280x800, which is what the guest negotiates on its own.
 
 A hand edit of `~/.config/hypr/monitors.lua` still needs a restart — the tool
 rewrites the file and reloads in one step, which is what makes it safe.

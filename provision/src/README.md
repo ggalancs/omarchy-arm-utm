@@ -115,6 +115,7 @@ pixels in each direction, sharp:
 ```bash
 omarchy-arm-display --retina    # 3840x2400 at scale 2
 omarchy-arm-display --default   # back to 1920x1200
+omarchy-arm-display --auto      # follow the UTM window (starts at 1280x800)
 omarchy-arm-display --status
 ```
 
@@ -336,6 +337,7 @@ Ships at 1920x1200, and it is one command either way:
 omarchy-arm-display --status    # what is in effect
 omarchy-arm-display --retina    # 3840x2400 at scale 2
 omarchy-arm-display --default   # back to 1920x1200
+omarchy-arm-display --auto      # follow the UTM window (starts at 1280x800)
 ```
 
 That was measured on the packaged image under UTM 4.7.5: the mode applies with
@@ -345,6 +347,13 @@ framebuffer down again.
 
 Retina is four times the pixels, so on software rendering it costs; pair it
 with `omarchy-arm-gpu --on` where the host supports that.
+
+**Black bars on a 16:9 monitor.** The shipped mode is 1920x1200, which is 16:10
+like the Mac panels this image targets. Dragged to a 16:9 display it can only be
+letterboxed, and an absolute pointer drifts when the guest and the window
+disagree on size. `omarchy-arm-display --auto` hands the mode back so the
+desktop follows the window; the cost is that the session then starts at
+1280x800, which is what the guest negotiates on its own.
 
 A hand edit of `~/.config/hypr/monitors.lua` still needs a restart — the tool
 rewrites the file and reloads in one step, which is what makes it safe.
