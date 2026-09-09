@@ -20,6 +20,38 @@ NEWU="${3:-omarchy}"
 DISK=$(find "$BUNDLE/Data" -name '*.qcow2' | head -1)
 [ -s "$DISK" ] || { echo "cannot find the qcow2 in $BUNDLE"; exit 2; }
 
+# The machine the bundle DECLARES, not one this script picked.
+#
+# It hardcoded -m 6144 -smp 4 while config.plist says 4096, so every run proved
+# the desktop comes up on a machine nobody is shipped -- and 4096 is the figure
+# the gallery entry publishes and a downloader gets. "It boots" had never been
+# established at the size being advertised.
+#
+# The display device cannot be matched here: the bundle asks for
+# virtio-gpu-gl-pci and the QEMU on this host does not carry it ("not a valid
+# device model" -- built without virgl; UTM ships its own). The check runs
+# virtio-gpu-pci instead. The guest forces LIBGL_ALWAYS_SOFTWARE=1 either way,
+# so what stays untested is UTM's GL path, not whether the desktop comes up.
+CFG="$BUNDLE/config.plist"
+VM_MEM=6144; VM_SMP=4
+if [ -f "$CFG" ]; then
+  _declared=$(python3 - "$CFG" 2>/dev/null <<'PLIST'
+import plistlib, sys
+try:
+    d = plistlib.load(open(sys.argv[1], 'rb'))
+except Exception:
+    raise SystemExit(0)
+sysd = d.get('System', {})
+print(sysd.get('MemorySize') or 0, sysd.get('CPUCount') or 0)
+PLIST
+  )
+  _m=${_declared%% *}; _c=${_declared##* }
+  # A 0 CPUCount is UTM's "let the host decide", not a machine with no CPUs.
+  case "$_m" in ''|*[!0-9]*) ;; *) [ "$_m" -ge 512 ] && VM_MEM=$_m ;; esac
+  case "$_c" in ''|*[!0-9]*) ;; *) [ "$_c" -ge 1 ]   && VM_SMP=$_c ;; esac
+fi
+echo "  booting as the bundle declares: ${VM_MEM} MiB, ${VM_SMP} vCPU"
+
 TMP=$(mktemp -d); [ -n "${KEEP_TMP:-}" ] || trap 'rm -rf "$TMP"' EXIT
 echo "  tmp: $TMP"
 dd if=/dev/zero of="$TMP/efi.fd" bs=1m count=64 status=none
@@ -60,7 +92,7 @@ log_user 1  # without this expect emits nothing and the report is lost
 # actually happening: hours have gone into reading a frozen log, believing the
 # guest was hung when it had already finished.
 log_file -a $env(TRANSCRIPT)
-spawn qemu-system-aarch64 -accel hvf -cpu host -smp 4 -m 6144 \
+spawn qemu-system-aarch64 -accel hvf -cpu host -smp $env(VM_SMP) -m $env(VM_MEM) \
   -M virt,highmem=on,gic-version=3 -snapshot \
   -drive if=pflash,format=raw,unit=0,readonly=on,file=$env(FW) \
   -drive if=pflash,format=raw,unit=1,file=$env(EFI) \
@@ -135,6 +167,7 @@ echo "  transcript: $TR"
 # by name, so a VM the user is running is not in reach of this.
 HARD_LIMIT="${CHECK_HARD_LIMIT:-2400}"
 EFI="$TMP/efi.fd" DISK="$DISK" ISO="$TMP/check.iso" OLDUSER="$OLD" NEWUSER="$NEWU" TRANSCRIPT="$TR" \
+VM_MEM="$VM_MEM" VM_SMP="$VM_SMP" \
 FW="$(brew --prefix qemu)/share/qemu/edk2-aarch64-code.fd" \
   expect "$TMP/t.exp" >/dev/null 2>&1 &
 EXP_PID=$!

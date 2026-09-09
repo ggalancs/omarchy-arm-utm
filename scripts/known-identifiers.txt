@@ -635,3 +635,10 @@ failed
 _n
 HL
 warn_block
+VM_MEM
+VM_SMP
+CFG
+_declared
+_m
+_c
+sysd
