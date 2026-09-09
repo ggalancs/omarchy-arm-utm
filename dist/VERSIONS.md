@@ -6,7 +6,7 @@
 |---|---|---|
 | | **← download this one** | the first release |
 | Size | 3.6 GB (3.8 GB unpacked) | 6.5 GB (13 GB unpacked) |
-| Published | 2026-09-08 | 2026-08-23 |
+| Published | 2026-09-09 | 2026-08-23 |
 | Shared clipboard | **works, verified both ways** | does not work |
 | "Update System" notification | gone | repeats on every boot |
 | "Reboot?" after each update | gone | repeats forever |
@@ -18,7 +18,7 @@ published back in August still resolve to the exact bytes they were written
 for. That is the only reason the better file is the one with `-v2` in its name.
 
 **`omarchy-arm-utm-v2.zip` has been replaced under the same name more than
-once**, on 2, 3 and 8 September, while the community's reports were being
+once**, on 2, 3, 8 and 9 September, while the community's reports were being
 worked through. If you downloaded during those days and `shasum -a 256 -c` now fails,
 that is this file changing underneath the name, not a corrupt download: fetch
 it again and it will match. The published sha256 always describes the bytes

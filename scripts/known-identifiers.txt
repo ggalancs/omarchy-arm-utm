@@ -613,3 +613,15 @@ line
 _head
 parts
 cmd
+_names
+_verb
+_it
+_total
+_list
+_w
+_i
+block
+build_list
+names
+total
+list

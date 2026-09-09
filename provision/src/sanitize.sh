@@ -287,11 +287,36 @@ install -d -o "$NEW" -g "$NEW" "/home/$NEW/Desktop"
 HYPR_REC=/usr/local/share/omarchy-arm/built-from-source.txt
 if [ -f "$HYPR_REC" ] && grep -qvE '^#|^[[:space:]]*$' "$HYPR_REC"; then
   _when=$(grep -vE '^#|^[[:space:]]*$' "$HYPR_REC" | head -1 | cut -f7)
+  # The names come from the record, field 1, not from a fixed string.
+  #
+  # This used to read "Hyprland and hyprtoolkit ... were COMPILED", whatever the
+  # build had actually compiled. Once Arch Linux ARM shipped a hyprtoolkit
+  # that pacman could install, only hyprland was built here -- and every login was still told
+  # both had been, contradicted by the very file the next line points at.
+  _names=$(grep -vE '^#|^[[:space:]]*$' "$HYPR_REC" | cut -f1 | sort -u | tr '\n' ' ')
+  _names=${_names% }
+  # "a b c" -> "a, b and c", with a loop rather than a chain of sed expressions.
+  # The chain was tried first: BSD sed rejects the `2g` flag it needed, and the
+  # version that parsed returned an EMPTY string, which would have shipped a
+  # motd naming no packages at all. A counter cannot get that wrong.
+  _total=0; for _w in $_names; do _total=$((_total + 1)); done
+  _list=""; _i=0
+  for _w in $_names; do
+    _i=$((_i + 1))
+    if   [ "$_i" -eq 1 ];       then _list="$_w"
+    elif [ "$_i" -eq "$_total" ]; then _list="$_list and $_w"
+    else                             _list="$_list, $_w"
+    fi
+  done
+  _names="$_list"
+  if [ "$_total" -eq 1 ]; then _verb="was"; _it="it"
+  else                         _verb="were"; _it="them"
+  fi
   cat >> /etc/motd <<MOTDEOF
 
-  Hyprland and hyprtoolkit in this image were COMPILED during the build, on
+  $_names in this image $_verb COMPILED during the build, on
   ${_when%T*}, from Arch Linux's own recipes, because Arch Linux ARM could not
-  install them. See /usr/local/share/omarchy-arm/built-from-source.txt
+  install $_it. See /usr/local/share/omarchy-arm/built-from-source.txt
   and run: omarchy-arm-hypr-local
 
 MOTDEOF
